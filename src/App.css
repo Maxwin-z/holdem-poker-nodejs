@@ -1,0 +1,257 @@
+@import "~antd/dist/antd.css";
+
+body {
+  background-color: #ececec;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+#root,
+.App {
+  width: 100vw;
+  height: 100vh;
+}
+
+.card {
+  border: "1px solid #f0f0f0";
+  border-radius: 2px;
+  background-color: white;
+  padding: 10px;
+  box-shadow: 2px 2px 2px lightgray;
+  flex: 1;
+}
+
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex1 {
+  flex: 1;
+}
+.flex2 {
+  flex: 2;
+}
+.flex3 {
+  flex: 3;
+}
+.flex4 {
+  flex: 4;
+}
+.flex5 {
+  flex: 5;
+}
+
+.flex-center {
+  justify-content: center;
+  align-items: center;
+}
+
+.poker-card {
+  height: 90%;
+  max-height: 110px;
+  min-height: 50px;
+  width: 83px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 24px;
+  margin: 0 10px;
+  position: relative;
+}
+
+.poker-card p {
+  flex: 1;
+}
+
+.poker-card.hd {
+  color: #ae2f11;
+}
+
+.poker-card.empty {
+  border: 1px dashed gray;
+  box-shadow: none;
+}
+
+.poker-card button {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+}
+
+.poker-card .full {
+  width: 100%;
+  height: 100%;
+  justify-self: center;
+  align-items: center;
+}
+
+.poker-card .content {
+  box-shadow: 0px 2px 1px -1px rgb(0 0 0 / 20%),
+    0px 1px 1px 0px rgb(0 0 0 / 14%), 0px 1px 3px 0px rgb(0 0 0 / 12%);
+  border: 1px solid lightgray;
+  border-radius: 2px;
+}
+
+.roominfo {
+  width: 480px;
+  margin: auto;
+}
+
+.user {
+  height: 150px;
+  width: 80px;
+  margin: 0 10px;
+  position: relative;
+}
+
+.user .status {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user .position,
+.owner .position {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+
+.allin {
+  position: absolute;
+  bottom: 30px;
+}
+
+.allin img {
+  height: 30px;
+}
+
+.position img {
+  height: 30px;
+}
+
+.userinfo {
+  border-radius: 2px;
+  background-color: #e1f5fe;
+  width: 100%;
+  flex: 1;
+}
+.userinfo.fold {
+  background-color: #e8e8e8;
+}
+.userinfo.allin {
+  border: 1px solid red;
+}
+
+.userinfo .ant-avatar,
+.owner .ant-avatar {
+  color: #f56a00;
+  background-color: #fde3cf;
+}
+
+.userinfo.fold .ant-avatar,
+.owner.fold .ant-avatar {
+  color: white;
+  background-color: lightgray;
+}
+
+.user .card-box {
+  position: absolute;
+  width: 100%;
+  height: 75px;
+  bottom: 0px;
+  display: flex;
+  flex-direction: row;
+}
+.card-box .poker-card {
+  width: 36px;
+  height: 50px;
+  margin: 0;
+  position: absolute;
+  background-color: white;
+  font-size: 12px;
+}
+.card-box .poker-card:last-child {
+  right: 0;
+}
+.card-box .handstype {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  text-align: center;
+}
+
+.stack,
+.bet {
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+}
+
+.coins {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: white;
+  display: inline-block;
+  background-color: #8e8e8e;
+  text-align: center;
+  font-size: 12px;
+}
+
+.bet {
+  font-weight: bold;
+}
+
+.bet .coins {
+  background-color: #ffb300;
+}
+
+.boards {
+  height: 100%;
+}
+
+.pots {
+  border-radius: 0.5rem;
+  padding: 0.45rem 1rem;
+  background-color: #838383;
+  color: white;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.owner {
+  width: 100px;
+  margin: auto;
+  text-align: center;
+  position: relative;
+}
+
+.user-actions button {
+  margin: 5px 5px;
+}
+
+.main-btn button {
+  margin: 5px 10px;
+}
+
+.spectators {
+  position: absolute;
+  top: 60px;
+  left: 0px;
+}
