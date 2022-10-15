@@ -1,15 +1,16 @@
-import { Context } from "koa";
-import * as jwt from "jsonwebtoken";
-import { secret } from "../config";
+import { Context } from 'koa';
+import * as jwt from 'jsonwebtoken';
+import { secret } from '../config';
 
 export default async (ctx: Context, next: () => Promise<any>) => {
   console.log(ctx.url, ctx.method);
-  const urls = ["/currentroom", "/createroom", "/joinroom"];
+  const urls = ['/currentroom', '/createroom', '/joinroom'];
   if (urls.indexOf(ctx.url) != -1) {
     try {
-      ctx.user = jwt.verify(ctx.headers.authorization || "", secret);
+      const user = jwt.verify(ctx.headers.authorization || '', secret);
+      ctx.user = user.split('@')[0];
     } catch (e) {
-      return (ctx.error = "invalid token, logout plz");
+      return (ctx.error = 'invalid token, logout plz');
     }
   }
   await next();
