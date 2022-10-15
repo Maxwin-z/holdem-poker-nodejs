@@ -50,7 +50,7 @@ export class Game {
   round: GameRound = GameRound.PreFlop;
   sortedUsers: Token[] = [];
   actingUserTimer = setTimeout(() => {}, 0);
-  isSettling: boolean = false;
+  isSettling: boolean = true;
   nextGameTime: number = 0;
   roundLeader: Token = ""; // the max bet
 
@@ -511,6 +511,12 @@ class Room {
       throw "至少需要两名玩家准备";
     }
     this.isGaming = true;
+
+    // already in game
+    if (this.game && !this.game.isSettling) {
+      return true;
+    }
+
     this.game = new Game(
       this.id,
       readyUsers.sort((_) => Math.random() - 0.5)[0],
