@@ -1,6 +1,6 @@
 import User, { Token } from "./User";
 import Room, { RoomID } from "./Room";
-import { PokerWebSocket, send2user } from "../api/ws";
+import { PokerWebSocket, send2all, send2user } from "../api/ws";
 
 type UserMap = {
   [token: string]: User;
@@ -165,5 +165,31 @@ export function userWatch(token: Token, watch: boolean) {
       throw `请结束本局后再观战`;
     }
     userMap[token].isSpectator = true;
+  }
+}
+
+export function userShowHands(token: Token, index: number) {
+  const user = userMap[token];
+  const roomid = user.roomid;
+  const game = roomMap[roomid].game;
+
+  if (!isInRoom(token, roomid)) {
+    throw "invalid room";
+  }
+
+  if (!game.isSettling) {
+    return;
+  }
+
+  if (index == 0 || index == 1) {
+    const hands: any[] = [null, null];
+    if (index == 0) hands[0] = user.hands[0];
+    if (index == 1) hands[1] = user.hands[1];
+    send2all(roomid, {
+      hands: {
+        id: user.chipsRecordID,
+        hands,
+      },
+    });
   }
 }

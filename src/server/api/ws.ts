@@ -1,7 +1,7 @@
-import { Context } from 'koa';
-import * as ws from 'ws';
-import * as jwt from 'jsonwebtoken';
-import { secret } from '../config';
+import { Context } from "koa";
+import * as ws from "ws";
+import * as jwt from "jsonwebtoken";
+import { secret } from "../config";
 import {
   pauseGame,
   roomMap,
@@ -15,10 +15,11 @@ import {
   userOverTime,
   userReady,
   userReBuy,
-  userWatch
-} from '../service';
-import { Token } from '../service/User';
-import Room, { Game, RoomID } from '../service/Room';
+  userShowHands,
+  userWatch,
+} from "../service";
+import { Token } from "../service/User";
+import Room, { Game, RoomID } from "../service/Room";
 import {
   ActionType,
   SimpleChipsRecord,
@@ -26,8 +27,8 @@ import {
   SimpleRoom,
   SimpleRoomChipsRecords,
   SimpleSelf,
-  SimpleUser
-} from '../../ApiType';
+  SimpleUser,
+} from "../../ApiType";
 
 export interface PokerWebSocket extends ws {
   name?: string;
@@ -46,7 +47,7 @@ function send2client(ws: PokerWebSocket, data: any) {
 function sendError(ws: PokerWebSocket, error: string) {
   send2client(ws, {
     code: -1,
-    error
+    error,
   });
 }
 
@@ -58,22 +59,22 @@ export function send2user(token: Token, data: any) {
   });
 }
 
-function send2all(roomid: RoomID, data: any) {
+export function send2all(roomid: RoomID, data: any) {
   roomMap[roomid].users.forEach((t) => send2user(t, data));
 }
 
 export default async (ctx: Context) => {
-  const token = ctx.request.header['sec-websocket-protocol']?.toString() || '';
+  const token = ctx.request.header["sec-websocket-protocol"]?.toString() || "";
   let websocket: PokerWebSocket | null = null;
   try {
-    const user = jwt.verify(token.toString(), secret).toString().split('@')[0];
+    const user = jwt.verify(token.toString(), secret).toString().split("@")[0];
     websocket = ctx.websocket;
     websocket.name = user;
     websocket.token = token;
     userMap[token].addWebsocket(websocket);
-    console.log('client connect', token, user);
+    console.log("client connect", token, user);
   } catch (e) {
-    ctx.websocket.send('invalid token');
+    ctx.websocket.send("invalid token");
     ctx.websocket.close();
   }
 
@@ -81,7 +82,7 @@ export default async (ctx: Context) => {
     return;
   }
 
-  websocket.on('message', (msg: string) => {
+  websocket.on("message", (msg: string) => {
     try {
       let data: ActionBase | null = null;
       try {
@@ -89,7 +90,7 @@ export default async (ctx: Context) => {
       } catch (e) {
         send2client(websocket!, {
           code: -1,
-          error: e
+          error: e,
         });
       }
       if (!data) {
@@ -97,12 +98,12 @@ export default async (ctx: Context) => {
       }
       handle(websocket!, data);
     } catch (e) {
-      console.log('server catch error', e);
+      console.log("server catch error", e);
       sendError(websocket!, `${e}`);
     }
   });
-  ctx.websocket.on('close', () => {
-    console.log('client closed');
+  ctx.websocket.on("close", () => {
+    console.log("client closed");
     const user = userMap[token];
     if (user) {
       user.removeWebSocket(websocket!);
@@ -117,7 +118,7 @@ export default async (ctx: Context) => {
 
 function handle(ws: PokerWebSocket, data: ActionBase) {
   const token = ws.token!;
-  console.log('handle', token, data);
+  console.log("handle", token, data);
   switch (data.action) {
     case ActionType.ENTER_GAME:
       userEnterRoom(token, data.roomid);
@@ -152,6 +153,9 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.WATCH:
       userWatch(token, data.watch);
       break;
+    case ActionType.SHOW_HANDS:
+      userShowHands(token, data.index);
+      break;
   }
   if (data.action != ActionType.LEAVE) {
     publish(token, data, ws);
@@ -166,7 +170,7 @@ function getSimpleRoom(room: Room): SimpleRoom {
   return {
     roomid: room.id,
     isGaming: room.isGaming,
-    users: room.users.map((t) => getSimpleUser(t))
+    users: room.users.map((t) => getSimpleUser(t)),
   };
 }
 
@@ -177,8 +181,8 @@ function getSimpleChipsRecords(room: Room): SimpleRoomChipsRecords {
       id: cr.id,
       name: cr.name,
       chips: cr.chips,
-      buyIn: cr.buyIn
-    }))
+      buyIn: cr.buyIn,
+    })),
   };
 }
 
@@ -187,11 +191,11 @@ function getSimpleGame(game: Game): SimpleGame {
     return {
       boardCards: [],
       pots: 0,
-      acting: '',
+      acting: "",
       preBet: 0,
       bb: 0,
       isSettling: false,
-      nextGameTime: 0
+      nextGameTime: 0,
     };
   }
   const actingUser =
@@ -202,11 +206,11 @@ function getSimpleGame(game: Game): SimpleGame {
   return {
     boardCards: game.boardCards,
     pots: sum(game.sortedUsers.map((t) => sum(userMap[t].bets))),
-    acting: actingUser ? userMap[actingUser].chipsRecordID : '',
+    acting: actingUser ? userMap[actingUser].chipsRecordID : "",
     preBet,
     bb: game.smallBlind * 2,
     isSettling: game.isSettling,
-    nextGameTime: game.nextGameTime
+    nextGameTime: game.nextGameTime,
   };
 }
 
@@ -233,10 +237,10 @@ function getSimpleUser(token: Token): SimpleUser {
     maxCards: user.shouldShowHand ? user.maxCards : [],
     profits: user.profits,
     position: user.positon,
-    handsType: user.shouldShowHand ? user.handsType : '',
+    handsType: user.shouldShowHand ? user.handsType : "",
 
     stack: user.stack - sum(user.bets),
-    bet: room.game ? user.bets[room.game.round] : 0
+    bet: room.game ? user.bets[room.game.round] : 0,
   };
 }
 
@@ -245,7 +249,7 @@ function getSimpleSelf(token: Token): SimpleSelf {
   return {
     id: user.chipsRecordID,
     hands: user.hands,
-    handsType: user.handsType
+    handsType: user.handsType,
   };
 }
 
@@ -253,11 +257,11 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
   const user = userMap[token];
   const action = data.action;
   if (!user) {
-    return sendError(ws, 'user not exists');
+    return sendError(ws, "user not exists");
   }
   const room = roomMap[user.roomid];
   if (!room) {
-    return sendError(ws, 'not in room');
+    return sendError(ws, "not in room");
   }
 
   const simpleGame = getSimpleGame(room.game);
@@ -274,38 +278,24 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
     case ActionType.WATCH:
       send2all(room.id, {
         game: simpleGame,
-        room: simpleRoom
+        room: simpleRoom,
       });
       break;
     case ActionType.READY:
     case ActionType.HANGUP:
       send2all(room.id, {
-        user: simpleUser
+        user: simpleUser,
       });
       break;
     case ActionType.LEAVE:
       send2all(room.id, {
-        game: simpleGame
+        game: simpleGame,
       });
       break;
     case ActionType.PAUSE_GAME:
       send2all(room.id, {
-        room: simpleRoom
+        room: simpleRoom,
       });
-      break;
-    case ActionType.SHOW_HANDS:
-      const index = data.index;
-      if (index == 0 || index == 1) {
-        const hands: any[] = [null, null];
-        if (index == 0) hands[0] = user.hands[0];
-        if (index == 1) hands[1] = user.hands[1];
-        send2all(room.id, {
-          hands: {
-            id: user.chipsRecordID,
-            hands
-          }
-        });
-      }
       break;
   }
 }
@@ -317,12 +307,12 @@ export function publish2all(roomid: RoomID) {
   send2all(room.id, {
     game: simpleGame,
     room: simpleRoom,
-    chips: getSimpleChipsRecords(room)
+    chips: getSimpleChipsRecords(room),
   });
 }
 
 export function publishLog2all(roomid: RoomID, logs: string[]) {
   send2all(roomid, {
-    logs
+    logs,
   });
 }
