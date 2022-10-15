@@ -6,27 +6,27 @@ import {
   Button,
   Card,
   Dropdown,
-  Menu,
-} from "antd";
-import { DownOutlined } from "@ant-design/icons";
-import { useEffect, useState } from "react";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
+  Menu
+} from 'antd';
+import { DownOutlined } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import {
   createRoomAsync,
   joinRoomAsync,
-  selectStatus,
-} from "./createRoomSlice";
-import { logout } from "../home/homeSlice";
-import { RecentGameRecords } from "./RecentGameRecords";
+  selectStatus
+} from './createRoomSlice';
+import { logout } from '../home/homeSlice';
+import { RecentGameRecords } from './RecentGameRecords';
 
-const style = { padding: "8px 0" };
+const style = { padding: '8px 0' };
 
 export function CreateRoom() {
   const dispatch = useAppDispatch();
 
   const [smallBlind, setSmallBlind] = useState(1);
   const [buyIn, setBuyIn] = useState(200);
-  const [roomid, setRoomID] = useState("");
+  const [roomid, setRoomID] = useState('');
   const status = useAppSelector(selectStatus);
 
   useEffect(() => {
@@ -48,9 +48,9 @@ export function CreateRoom() {
         >
           <a
             className="ant-dropdown-link"
-            style={{ fontSize: 32, marginBottom: 30, display: "inline-block" }}
+            style={{ fontSize: 32, marginBottom: 30, display: 'inline-block' }}
           >
-            {localStorage["name"]}
+            {localStorage['name']}
             <DownOutlined />
           </a>
         </Dropdown>
@@ -60,14 +60,14 @@ export function CreateRoom() {
             <InputNumber
               min={1}
               value={smallBlind}
-              onChange={(v) => setSmallBlind(v)}
+              onChange={(v) => setSmallBlind(v!)}
             />
             / 大盲:
             <InputNumber disabled={true} min={1} value={smallBlind * 2} />
           </div>
           <div style={style}>
             买入:
-            <InputNumber min={1} value={buyIn} onChange={(v) => setBuyIn(v)} />
+            <InputNumber min={1} value={buyIn} onChange={(v) => setBuyIn(v!)} />
           </div>
           <div style={style}>
             <Button
@@ -75,7 +75,7 @@ export function CreateRoom() {
               onClick={() =>
                 dispatch(createRoomAsync({ sb: smallBlind, buyIn }))
               }
-              loading={status.createRoomStatus == "loading" ? true : false}
+              loading={status.createRoomStatus == 'loading' ? true : false}
             >
               创建房间
             </Button>
@@ -99,7 +99,7 @@ export function CreateRoom() {
               onClick={() => {
                 dispatch(joinRoomAsync(roomid));
               }}
-              loading={status.joinRoomStatus == "loading" ? true : false}
+              loading={status.joinRoomStatus == 'loading' ? true : false}
             >
               加入房间
             </Button>

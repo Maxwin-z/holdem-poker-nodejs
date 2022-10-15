@@ -1,19 +1,19 @@
-import { Avatar, Button, Slider, InputNumber, Tooltip, Popover } from "antd";
-import { useEffect, useRef, useState } from "react";
-import { useAppSelector } from "../../app/hooks";
+import { Avatar, Button, Slider, InputNumber, Tooltip, Popover } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { useAppSelector } from '../../app/hooks';
 import {
   ws_overtime,
   ws_userBet,
   ws_userFold,
-  ws_userRebuy,
-} from "../../app/websocket";
-import { CountDown } from "./CountDown";
-import { Poker } from "./Poker";
-import { BigBlind, Dealer, SmallBlind } from "./Symbol";
-import { selectGame, selectRoom, selectSelf } from "./roomSlice";
-import { card2html } from "../gamehistory/GameHistory";
-const hintsound = require("../../assets/hint.wav");
-const dealcardsound = require("../../assets/dealcard.wav");
+  ws_userRebuy
+} from '../../app/websocket';
+import { CountDown } from './CountDown';
+import { Poker } from './Poker';
+import { BigBlind, Dealer, SmallBlind } from './Symbol';
+import { selectGame, selectRoom, selectSelf } from './roomSlice';
+import { card2html } from '../gamehistory/GameHistory';
+const hintsound = require('../../assets/hint.wav');
+const dealcardsound = require('../../assets/dealcard.wav');
 
 export function Owner() {
   const hintSoundRef = useRef<HTMLAudioElement>(null);
@@ -30,7 +30,7 @@ export function Owner() {
   const bb = game?.bb || 0;
   const isSettling = game?.isSettling || false;
 
-  const name = self?.name || "";
+  const name = self?.name || '';
   const stack = self?.stack || 0;
   const bet = self?.bet || 0;
   const isActing = self?.isActing || false;
@@ -75,11 +75,11 @@ export function Owner() {
   }, [game?.boardCards.length, room?.isGaming]);
 
   return (
-    <div className="flex-row flex-center" style={{ height: "100%" }}>
+    <div className="flex-row flex-center" style={{ height: '100%' }}>
       <audio src={hintsound} autoPlay={false} ref={hintSoundRef} />
       <audio src={dealcardsound} autoPlay={false} ref={dealCardSoundRef} />
       <div className="flex3 flex flex-center">
-        <div className={`owner ${!inGame ? "fold" : ""}`}>
+        <div className={`owner ${!inGame ? 'fold' : ''}`}>
           <Popover
             content={
               <div
@@ -88,14 +88,14 @@ export function Owner() {
                     self?.maxCards || []
                   )} <strong style="color: #FF6F00">+$${
                     self?.profits
-                  }</strong> `,
+                  }</strong> `
                 }}
               ></div>
             }
             trigger="click"
             visible={self?.isWinner && self.profits >= 0}
           >
-            <Avatar>{name.length > 0 ? name[0] : ""}</Avatar>
+            <Avatar>{name.length > 0 ? name[0] : ''}</Avatar>
           </Popover>
           <div>{name}</div>
           <div className="stack">
@@ -107,20 +107,20 @@ export function Owner() {
               再次买入
             </Button>
           ) : null}
-          {position != "" ? (
+          {position != '' ? (
             <div className="position">
-              {position == "SB" ? (
+              {position == 'SB' ? (
                 <SmallBlind />
-              ) : position == "BB" ? (
+              ) : position == 'BB' ? (
                 <BigBlind />
-              ) : position == "D" ? (
+              ) : position == 'D' ? (
                 <Dealer />
               ) : null}
             </div>
           ) : null}
         </div>
       </div>
-      <div className="flex3 flex flex-column" style={{ height: "100%" }}>
+      <div className="flex3 flex flex-column" style={{ height: '100%' }}>
         <div className="bet">
           {self?.actionName}
           {bet == 0 ? null : (
@@ -247,7 +247,7 @@ export function Owner() {
                 min={minRaise}
                 max={maxRaise}
                 value={raise}
-                onChange={(v) => setRaise(v)}
+                onChange={(v) => setRaise(v!)}
               />
             </div>
             <div className="flex1 flex flex-row flex-center">
