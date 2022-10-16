@@ -1,4 +1,12 @@
-import { Avatar, Button, Slider, InputNumber, Tooltip, Popover } from "antd";
+import {
+  Avatar,
+  Button,
+  Slider,
+  InputNumber,
+  Tooltip,
+  Popover,
+  Checkbox,
+} from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useAppSelector } from "../../app/hooks";
 import {
@@ -36,6 +44,11 @@ export function Owner() {
   const stack = self?.stack || 0;
   const bet = self?.bet || 0;
   const isActing = self?.isActing || false;
+  const isWaiting =
+    !self?.isActing &&
+    !self?.isAllIn &&
+    !self?.isFoled &&
+    self?.isInCurrentGame;
   const leftTime = (self?.actionEndTime || Date.now()) - Date.now();
   const position = self?.position;
   // const isAllIn = self?.isAllIn || false;
@@ -57,17 +70,29 @@ export function Owner() {
 
   const [raise, setRaise] = useState(0);
   const [now, setNow] = useState(0);
+  const [autoCheck, setAutoCheck] = useState(false);
 
   useEffect(() => {
     if (hintSoundRef.current && isActing) {
       const audio: HTMLAudioElement = hintSoundRef.current;
-      audio.play();
+      try {
+        audio.play();
+      } catch (ignore) {}
+    }
+
+    if (autoCheck && isActing) {
+      if (canCheck) {
+        ws_userBet(bet);
+      } else {
+        ws_userFold();
+      }
     }
   }, [isActing]);
 
   useEffect(() => {
     setRaise(0);
-  }, [game?.boardCards.length]);
+    setAutoCheck(false);
+  }, [game?.boardCards.length, game?.isSettling]);
 
   useEffect(() => {
     if (dealCardSoundRef.current && room?.isGaming) {
@@ -104,7 +129,8 @@ export function Owner() {
             <span className="coins">$</span>
             {stack}
           </div>
-          {stack + bet < bb && (game?.isSettling || !self?.isInCurrentGame) ? (
+          {stack + bet < bb * 20 &&
+          (game?.isSettling || !self?.isInCurrentGame) ? (
             <Button type="primary" onClick={() => ws_userRebuy()}>
               再次买入
             </Button>
@@ -168,6 +194,14 @@ export function Owner() {
         </div>
       </div>
       <div className="flex4 flex flex-colomn user-actions">
+        {isWaiting ? (
+          <Checkbox
+            onChange={() => setAutoCheck(!autoCheck)}
+            checked={autoCheck}
+          >
+            自动过牌或弃牌
+          </Checkbox>
+        ) : null}
         {isActing ? (
           <>
             <div className="flex1 flex flex-row flex-center main-btn">
