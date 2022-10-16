@@ -53,6 +53,8 @@ export class Game {
   isSettling: boolean = true;
   nextGameTime: number = 0;
   roundLeader: Token = ""; // the max bet
+  raiseBet: number = 0; // bet of the raise
+  raiseBetDiff: number = 0; //  valid rasize count
 
   constructor(roomid: RoomID, token: Token, smallBlind: number) {
     this.roomid = roomid;
@@ -148,6 +150,8 @@ export class Game {
     }
     sb.positon = "SB";
     bb.positon = "BB";
+    this.raiseBet = bb.bets[0];
+    this.raiseBetDiff = bb.bets[0]; // 1,2 -> 4. bet diff should >= bb.
     if (this.sortedUsers.length > 2) {
       userMap[this.sortedUsers[this.sortedUsers.length - 1]].positon = "D";
     }
@@ -179,9 +183,17 @@ export class Game {
     if (chips < preBets && chips < availableStack) {
       throw "chips should be large than the previous bet user";
     }
+    // raise
     if (chips > preBets) {
-      if (chips < preBets * 1.5 && chips < availableStack) {
-        throw "raise should 1.5 times at least";
+      // all in
+      if (chips < this.raiseBet + this.raiseBetDiff) {
+        if (chips < availableStack) {
+          throw "raise should greater than " + this.raiseBetDiff;
+        }
+      } else {
+        // valid raise
+        this.raiseBetDiff = chips - this.raiseBet;
+        this.raiseBet = chips;
       }
       // user raise, other users need react
       this.sortedUsers
@@ -386,6 +398,8 @@ export class Game {
     this.round += 1;
     this.roundLeader = "";
     this.sortedUsers.forEach((t) => (userMap[t].actionName = ""));
+    this.raiseBet = 0;
+    this.raiseBetDiff = this.smallBlind * 2;
     const r = this.round;
     const roundName =
       r == 0
