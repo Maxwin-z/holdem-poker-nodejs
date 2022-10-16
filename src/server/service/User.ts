@@ -86,6 +86,12 @@ class User {
     this.isInRoom = false;
     this.isFolded = true;
     this.isReady = false;
+    this.isActing = false;
+    this.needAction = false;
+    this.shouldShowHand = false;
+    this.isInCurrentGame = false;
+    this.isWinner = false;
+    this.maxCards = [];
   }
   setReady(ready: boolean) {
     this.isReady = ready;

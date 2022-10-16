@@ -135,6 +135,9 @@ export class Game {
       ...[...tokens].splice(0, smallBlindIndex),
     ];
   }
+  removeUser(token: Token) {
+    this.sortedUsers = this.sortedUsers.filter((t) => t !== token);
+  }
   doPreBet() {
     const sb = userMap[this.sortedUsers[0]];
     const bb = userMap[this.sortedUsers[1]];
@@ -579,7 +582,7 @@ class Room {
         userMap[this.users[index]].isRoomOwner = true;
       }
     }
-
+    this.game.removeUser(token);
     userMap[token].leaveRoom();
   }
 
