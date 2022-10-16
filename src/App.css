@@ -145,12 +145,13 @@ body {
 
 .userinfo {
   border-radius: 2px;
-  background-color: #e1f5fe;
+  background-color: #99ddff;
   width: 100%;
   flex: 1;
 }
 .userinfo.fold {
   background-color: #e8e8e8;
+  color: #838383;
 }
 .userinfo.allin {
   border: 1px solid red;
