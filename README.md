@@ -18,3 +18,7 @@ npm i
 npm run start:web		# start react app
 npm run watch-server	# start server
 ```
+
+## 说明
+
+核心算法：`src/server/utils/game-engine.ts`
