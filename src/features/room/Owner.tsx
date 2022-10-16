@@ -6,6 +6,7 @@ import {
   Tooltip,
   Popover,
   Checkbox,
+  Switch,
 } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useAppSelector } from "../../app/hooks";
@@ -195,12 +196,13 @@ export function Owner() {
       </div>
       <div className="flex4 flex flex-colomn user-actions">
         {isWaiting ? (
-          <Checkbox
-            onChange={() => setAutoCheck(!autoCheck)}
-            checked={autoCheck}
-          >
+          <div>
+            <Switch
+              checked={autoCheck}
+              onChange={() => setAutoCheck(!autoCheck)}
+            />
             自动过牌或弃牌
-          </Checkbox>
+          </div>
         ) : null}
         {isActing ? (
           <>
