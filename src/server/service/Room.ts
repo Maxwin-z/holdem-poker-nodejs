@@ -343,13 +343,9 @@ export class Game {
     const delay = 10000; // after 10s, start next game
     this.nextGameTime = Date.now() + delay;
     publish2all(this.roomid);
-    setTimeout(() => {
-      try {
-        this.nextGame();
-      } catch (e) {
-        console.error("next game error", e);
-      }
-    }, delay); // 10s
+    delayTry(() => {
+      this.nextGame();
+    }, delay);
   }
   dealCards2User() {
     // deal cards to ready user
@@ -450,13 +446,9 @@ export class Game {
     user.actionEndTime = Date.now() + delay; // 30 s
     console.log("setActingUser", user.name);
     clearTimeout(this.actingUserTimer);
-    this.actingUserTimer = setTimeout(() => {
-      try {
-        this.fold(token); // auto fold
-        publish2all(this.roomid);
-      } catch (e) {
-        console.error("should not:", e);
-      }
+    this.actingUserTimer = delayTry(() => {
+      this.fold(token); // auto fold
+      publish2all(this.roomid);
     }, delay);
   }
   setActed(token: Token) {
