@@ -53,6 +53,7 @@ export class Game {
   isSettling: boolean = true;
   nextGameTime: number = 0;
   roundLeader: Token = ""; // the max bet
+  raiseUser: string = "";
   raiseBet: number = 0; // bet of the raise
   raiseBetDiff: number = 0; //  valid rasize count
 
@@ -70,6 +71,7 @@ export class Game {
     this.isSettling = false;
     this.round = GameRound.PreFlop;
     this.roundLeader = "";
+    this.raiseUser = "";
 
     this.sortedUsers = this.sortUsersBySmallBlind();
     console.log(new Array(10).fill("==").join(""));
@@ -192,6 +194,7 @@ export class Game {
         }
       } else {
         // valid raise
+        this.raiseUser = user.chipsRecordID;
         this.raiseBetDiff = chips - this.raiseBet;
         this.raiseBet = chips;
       }
@@ -398,6 +401,7 @@ export class Game {
     this.round += 1;
     this.roundLeader = "";
     this.sortedUsers.forEach((t) => (userMap[t].actionName = ""));
+    this.raiseUser = "";
     this.raiseBet = 0;
     this.raiseBetDiff = this.smallBlind * 2;
     const r = this.round;

@@ -56,6 +56,7 @@ export function Owner() {
 
   const canCheck = bet == preBet;
   const canCall = preBet > bet && stack + bet > preBet;
+  const canRaise = game?.raiseUser != self?.id;
   const shouldAllIn = stack + bet <= preBet;
   const onlyRaiseAllIn = stack + bet <= raiseBet + raiseBetDiff;
   const minRaise = Math.min(stack, Math.max(bb, raiseBet + raiseBetDiff - bet));
@@ -237,57 +238,64 @@ export function Owner() {
                 >
                   AllIn ${chips2call}
                 </Button>
-              ) : onlyRaiseAllIn ? (
-                <Button
-                  type="primary"
-                  size="large"
-                  danger
-                  onClick={() => ws_userBet(minRaise + bet)}
-                >
-                  AllIn ${minRaise}
-                </Button>
-              ) : (
-                <Button
-                  type="primary"
-                  size="large"
-                  disabled={raise < minRaise}
-                  onClick={() => ws_userBet(raise + bet)}
-                >
-                  加注 ${raise}
-                </Button>
-              )}
+              ) : canRaise ? (
+                onlyRaiseAllIn ? (
+                  <Button
+                    type="primary"
+                    size="large"
+                    danger
+                    onClick={() => ws_userBet(minRaise + bet)}
+                  >
+                    AllIn ${minRaise}
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    size="large"
+                    disabled={raise < minRaise}
+                    onClick={() => ws_userBet(raise + bet)}
+                  >
+                    加注 ${raise}
+                  </Button>
+                )
+              ) : null}
             </div>
-            <div className="flex1 flex flex-row flex-center">
-              {has1_4 ? (
-                <Button onClick={() => setRaise(Math.ceil(pots / 4))}>
-                  1/4
-                </Button>
-              ) : null}
-              {has1_3 ? (
-                <Button onClick={() => setRaise(Math.ceil(pots / 3))}>
-                  1/3
-                </Button>
-              ) : null}
-              {has1_2 ? (
-                <Button onClick={() => setRaise(Math.ceil(pots / 2))}>
-                  1/2
-                </Button>
-              ) : null}
-              {has3_4 ? (
-                <Button onClick={() => setRaise(Math.ceil((pots * 3) / 4))}>
-                  3/4
-                </Button>
-              ) : null}
-              {has1_1 ? (
-                <Button onClick={() => setRaise(Math.ceil(pots))}>1Pots</Button>
-              ) : null}
-              <InputNumber
-                min={minRaise}
-                max={maxRaise}
-                value={raise}
-                onChange={(v) => setRaise(v!)}
-              />
-            </div>
+            {canRaise ? (
+              <div className="flex1 flex flex-row flex-center">
+                {has1_4 ? (
+                  <Button onClick={() => setRaise(Math.ceil(pots / 4))}>
+                    1/4
+                  </Button>
+                ) : null}
+                {has1_3 ? (
+                  <Button onClick={() => setRaise(Math.ceil(pots / 3))}>
+                    1/3
+                  </Button>
+                ) : null}
+                {has1_2 ? (
+                  <Button onClick={() => setRaise(Math.ceil(pots / 2))}>
+                    1/2
+                  </Button>
+                ) : null}
+                {has3_4 ? (
+                  <Button onClick={() => setRaise(Math.ceil((pots * 3) / 4))}>
+                    3/4
+                  </Button>
+                ) : null}
+                {has1_1 ? (
+                  <Button onClick={() => setRaise(Math.ceil(pots))}>
+                    1Pots
+                  </Button>
+                ) : null}
+                <InputNumber
+                  min={minRaise}
+                  max={maxRaise}
+                  value={raise}
+                  onChange={(v) => setRaise(v!)}
+                />
+              </div>
+            ) : null}
+
             <div className="flex1 flex flex-row flex-center">
               <span className="coins">$</span>
               <Slider

@@ -196,6 +196,7 @@ function getSimpleGame(game: Game): SimpleGame {
       bb: 0,
       isSettling: false,
       nextGameTime: 0,
+      raiseUser: "",
       raiseBet: 0,
       raiseBetDiff: 0,
     };
@@ -213,6 +214,7 @@ function getSimpleGame(game: Game): SimpleGame {
     bb: game.smallBlind * 2,
     isSettling: game.isSettling,
     nextGameTime: game.nextGameTime,
+    raiseUser: game.raiseUser,
     raiseBet: game.raiseBet,
     raiseBetDiff: game.raiseBetDiff,
   };

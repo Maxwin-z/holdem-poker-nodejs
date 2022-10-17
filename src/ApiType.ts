@@ -20,6 +20,7 @@ export interface SimpleGame {
   boardCards: Card[];
   pots: number;
   acting: string; // user's uuid in room, not token
+  raiseUser: string;
   raiseBet: number; //
   raiseBetDiff: number; // valid rasize count
   preBet: number;
