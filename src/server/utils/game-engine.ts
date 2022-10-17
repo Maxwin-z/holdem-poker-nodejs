@@ -53,14 +53,14 @@ export function prettify(cards: Card[]) {
     })
     .join(" ");
 }
-export function parse(hands: any): Card[] {
+export function parse(hands: any, sort: boolean = true): Card[] {
   const suitSortOpts: { [x: string]: number } = {
     c: 4,
     d: 3,
     h: 2,
     s: 1,
   };
-  return (
+  const cards =
     typeof hands[0] == "object"
       ? hands
       : hands.map(
@@ -69,16 +69,20 @@ export function parse(hands: any): Card[] {
               num: parseInt(hand.substr(0, hand.length - 1), 10),
               suit: hand.substr(-1),
             }
-        )
-  ).sort(
-    (
-      a: { num: number; suit: string | number },
-      b: { num: number; suit: string | number }
-    ) =>
-      b.num - a.num != 0
-        ? b.num - a.num
-        : suitSortOpts[b.suit] - suitSortOpts[a.suit]
-  );
+        );
+  if (sort) {
+    return cards.sort(
+      (
+        a: { num: number; suit: string | number },
+        b: { num: number; suit: string | number }
+      ) =>
+        b.num - a.num != 0
+          ? b.num - a.num
+          : suitSortOpts[b.suit] - suitSortOpts[a.suit]
+    );
+  } else {
+    return cards;
+  }
 }
 
 // function maxCard(hands, suit = null) {

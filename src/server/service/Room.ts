@@ -367,10 +367,10 @@ export class Game {
     this.sortedUsers.forEach((t) => {
       const user = userMap[t];
       if (user.isReady) {
-        user.hands = parse([
-          this.cards[this.cardIndex],
-          this.cards[this.cardIndex + 1],
-        ]);
+        user.hands = parse(
+          [this.cards[this.cardIndex], this.cards[this.cardIndex + 1]],
+          false
+        );
         this.cardIndex += 2;
         user.isFolded = false;
       }
