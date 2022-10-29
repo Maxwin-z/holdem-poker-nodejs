@@ -6,27 +6,28 @@ import {
   Button,
   Card,
   Dropdown,
-  Menu
-} from 'antd';
-import { DownOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
+  Menu,
+} from "antd";
+import { DownOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   createRoomAsync,
   joinRoomAsync,
-  selectStatus
-} from './createRoomSlice';
-import { logout } from '../home/homeSlice';
-import { RecentGameRecords } from './RecentGameRecords';
+  selectStatus,
+} from "./createRoomSlice";
+import { logout } from "../home/homeSlice";
+import { RecentGameRecords } from "./RecentGameRecords";
 
-const style = { padding: '8px 0' };
+const style = { padding: "8px 0" };
 
 export function CreateRoom() {
   const dispatch = useAppDispatch();
 
   const [smallBlind, setSmallBlind] = useState(1);
   const [buyIn, setBuyIn] = useState(200);
-  const [roomid, setRoomID] = useState('');
+  const [reBuyLimit, setReBuyLimit] = useState(10);
+  const [roomid, setRoomID] = useState("");
   const status = useAppSelector(selectStatus);
 
   useEffect(() => {
@@ -48,9 +49,9 @@ export function CreateRoom() {
         >
           <a
             className="ant-dropdown-link"
-            style={{ fontSize: 32, marginBottom: 30, display: 'inline-block' }}
+            style={{ fontSize: 32, marginBottom: 30, display: "inline-block" }}
           >
-            {localStorage['name']}
+            {localStorage["name"]}
             <DownOutlined />
           </a>
         </Dropdown>
@@ -70,12 +71,21 @@ export function CreateRoom() {
             <InputNumber min={1} value={buyIn} onChange={(v) => setBuyIn(v!)} />
           </div>
           <div style={style}>
+            低于
+            <InputNumber
+              min={1}
+              value={reBuyLimit}
+              onChange={(v) => setReBuyLimit(v!)}
+            />
+            大盲时允许再次买入。
+          </div>
+          <div style={style}>
             <Button
               type="primary"
               onClick={() =>
-                dispatch(createRoomAsync({ sb: smallBlind, buyIn }))
+                dispatch(createRoomAsync({ sb: smallBlind, buyIn, reBuyLimit }))
               }
-              loading={status.createRoomStatus == 'loading' ? true : false}
+              loading={status.createRoomStatus == "loading" ? true : false}
             >
               创建房间
             </Button>
@@ -99,7 +109,7 @@ export function CreateRoom() {
               onClick={() => {
                 dispatch(joinRoomAsync(roomid));
               }}
-              loading={status.joinRoomStatus == 'loading' ? true : false}
+              loading={status.joinRoomStatus == "loading" ? true : false}
             >
               加入房间
             </Button>

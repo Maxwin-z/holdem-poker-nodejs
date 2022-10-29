@@ -14,12 +14,17 @@ export async function roominfo(): Promise<ApiRsp> {
   return await rsp.json();
 }
 
-export async function createroom(sb: number, buyin: number): Promise<ApiRsp> {
+export async function createroom(
+  sb: number,
+  buyin: number,
+  reBuyLimit: number
+): Promise<ApiRsp> {
   const rsp = await fetch("/createroom", {
     method: "POST",
     body: JSON.stringify({
       sb,
       buyin,
+      reBuyLimit,
     }),
     headers: {
       authorization: localStorage["token"],

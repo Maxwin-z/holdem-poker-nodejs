@@ -38,9 +38,14 @@ export function createUser(token: Token, name: string, avatar: string): User {
   return user;
 }
 
-export function createRoom(token: Token, sb: number, buyIn: number): Room {
+export function createRoom(
+  token: Token,
+  sb: number,
+  buyIn: number,
+  reBuyLimit: number = 1
+): Room {
   const user = userMap[token];
-  const room = new Room(genRoomID(), sb, buyIn);
+  const room = new Room(genRoomID(), sb, buyIn, reBuyLimit);
   roomMap[room.id] = room;
   userEnterRoom(token, room.id);
   user.isRoomOwner = true;

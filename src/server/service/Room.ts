@@ -498,17 +498,19 @@ class Room {
   isGaming: boolean = false;
   smallBlind: number = 0;
   buyIn: number = 0;
+  reBuyLimit: number = 1;
   game: Game = new Game("", "", 0);
   chipsRecords: ChipsRecord[] = [];
 
-  constructor(id: string, sb: number, buyIn: number) {
-    if (sb == 0 || buyIn == 0) {
+  constructor(id: string, sb: number, buyIn: number, reBuyLimit: number = 1) {
+    if (sb === 0 || buyIn === 0) {
       throw `small blind(${sb}) and buy in(${buyIn})] should not be 0`;
     }
     // new room
     this.id = id;
     this.smallBlind = sb;
     this.buyIn = buyIn;
+    this.reBuyLimit = Math.max(1, reBuyLimit);
     this.isGaming = false;
   }
 
@@ -599,7 +601,7 @@ class Room {
   reBuy(token: Token) {
     const user = userMap[token];
     // console.log("rebuy", user);
-    if (user.stack >= this.smallBlind * 2) {
+    if (user.stack > this.reBuyLimit * this.smallBlind * 2) {
       throw "cannot rebuy now";
     }
     user.stack += this.buyIn;
