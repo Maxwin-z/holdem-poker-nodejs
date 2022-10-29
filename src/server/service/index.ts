@@ -1,6 +1,6 @@
 import User, { Token } from "./User";
 import Room, { RoomID } from "./Room";
-import { PokerWebSocket, send2all, send2user } from "../api/ws";
+import { PokerWebSocket, publishLog2all, send2all, send2user } from "../api/ws";
 
 type UserMap = {
   [token: string]: User;
@@ -188,13 +188,21 @@ export function userShowHands(token: Token, index: number) {
 
   if (index == 0 || index == 1) {
     const hands: any[] = [null, null];
-    if (index == 0) hands[0] = user.hands[0];
-    if (index == 1) hands[1] = user.hands[1];
+    let card = "";
+    if (index == 0) {
+      hands[0] = user.hands[0];
+      card = `${hands[0].num}${hands[0].suit}`;
+    }
+    if (index == 1) {
+      hands[1] = user.hands[1];
+      card = `${hands[1].num}${hands[1].suit}`;
+    }
     send2all(roomid, {
       hands: {
         id: user.chipsRecordID,
         hands,
       },
     });
+    publishLog2all(roomid, [`${user.name}亮牌${card}`]);
   }
 }
