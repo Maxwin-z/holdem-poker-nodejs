@@ -61,9 +61,9 @@ export function Owner() {
   const onlyRaiseAllIn = stack + bet <= raiseBet + raiseBetDiff;
   const minRaise = Math.min(stack, Math.max(bb, raiseBet + raiseBetDiff - bet));
   const maxRaise = stack;
-  const has1_4 = stack >= pots / 4 && pots / 4 >= minRaise;
   const has1_3 = stack >= pots / 3 && pots / 3 >= minRaise;
   const has1_2 = stack >= pots / 2 && pots / 2 >= minRaise;
+  const has2_3 = stack >= (pots * 2) / 3 && (pots * 2) / 3 >= minRaise;
   const has3_4 = stack >= (pots * 3) / 4 && (pots * 3) / 4 >= minRaise;
   const has1_1 = stack >= pots && pots >= minRaise;
   const chips2call = Math.min(stack, preBet - bet);
@@ -262,11 +262,6 @@ export function Owner() {
             </div>
             {canRaise ? (
               <div className="flex1 flex flex-row flex-center">
-                {has1_4 ? (
-                  <Button onClick={() => setRaise(Math.ceil(pots / 4))}>
-                    1/4
-                  </Button>
-                ) : null}
                 {has1_3 ? (
                   <Button onClick={() => setRaise(Math.ceil(pots / 3))}>
                     1/3
@@ -275,6 +270,11 @@ export function Owner() {
                 {has1_2 ? (
                   <Button onClick={() => setRaise(Math.ceil(pots / 2))}>
                     1/2
+                  </Button>
+                ) : null}
+                {has2_3 ? (
+                  <Button onClick={() => setRaise(Math.ceil((pots * 2) / 3))}>
+                    2/3
                   </Button>
                 ) : null}
                 {has3_4 ? (
