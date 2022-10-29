@@ -39,6 +39,7 @@ export function Owner() {
   const raiseBetDiff = game?.raiseBetDiff || 0;
   const pots = game?.pots || 0;
   const bb = game?.bb || 0;
+  const reBuyLimit = game?.reBuyLimit || 1;
   const isSettling = game?.isSettling || false;
 
   const name = self?.name || "";
@@ -131,7 +132,7 @@ export function Owner() {
             <span className="coins">$</span>
             {stack}
           </div>
-          {stack + bet < bb * 20 &&
+          {stack + bet < reBuyLimit * bb &&
           (game?.isSettling || !self?.isInCurrentGame) ? (
             <Button type="primary" onClick={() => ws_userRebuy()}>
               再次买入

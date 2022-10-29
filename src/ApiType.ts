@@ -25,6 +25,7 @@ export interface SimpleGame {
   raiseBetDiff: number; // valid rasize count
   preBet: number;
   bb: number;
+  reBuyLimit: number;
   isSettling: boolean;
   nextGameTime: number;
 }

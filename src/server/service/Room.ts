@@ -43,6 +43,7 @@ function delayTry(fn: FnType, delay: number): ReturnType<typeof setTimeout> {
 export class Game {
   roomid: RoomID = "";
   smallBlind: number = 0;
+  reBuyLimit: number = 1;
   bigBlindUser: Token = "";
   cards: Card[] = [];
   boardCards: Card[] = [];
@@ -57,10 +58,16 @@ export class Game {
   raiseBet: number = 0; // bet of the raise
   raiseBetDiff: number = 0; //  valid rasize count
 
-  constructor(roomid: RoomID, token: Token, smallBlind: number) {
+  constructor(
+    roomid: RoomID,
+    token: Token,
+    smallBlind: number,
+    reBuyLimit: number
+  ) {
     this.roomid = roomid;
     this.bigBlindUser = token;
     this.smallBlind = smallBlind;
+    this.reBuyLimit = reBuyLimit;
   }
 
   start() {
@@ -355,7 +362,7 @@ export class Game {
 
     // next game
     this.isSettling = true;
-    const delay = 10000; // after 10s, start next game
+    const delay = 6000; // after 6s, start next game
     this.nextGameTime = Date.now() + delay;
     publish2all(this.roomid);
     delayTry(() => {
@@ -499,7 +506,7 @@ class Room {
   smallBlind: number = 0;
   buyIn: number = 0;
   reBuyLimit: number = 1;
-  game: Game = new Game("", "", 0);
+  game: Game = new Game("", "", 0, 1);
   chipsRecords: ChipsRecord[] = [];
 
   constructor(id: string, sb: number, buyIn: number, reBuyLimit: number = 1) {
@@ -535,7 +542,8 @@ class Room {
     this.game = new Game(
       this.id,
       readyUsers.sort((_) => Math.random() - 0.5)[0],
-      this.smallBlind
+      this.smallBlind,
+      this.reBuyLimit
     );
     this.game.start();
     return true;
