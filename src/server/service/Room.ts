@@ -465,7 +465,7 @@ export class Game {
     this.setActingUser(token);
     publish2all(this.roomid);
   }
-  setActingUser(token: Token, delay = 60000) {
+  setActingUser(token: Token, delay = 30000) {
     const user = userMap[token];
     user.isActing = true;
     user.actionEndTime = Date.now() + delay; // 30 s
