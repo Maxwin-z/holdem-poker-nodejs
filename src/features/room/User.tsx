@@ -28,7 +28,7 @@ export function User({ id }: { id: string }) {
     ) : position == "D" ? (
       <Dealer />
     ) : null;
-  const inGame = user?.isInCurrentGame && user?.isReady && !user?.isFoled;
+  const inGame = user?.isInCurrentGame && !user?.isFoled;
   return (
     <div className="user flex-column flex-center">
       <div
