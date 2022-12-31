@@ -217,6 +217,7 @@ export class Game {
         chips == availableStack ? "AllIn" : chips == preBets ? "Call" : "NBet"
       }:`.green,
       user.name,
+      prettify(user.hands),
       chips
     );
 
@@ -261,7 +262,7 @@ export class Game {
       console.error("FOLD: not action", user.name);
       throw "not your action now";
     }
-    console.log(`USER Fold: ${user.name}`.green);
+    console.log(`USER Fold: ${user.name}`.green, prettify(user.hands));
     publishLog2all(this.roomid, [`${user.name} Fold`]);
     user.isFolded = true;
     user.actionName = "Fold";
