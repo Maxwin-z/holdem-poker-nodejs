@@ -472,6 +472,13 @@ export class Game {
 
     // only one user
     if (activeUsers.length < 2) {
+      // avaiable user show all show hand
+      this.sortedUsers.forEach((t) => {
+        const user = userMap[t];
+        if (user.isInCurrentGame && !user.isFolded) {
+          user.shouldShowHand = true;
+        }
+      });
       delayTry(() => {
         this.nextRound();
       }, 1000);
