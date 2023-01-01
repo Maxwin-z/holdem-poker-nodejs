@@ -319,6 +319,27 @@ export class Game {
 
     const crs = roomMap[this.roomid].chipsRecords;
     const logs: string[] = [];
+
+    const leaderIndex = this.sortedUsers.findIndex(
+      (t) => t === this.roundLeader
+    );
+    const actionOrder = [
+      ...this.sortedUsers.splice(leaderIndex),
+      ...this.sortedUsers.splice(0, leaderIndex),
+    ];
+    const winnerMap: { [x: string]: boolean } = {};
+    ps.forEach((p) => {
+      if (p.isWinner) {
+        winnerMap[p.id] = true;
+      }
+    });
+    let lastWinnerIndex = 0;
+    actionOrder.forEach((t, i) => {
+      if (winnerMap[t]) {
+        lastWinnerIndex = i;
+      }
+    });
+
     ps.forEach((p) => {
       const user = userMap[p.id];
       const profits = p.profits! - sum(user.bets);
@@ -328,12 +349,11 @@ export class Game {
       user.isWinner = p.isWinner || false;
       user.maxCards = p.maxCards || [];
       user.actionName = "";
+      const index = actionOrder.findIndex((t) => t === p.id);
       user.shouldShowHand =
         this.round == GameRound.River &&
         availableUsers.length > 1 &&
-        (user.isAllIn ||
-          (!user.isFolded && user.isWinner) ||
-          user.token == this.roundLeader);
+        (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
 
       logs.push(
         `${user.name} ${
