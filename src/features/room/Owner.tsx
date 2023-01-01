@@ -133,7 +133,7 @@ export function Owner() {
             {stack}
           </div>
           {stack + bet < reBuyLimit * bb &&
-          (game?.isSettling || !self?.isInCurrentGame) ? (
+          (game?.isSettling || !self?.isInCurrentGame || self.isFoled) ? (
             <Button type="primary" onClick={() => ws_userRebuy()}>
               再次买入
             </Button>
