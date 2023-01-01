@@ -18,6 +18,7 @@ function rand4str(): string {
   while (id.length < 4) {
     id = `0${id}`;
   }
+  id = id.replace(/4/g, "8");
   return id;
 }
 
