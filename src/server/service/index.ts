@@ -148,6 +148,7 @@ export function userOverTime(token: Token) {
   }
   const roomid = user.roomid;
   const game = roomMap[roomid].game;
+  game.buyOverTimeCard(token);
   game.setActingUser(token, 60000);
 }
 

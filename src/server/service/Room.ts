@@ -477,6 +477,26 @@ export class Game {
       publish2all(this.roomid);
     }, delay);
   }
+  buyOverTimeCard(token: Token) {
+    const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
+    const user = userMap[token];
+    const preRoundBets = sum([...user.bets].splice(0, this.round));
+    const availableStack = user.stack - preRoundBets;
+    const count = this.sortedUsers.length;
+    if (availableStack <= count) {
+      return;
+    }
+    const cost = Math.ceil(
+      Math.min(
+        this.smallBlind * 2,
+        Math.max(1, pots / 4 / count),
+        availableStack / count
+      )
+    );
+    this.sortedUsers.forEach((t) => (userMap[t].stack += cost));
+    user.stack -= count * cost;
+    publish2all(this.roomid);
+  }
   setActed(token: Token) {
     userMap[token].isActing = false;
     userMap[token].needAction = false;
