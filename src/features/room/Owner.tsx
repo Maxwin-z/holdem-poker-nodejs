@@ -70,6 +70,11 @@ export function Owner() {
   const chips2call = Math.min(stack, preBet - bet);
 
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
+  const overtimeCost = Math.min(
+    bb,
+    Math.max(1, pots / 4 / (game?.userCount || 1)),
+    stack / (game?.userCount || 1)
+  );
 
   const [raise, setRaise] = useState(0);
   const [now, setNow] = useState(0);
@@ -179,7 +184,7 @@ export function Owner() {
         </div>
         <div className="flex flex-row flex-center">
           {isActing ? (
-            <Tooltip title="点击加时">
+            <Tooltip title={`点击加时，需支付其他玩家各$${overtimeCost}`}>
               <Button
                 type="text"
                 style={{ width: 300 }}

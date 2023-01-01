@@ -200,6 +200,7 @@ function getSimpleGame(game: Game): SimpleGame {
       raiseUser: "",
       raiseBet: 0,
       raiseBetDiff: 0,
+      userCount: 0,
     };
   }
   const actingUser =
@@ -219,6 +220,7 @@ function getSimpleGame(game: Game): SimpleGame {
     raiseUser: game.raiseUser,
     raiseBet: game.raiseBet,
     raiseBetDiff: game.raiseBetDiff,
+    userCount: game.sortedUsers.length,
   };
 }
 

@@ -28,6 +28,7 @@ export interface SimpleGame {
   reBuyLimit: number;
   isSettling: boolean;
   nextGameTime: number;
+  userCount: number;
 }
 
 export interface SimpleUser {
