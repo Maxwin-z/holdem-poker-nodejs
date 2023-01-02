@@ -1293,3 +1293,31 @@ describe("两人平分15", () => {
     );
   });
 });
+
+describe("debug", () => {
+  it("", () => {
+    const players = [
+      {
+        id: "A_134",
+        total: 134,
+        fold: false,
+        cards: hands2cards("3d3h14s12d11c"),
+      },
+      {
+        id: "C_86",
+        total: 86,
+        fold: false,
+        cards: hands2cards("3d3h14s12d11c"),
+      },
+    ];
+    const ps = settle(players, 1);
+    console.log(
+      ps.map((p) => ({
+        id: p.id,
+        total: p.total,
+        orginTotal: p.originTotal,
+        profits: p.profits,
+      }))
+    );
+  });
+});

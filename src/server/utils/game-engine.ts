@@ -399,13 +399,18 @@ export function settle(players: PlayerInfo[], sb: number): PlayerInfo[] {
     aliveUsers[i].stage = stage;
   }
 
+  // sort users
   aliveUsers = aliveUsers.sort((p1, p2) => {
-    if (p1.stage != p2.stage) {
+    if (p1.stage !== p2.stage) {
       return (p1.stage || 0) - (p2.stage || 0);
     } else {
       return p1.total - p2.total;
     }
   });
+  // sort stage's users. same order with aliveUsers after flatten.
+  for (let i = 0; i < stages.length; ++i) {
+    stages[i] = stages[i].sort((p1, p2) => p1.total - p2.total);
+  }
 
   const allUseres = [...aliveUsers, ...foldUsers];
 
