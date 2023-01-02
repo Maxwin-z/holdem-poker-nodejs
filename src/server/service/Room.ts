@@ -88,6 +88,7 @@ export class Game {
 
     this.multiSettleStart = false;
     this.multiSettleRound = GameRound.PreFlop;
+    this.multiSettleConfirm = false;
     this.multiSettleTimes = 1;
     this.multiSettleIndex = 0;
 
@@ -499,12 +500,13 @@ export class Game {
         );
       });
 
+      console.log("multi settle users:", settleUsers);
+
       // decide
       if (!this.multiSettleStart) {
         // multiple settle users
         publish2all(this.roomid);
 
-        console.log("multi settle users:", settleUsers);
         settleUsers.forEach((t) => {
           send2user(t, {
             selectSettleTimes: true,
