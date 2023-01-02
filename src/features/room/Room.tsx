@@ -22,7 +22,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { User } from "./User";
 import { Owner } from "./Owner";
-import { useAppSelector } from "../../app/hooks";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   selectSelf,
   selectRoomID,
@@ -48,6 +48,7 @@ import { GameHistory } from "../gamehistory/GameHistory";
 import { Spectators } from "./Spectators";
 
 export function Room() {
+  const dispatch = useAppDispatch();
   const centerRef = useRef(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const roomid = useAppSelector(selectRoomID);
@@ -64,7 +65,7 @@ export function Room() {
 
   function setSettleTimes(times: number) {
     ws_settleTimes(times);
-    setSelectSettleTimes(false);
+    dispatch(setSelectSettleTimes(false));
   }
 
   useEffect(() => {

@@ -60,7 +60,8 @@ export class Game {
 
   multiSettleStart: boolean = false;
   multiSettleRound: GameRound = GameRound.PreFlop;
-  multiSettleCount: number = 1; // settle times
+  multiSettleConfirm: boolean = false;
+  multiSettleTimes: number = 1; // settle times
   multiSettleIndex: number = 0;
 
   constructor(
@@ -87,7 +88,7 @@ export class Game {
 
     this.multiSettleStart = false;
     this.multiSettleRound = GameRound.PreFlop;
-    this.multiSettleCount = 1;
+    this.multiSettleTimes = 1;
     this.multiSettleIndex = 0;
 
     this.sortedUsers = this.sortUsersBySmallBlind();
@@ -137,6 +138,7 @@ export class Game {
       user.totalBets = 0;
       user.maxCards = [];
       user.profits = 0;
+      user.settleTimes = 0;
     });
   }
   sortUsersBySmallBlind(): Token[] {
@@ -301,11 +303,11 @@ export class Game {
     logGame(this);
 
     const subTotal = (total: number) => {
-      const chips = Math.floor(total / this.multiSettleCount);
-      if (this.multiSettleIndex < this.multiSettleCount - 1) {
+      const chips = Math.floor(total / this.multiSettleTimes);
+      if (this.multiSettleIndex < this.multiSettleTimes - 1) {
         return chips;
       } else {
-        return total - (this.multiSettleCount - 1) * chips;
+        return total - (this.multiSettleTimes - 1) * chips;
       }
     };
 
@@ -405,7 +407,7 @@ export class Game {
     });
     // end log
 
-    if (++this.multiSettleIndex < this.multiSettleCount) {
+    if (++this.multiSettleIndex < this.multiSettleTimes) {
       publishLog2all(this.roomid, [`第${this.multiSettleIndex + 1}轮`]);
       // new one
       this.round = this.multiSettleRound;
@@ -468,11 +470,75 @@ export class Game {
     }, 1000);
   }
   nextRound(): void {
-    if (this.round == GameRound.River) {
+    if (this.round === GameRound.River) {
       console.log("already river turn, goto settle");
       this.settle();
       return;
     }
+
+    const activeUsers = this.sortedUsers.filter(
+      (t) => !userMap[t].isFolded && !userMap[t].isAllIn
+    );
+
+    console.log("nextRound", activeUsers);
+
+    // only one or zero user need act
+    if (activeUsers.length <= 1) {
+      // avaiable user show all show hand
+      this.sortedUsers.forEach((t) => {
+        const user = userMap[t];
+        if (user.isInCurrentGame && !user.isFolded) {
+          user.shouldShowHand = true;
+        }
+      });
+
+      const settleUsers = this.sortedUsers.filter((t) => {
+        const user = userMap[t];
+        return (
+          !user.isFolded && user.isInCurrentGame && user.bets[this.round] > 0
+        );
+      });
+
+      // decide
+      if (!this.multiSettleStart) {
+        // multiple settle users
+        publish2all(this.roomid);
+
+        console.log("multi settle users:", settleUsers);
+        settleUsers.forEach((t) => {
+          send2user(t, {
+            selectSettleTimes: true,
+          });
+        });
+
+        const log =
+          "玩家" +
+          settleUsers.map((t) => userMap[t].name).join(", ") +
+          "决定发牌次数";
+        publishLog2all(this.roomid, [log]);
+
+        this.multiSettleStart = true;
+        this.multiSettleRound = this.round;
+        this.multiSettleIndex = 0;
+        return;
+      } else if (!this.multiSettleConfirm) {
+        // check all settle users selected
+        let settleTimes = Number.MAX_VALUE;
+        settleUsers.forEach(
+          (t) => (settleTimes = Math.min(settleTimes, userMap[t].settleTimes))
+        );
+        console.log("times", settleTimes);
+        if (settleTimes === 0) {
+          // wait for other user
+          return;
+        } else {
+          this.multiSettleTimes = settleTimes;
+          this.multiSettleConfirm = true;
+          publishLog2all(this.roomid, [`发${settleTimes}次`]);
+        }
+      }
+    }
+
     this.round += 1;
     this.roundLeader = "";
     this.sortedUsers.forEach((t) => (userMap[t].actionName = ""));
@@ -513,66 +579,17 @@ export class Game {
     this.calcUserRank();
 
     publishLog2all(this.roomid, [log]);
-    const activeUsers = this.sortedUsers.filter(
-      (t) => !userMap[t].isFolded && !userMap[t].isAllIn
-    );
 
-    // only one user
-    if (activeUsers.length < 2) {
-      // avaiable user show all show hand
-      this.sortedUsers.forEach((t) => {
-        const user = userMap[t];
-        if (user.isInCurrentGame && !user.isFolded) {
-          user.shouldShowHand = true;
-        }
-      });
-
-      const settleUsers = this.sortedUsers.filter((t) => {
-        const user = userMap[t];
-        return (
-          !user.isFolded &&
-          user.isInCurrentGame &&
-          user.bets[this.round - 1] > 0
-        );
-      });
-
-      // decide
-      if (!this.multiSettleStart) {
-        // multiple settle users
-        console.log("settle users:", settleUsers);
-        settleUsers.forEach((t) => {
-          send2user(t, {
-            selectSettleTimes: true,
-          });
-        });
-
-        const log =
-          "玩家" +
-          settleUsers.map((t) => userMap[t].name).join(", ") +
-          "决定发牌次数";
-        publishLog2all(this.roomid, [log]);
-
-        this.multiSettleStart = true;
-        this.multiSettleRound = this.round - 1;
-        this.multiSettleIndex = 0;
-        return;
-      } else {
-        // check all settle users selected
-        return;
-      }
-
+    if (activeUsers.length <= 1) {
       delayTry(() => {
         this.nextRound();
       }, 1000);
-      publish2all(this.roomid);
-      return;
+    } else {
+      activeUsers.forEach((t) => (userMap[t].needAction = true));
+      const token = activeUsers[0];
+      this.roundLeader = token;
+      this.setActingUser(token);
     }
-
-    activeUsers.forEach((t) => (userMap[t].needAction = true));
-
-    const token = activeUsers[0];
-    this.roundLeader = token;
-    this.setActingUser(token);
     publish2all(this.roomid);
   }
   setActingUser(token: Token, delay = 30000) {

@@ -15,6 +15,7 @@ import {
   userOverTime,
   userReady,
   userReBuy,
+  userSetSettleTimes,
   userShowHands,
   userWatch,
 } from "../service";
@@ -63,6 +64,7 @@ export function send2all(roomid: RoomID, data: any) {
   roomMap[roomid].users.forEach((t) => send2user(t, data));
 }
 
+// eslint-disable-next-line import/no-anonymous-default-export
 export default async (ctx: Context) => {
   const token = ctx.request.header["sec-websocket-protocol"]?.toString() || "";
   let websocket: PokerWebSocket | null = null;
@@ -156,6 +158,8 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.SHOW_HANDS:
       userShowHands(token, data.index);
       break;
+    case ActionType.SET_SETTLE_TIMES:
+      userSetSettleTimes(token, data.times);
   }
   if (data.action != ActionType.LEAVE) {
     publish(token, data, ws);
