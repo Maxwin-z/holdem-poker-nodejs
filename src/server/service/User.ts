@@ -28,6 +28,7 @@ class User {
   actionName: string = "";
   stack: number = 0;
   bets: number[] = [0, 0, 0, 0];
+  totalBets: number = 0; // sum(bets)
   hands: Card[] = [];
   maxCards: Card[] = [];
   profits: number = 0;

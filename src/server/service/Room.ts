@@ -134,6 +134,7 @@ export class Game {
       user.isWinner = false;
       user.positon = "";
       user.bets = [0, 0, 0, 0];
+      user.totalBets = 0;
       user.maxCards = [];
       user.profits = 0;
     });
@@ -260,6 +261,7 @@ export class Game {
     publishLog2all(this.roomid, [log]);
 
     user.bets[this.round] = chips;
+    user.totalBets += chips;
     this.setActed(token);
 
     if (chips == availableStack) {
@@ -315,8 +317,7 @@ export class Game {
       const user = userMap[t];
       return {
         id: user.token,
-        bets: user.bets,
-        total: subTotal(sum(user.bets)),
+        total: subTotal(user.totalBets),
         profits: 0,
         fold: user.isFolded,
         cards: [...user.hands, ...this.boardCards],
@@ -329,7 +330,7 @@ export class Game {
     // just log
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const total = subTotal(sum(user.bets));
+      const total = subTotal(user.totalBets);
       console.log(
         `${user.name} ${prettify(user.hands)} Stage: ${p.stage} Max: ${prettify(
           p.maxCards!
@@ -365,7 +366,8 @@ export class Game {
 
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const profits = p.profits! - subTotal(sum(user.bets));
+      const profits = p.profits! - subTotal(user.totalBets);
+      user.bets = [0, 0, 0, 0];
       user.stack += profits;
       user.profits = profits;
       user.isWinner = p.isWinner || false;
