@@ -324,7 +324,7 @@ export class Game {
       };
     });
 
-    console.log(JSON.stringify(players, null, 2));
+    // console.log(JSON.stringify(players, null, 2));
     const ps = settle(players, 1);
 
     // just log
