@@ -12,12 +12,14 @@ export interface RoomState {
   room: SimpleRoom | null;
   game: SimpleGame | null;
   self: SimpleSelf | null;
+  selectSettleTimes: boolean;
 }
 
 const initialState: RoomState = {
   room: null,
   game: null,
   self: null,
+  selectSettleTimes: false,
 };
 
 export const roomSlice = createSlice({
@@ -38,7 +40,7 @@ export const roomSlice = createSlice({
       const user = action.payload;
       if (room) {
         room.users.forEach((u, i) => {
-          if (u.id == user.id) {
+          if (u.id === user.id) {
             room.users[i] = user;
           }
         });
@@ -58,12 +60,21 @@ export const roomSlice = createSlice({
         }
       }
     },
+    setSelectSettleTimes(state, action: PayloadAction<boolean>) {
+      state.selectSettleTimes = action.payload;
+    },
   },
   extraReducers: (builder) => {},
 });
 
-export const { setRoom, setGame, setSelf, setUser, setHands } =
-  roomSlice.actions;
+export const {
+  setRoom,
+  setGame,
+  setSelf,
+  setUser,
+  setHands,
+  setSelectSettleTimes,
+} = roomSlice.actions;
 export const selectRoomID = (state: RootState) => state.room.room?.roomid;
 export const selectUsers = (state: RootState) => {
   const { room, self } = state.room;
@@ -90,6 +101,9 @@ export const selectSelf = (state: RootState) => {
   }
   const owner = room.users[room.users.findIndex((u) => u.id == self.id)];
   return Object.assign({}, owner, self);
+};
+export const getSelectSettleStatus = (state: RootState) => {
+  return state.room.selectSettleTimes;
 };
 
 export default roomSlice.reducer;

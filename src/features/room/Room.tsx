@@ -1,4 +1,13 @@
-import { Button, Input, message, Popconfirm, Row, Tooltip } from "antd";
+import {
+  Button,
+  Col,
+  Input,
+  message,
+  Modal,
+  Popconfirm,
+  Row,
+  Tooltip,
+} from "antd";
 import { Card as PokerCard } from "../../ApiType";
 import {
   LoginOutlined,
@@ -13,16 +22,19 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { User } from "./User";
 import { Owner } from "./Owner";
-import { useAppSelector, useAppDispatch } from "../../app/hooks";
+import { useAppSelector } from "../../app/hooks";
 import {
   selectSelf,
   selectRoomID,
   selectUsers,
   selectGame,
   selectRoom,
+  getSelectSettleStatus,
+  setSelectSettleTimes,
 } from "./roomSlice";
 import {
   ws_pauseGame,
+  ws_settleTimes,
   ws_startGame,
   ws_userHangup,
   ws_userLeave,
@@ -43,11 +55,17 @@ export function Room() {
   const room = useAppSelector(selectRoom);
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
+  const selectSettleTime = useAppSelector(getSelectSettleStatus);
   const isSettling = game?.isSettling || false;
   const nextGameTime = Math.floor(
     ((game?.nextGameTime || Date.now()) - Date.now()) / 1000
   );
   const cards: PokerCard[] = [...(game?.boardCards || [])];
+
+  function setSettleTimes(times: number) {
+    ws_settleTimes(times);
+    setSelectSettleTimes(false);
+  }
 
   useEffect(() => {
     function handleResize() {
@@ -235,6 +253,45 @@ export function Room() {
       <div className="card">
         <ChipsRecord />
       </div>
+      <Modal
+        title="选择发牌次数"
+        visible={selectSettleTime}
+        footer={null}
+        closable={false}
+      >
+        <Button
+          type="primary"
+          size="large"
+          style={{ marginRight: 10 }}
+          onClick={() => setSettleTimes(1)}
+        >
+          发一次
+        </Button>
+        <Button
+          type="primary"
+          size="large"
+          style={{ marginRight: 10 }}
+          onClick={() => setSettleTimes(2)}
+        >
+          发两次
+        </Button>
+        <Button
+          type="primary"
+          size="large"
+          style={{ marginRight: 10 }}
+          onClick={() => setSettleTimes(3)}
+        >
+          发三次
+        </Button>
+        <Button
+          type="primary"
+          size="large"
+          style={{ marginRight: 10 }}
+          onClick={() => setSettleTimes(4)}
+        >
+          发四次
+        </Button>
+      </Modal>
     </div>
   );
 }
