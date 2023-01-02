@@ -368,7 +368,6 @@ export class Game {
       const profits = p.profits! - subTotal(sum(user.bets));
       user.stack += profits;
       user.profits = profits;
-      user.bets = [0, 0, 0, 0];
       user.isWinner = p.isWinner || false;
       user.maxCards = p.maxCards || [];
       user.actionName = "";
@@ -529,7 +528,7 @@ export class Game {
       if (!this.multiSettleStart) {
         this.multiSettleStart = true;
         this.multiSettleRound = this.round - 1;
-        this.multiSettleCount = 2;
+        this.multiSettleCount = 3;
         this.multiSettleIndex = 0;
       }
 
