@@ -96,4 +96,6 @@ export enum ActionType {
   LEAVE,
   SHOW_HANDS,
   WATCH,
+  SELECT_SETTLE_TIMES,
+  SET_SETTLE_TIMES,
 }

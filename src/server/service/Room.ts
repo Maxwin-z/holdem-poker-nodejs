@@ -13,7 +13,7 @@ import {
   settle,
 } from "../utils/game-engine";
 import { logGame } from "../tests/utils";
-import { publish2all, publishLog2all } from "../api/ws";
+import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
 
 export type RoomID = string;
@@ -527,11 +527,38 @@ export class Game {
         }
       });
 
+      const settleUsers = this.sortedUsers.filter((t) => {
+        const user = userMap[t];
+        return (
+          !user.isFolded &&
+          user.isInCurrentGame &&
+          user.bets[this.round - 1] > 0
+        );
+      });
+
+      // decide
       if (!this.multiSettleStart) {
+        // multiple settle users
+        console.log("settle users:", settleUsers);
+        settleUsers.forEach((t) => {
+          send2user(t, {
+            selectSettleTimes: true,
+          });
+        });
+
+        const log =
+          "玩家" +
+          settleUsers.map((t) => userMap[t].name).join(", ") +
+          "决定发牌次数";
+        publishLog2all(this.roomid, [log]);
+
         this.multiSettleStart = true;
         this.multiSettleRound = this.round - 1;
-        this.multiSettleCount = 3;
         this.multiSettleIndex = 0;
+        return;
+      } else {
+        // check all settle users selected
+        return;
       }
 
       delayTry(() => {
