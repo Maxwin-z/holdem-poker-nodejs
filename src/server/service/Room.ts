@@ -58,6 +58,11 @@ export class Game {
   raiseBet: number = 0; // bet of the raise
   raiseBetDiff: number = 0; //  valid rasize count
 
+  multiSettleStart: boolean = false;
+  multiSettleRound: GameRound = GameRound.PreFlop;
+  multiSettleCount: number = 1; // settle times
+  multiSettleIndex: number = 0;
+
   constructor(
     roomid: RoomID,
     token: Token,
@@ -80,14 +85,21 @@ export class Game {
     this.roundLeader = "";
     this.raiseUser = "";
 
+    this.multiSettleStart = false;
+    this.multiSettleRound = GameRound.PreFlop;
+    this.multiSettleCount = 1;
+    this.multiSettleIndex = 0;
+
     this.sortedUsers = this.sortUsersBySmallBlind();
-    console.log(new Array(10).fill("==").join(""));
-    console.log("START:", this.sortedUsers);
-    console.log(this.cards.map((c) => `${c.num}${c.suit}`).join(""));
-    publishLog2all(this.roomid, ["====游戏开始===="]);
     if (this.sortedUsers.length < 2) {
+      console.log("not enough users");
       return;
     }
+    console.log(new Array(10).fill("==").join(""));
+    console.log("START:", this.sortedUsers);
+    console.log(prettify(this.cards));
+    publishLog2all(this.roomid, ["====游戏开始===="]);
+
     this.dealCards2User();
     this.doPreBet();
     publish2all(this.roomid);
@@ -142,8 +154,8 @@ export class Game {
       (tokens.findIndex((t) => t == this.bigBlindUser) + (tokens.length - 1)) %
       tokens.length;
     return [
-      ...[...tokens].splice(smallBlindIndex),
-      ...[...tokens].splice(0, smallBlindIndex),
+      ...[...tokens].slice(smallBlindIndex),
+      ...[...tokens].slice(0, smallBlindIndex),
     ];
   }
   removeUser(token: Token) {
@@ -181,7 +193,7 @@ export class Game {
       console.error("BET: not action", user.name);
       throw "not your action now";
     }
-    const preRoundBets = sum([...user.bets].splice(0, this.round));
+    const preRoundBets = sum([...user.bets].slice(0, this.round));
     const availableStack = user.stack - preRoundBets;
     // console.log(`round ${this.round}:`, user.token, user.stack, availableStack);
     if (chips > availableStack) {
@@ -285,6 +297,16 @@ export class Game {
   settle() {
     console.log("SETTLE NOW");
     logGame(this);
+
+    const subTotal = (total: number) => {
+      const chips = Math.floor(total / this.multiSettleCount);
+      if (this.multiSettleIndex < this.multiSettleCount - 1) {
+        return chips;
+      } else {
+        return total - (this.multiSettleCount - 1) * chips;
+      }
+    };
+
     const availableUsers = this.sortedUsers
       .filter((t) => !userMap[t].isFolded)
       .map((t) => userMap[t]);
@@ -294,19 +316,20 @@ export class Game {
       return {
         id: user.token,
         bets: user.bets,
-        total: sum(user.bets),
+        total: subTotal(sum(user.bets)),
         profits: 0,
         fold: user.isFolded,
         cards: [...user.hands, ...this.boardCards],
       };
     });
 
+    console.log(JSON.stringify(players, null, 2));
     const ps = settle(players, 1);
 
     // just log
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const total = sum(user.bets);
+      const total = subTotal(sum(user.bets));
       console.log(
         `${user.name} ${prettify(user.hands)} Stage: ${p.stage} Max: ${prettify(
           p.maxCards!
@@ -324,8 +347,8 @@ export class Game {
       (t) => t === this.roundLeader
     );
     const actionOrder = [
-      ...this.sortedUsers.splice(leaderIndex),
-      ...this.sortedUsers.splice(0, leaderIndex),
+      ...this.sortedUsers.slice(leaderIndex),
+      ...this.sortedUsers.slice(0, leaderIndex),
     ];
     const winnerMap: { [x: string]: boolean } = {};
     ps.forEach((p) => {
@@ -342,7 +365,7 @@ export class Game {
 
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const profits = p.profits! - sum(user.bets);
+      const profits = p.profits! - subTotal(sum(user.bets));
       user.stack += profits;
       user.profits = profits;
       user.bets = [0, 0, 0, 0];
@@ -351,7 +374,7 @@ export class Game {
       user.actionName = "";
       const index = actionOrder.findIndex((t) => t === p.id);
       user.shouldShowHand =
-        this.round == GameRound.River &&
+        this.round === GameRound.River &&
         availableUsers.length > 1 &&
         (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
 
@@ -369,7 +392,7 @@ export class Game {
       if (user.stack < this.smallBlind * 2) {
         user.isReady = false;
       }
-      crs.find((cr) => cr.id == user.chipsRecordID)!.chips = user.stack;
+      crs.find((cr) => cr.id === user.chipsRecordID)!.chips = user.stack;
     });
 
     publishLog2all(this.roomid, logs);
@@ -380,6 +403,29 @@ export class Game {
       console.log(`${user.token}, Stack: ${user.stack}`);
     });
     // end log
+
+    if (++this.multiSettleIndex < this.multiSettleCount) {
+      publishLog2all(this.roomid, [`第${this.multiSettleIndex + 1}轮`]);
+      // new one
+      this.round = this.multiSettleRound;
+      switch (this.round) {
+        case GameRound.PreFlop:
+          this.boardCards = [];
+          break;
+        case GameRound.Flop:
+          this.boardCards = this.boardCards.slice(0, 3);
+          break;
+        case GameRound.Turn:
+          this.boardCards = this.boardCards.slice(0, 4);
+          break;
+      }
+
+      publish2all(this.roomid);
+      delayTry(() => {
+        this.nextRound();
+      }, 3000);
+      return;
+    }
 
     // next game
     this.isSettling = true;
@@ -434,20 +480,20 @@ export class Game {
     this.raiseBetDiff = this.smallBlind * 2;
     const r = this.round;
     const roundName =
-      r == 0
+      r === GameRound.PreFlop
         ? "PreFlop"
-        : r == 1
+        : r === GameRound.Flop
         ? "Flop"
-        : r == 2
+        : r === GameRound.Turn
         ? "Turn"
-        : r == 3
+        : r === GameRound.River
         ? "River"
         : "Invalid";
 
     let log = `${roundName}: `;
     // deal cards
     this.cardIndex += 1; // skip one
-    if (this.round == GameRound.Flop) {
+    if (this.round === GameRound.Flop) {
       for (let i = 0; i < 3; ++i) {
         const card = this.cards[this.cardIndex];
         this.boardCards.push(card);
@@ -479,6 +525,14 @@ export class Game {
           user.shouldShowHand = true;
         }
       });
+
+      if (!this.multiSettleStart) {
+        this.multiSettleStart = true;
+        this.multiSettleRound = this.round - 1;
+        this.multiSettleCount = 2;
+        this.multiSettleIndex = 0;
+      }
+
       delayTry(() => {
         this.nextRound();
       }, 1000);
@@ -507,7 +561,7 @@ export class Game {
   buyOverTimeCard(token: Token) {
     const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
     const user = userMap[token];
-    const preRoundBets = sum([...user.bets].splice(0, this.round));
+    const preRoundBets = sum([...user.bets].slice(0, this.round));
     const availableStack = user.stack - preRoundBets;
     const count = this.sortedUsers.length;
     if (availableStack <= count) {
