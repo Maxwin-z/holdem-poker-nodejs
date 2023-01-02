@@ -1,13 +1,4 @@
-import {
-  Button,
-  Col,
-  Input,
-  message,
-  Modal,
-  Popconfirm,
-  Row,
-  Tooltip,
-} from "antd";
+import { Button, Input, message, Popconfirm, Tooltip } from "antd";
 import { Card as PokerCard } from "../../ApiType";
 import {
   LoginOutlined,
@@ -246,6 +237,41 @@ export function Room() {
             </div>
             <div className="pots">底池: {game?.pots || 0}</div>
           </div>
+          {selectSettleTime ? (
+            <div style={{ margin: "auto", padding: "20px 0" }}>
+              <div>请选择发牌次数</div>
+              <div>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(1)}
+                >
+                  发一次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(2)}
+                >
+                  发两次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(3)}
+                >
+                  发三次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(4)}
+                >
+                  发四次
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex1">
             <Owner />
           </div>
@@ -254,45 +280,6 @@ export function Room() {
       <div className="card">
         <ChipsRecord />
       </div>
-      <Modal
-        title="选择发牌次数"
-        visible={selectSettleTime}
-        footer={null}
-        closable={false}
-      >
-        <Button
-          type="primary"
-          size="large"
-          style={{ marginRight: 10 }}
-          onClick={() => setSettleTimes(1)}
-        >
-          发一次
-        </Button>
-        <Button
-          type="primary"
-          size="large"
-          style={{ marginRight: 10 }}
-          onClick={() => setSettleTimes(2)}
-        >
-          发两次
-        </Button>
-        <Button
-          type="primary"
-          size="large"
-          style={{ marginRight: 10 }}
-          onClick={() => setSettleTimes(3)}
-        >
-          发三次
-        </Button>
-        <Button
-          type="primary"
-          size="large"
-          style={{ marginRight: 10 }}
-          onClick={() => setSettleTimes(4)}
-        >
-          发四次
-        </Button>
-      </Modal>
     </div>
   );
 }
