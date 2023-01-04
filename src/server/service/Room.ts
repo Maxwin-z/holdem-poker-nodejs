@@ -513,6 +513,10 @@ export class Game {
           });
         });
 
+        delayTry(() => {
+          settleUsers.forEach((t) => this.userSetSettleTimes(t, 4));
+        }, 30000);
+
         const log =
           "玩家" +
           settleUsers.map((t) => userMap[t].name).join(", ") +
@@ -606,8 +610,8 @@ export class Game {
     }, delay);
   }
   userSetSettleTimes(token: Token, times: number) {
-    if (times < 1) {
-      times = 1;
+    if (!this.multiSettleStart || userMap[token].settleTimes > 0 || times < 1) {
+      return;
     }
     userMap[token].settleTimes = times;
     this.nextRound();
