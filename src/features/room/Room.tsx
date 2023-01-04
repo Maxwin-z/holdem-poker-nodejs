@@ -239,7 +239,12 @@ export function Room() {
           </div>
           {selectSettleStatus ? (
             <div style={{ margin: "auto", padding: "20px 0" }}>
-              <div>请选择发牌次数</div>
+              <div>
+                请选择发牌次数
+                <span style={{ width: 100 }}>
+                  <CountDown time={30} total={30} />
+                </span>
+              </div>
               <div>
                 <Button
                   type="primary"
