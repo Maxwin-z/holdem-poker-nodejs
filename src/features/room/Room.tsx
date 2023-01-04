@@ -47,7 +47,7 @@ export function Room() {
   const room = useAppSelector(selectRoom);
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
-  const selectSettleTime = useAppSelector(getSelectSettleStatus);
+  const selectSettleStatus = useAppSelector(getSelectSettleStatus);
   const isSettling = game?.isSettling || false;
   const nextGameTime = Math.floor(
     ((game?.nextGameTime || Date.now()) - Date.now()) / 1000
@@ -237,7 +237,7 @@ export function Room() {
             </div>
             <div className="pots">底池: {game?.pots || 0}</div>
           </div>
-          {selectSettleTime ? (
+          {selectSettleStatus ? (
             <div style={{ margin: "auto", padding: "20px 0" }}>
               <div>请选择发牌次数</div>
               <div>

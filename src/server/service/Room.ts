@@ -63,6 +63,7 @@ export class Game {
   multiSettleConfirm: boolean = false;
   multiSettleTimes: number = 1; // settle times
   multiSettleIndex: number = 0;
+  multiSettleTimer = setTimeout(() => {}, 0);
 
   constructor(
     roomid: RoomID,
@@ -91,6 +92,7 @@ export class Game {
     this.multiSettleConfirm = false;
     this.multiSettleTimes = 1;
     this.multiSettleIndex = 0;
+    clearTimeout(this.multiSettleTimer);
 
     this.sortedUsers = this.sortUsersBySmallBlind();
     if (this.sortedUsers.length < 2) {
@@ -509,12 +511,17 @@ export class Game {
 
         settleUsers.forEach((t) => {
           send2user(t, {
-            selectSettleTimes: true,
+            selectSettleTimes: 1,
           });
         });
 
-        delayTry(() => {
-          settleUsers.forEach((t) => this.userSetSettleTimes(t, 4));
+        this.multiSettleTimer = delayTry(() => {
+          settleUsers.forEach((t) => {
+            this.userSetSettleTimes(t, 4);
+            send2user(t, {
+              selectSettleTimes: 0,
+            });
+          });
         }, 30000);
 
         const log =

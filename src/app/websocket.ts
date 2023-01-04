@@ -84,8 +84,11 @@ export const connect2server =
         if (data.logs) {
           dispatch(addLogs(data.logs));
         }
-        if (data.selectSettleTimes) {
+        if (data.selectSettleTimes === 1) {
           dispatch(setSelectSettleTimes(true));
+        }
+        if (data.selectSettleTimes === 0) {
+          dispatch(setSelectSettleTimes(false));
         }
         console.log(data);
       } catch (e) {
