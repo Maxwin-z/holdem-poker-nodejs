@@ -216,9 +216,5 @@ export function userSetSettleTimes(token: Token, times: number) {
   if (!isInRoom(token, roomid)) {
     throw "invalid room";
   }
-  if (times < 1) {
-    times = 1;
-  }
-  user.settleTimes = times;
-  game.nextRound();
+  game.userSetSettleTimes(token, times);
 }

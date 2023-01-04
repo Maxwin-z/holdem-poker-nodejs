@@ -605,6 +605,13 @@ export class Game {
       publish2all(this.roomid);
     }, delay);
   }
+  userSetSettleTimes(token: Token, times: number) {
+    if (times < 1) {
+      times = 1;
+    }
+    userMap[token].settleTimes = times;
+    this.nextRound();
+  }
   buyOverTimeCard(token: Token) {
     const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
     const user = userMap[token];
