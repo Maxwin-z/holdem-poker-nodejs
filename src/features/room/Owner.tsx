@@ -67,6 +67,8 @@ export function Owner() {
   const has2_3 = stack >= (pots * 2) / 3 && (pots * 2) / 3 >= minRaise;
   const has3_4 = stack >= (pots * 3) / 4 && (pots * 3) / 4 >= minRaise;
   const has1_1 = stack >= pots && pots >= minRaise;
+  const useBB = stack > 4 * bb && pots < 4 * bb;
+
   const chips2call = Math.min(stack, preBet - bet);
 
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
@@ -268,31 +270,48 @@ export function Owner() {
             </div>
             {canRaise ? (
               <div className="flex1 flex flex-row flex-center">
-                {has1_3 ? (
-                  <Button onClick={() => setRaise(Math.ceil(pots / 3))}>
-                    1/3
-                  </Button>
-                ) : null}
-                {has1_2 ? (
-                  <Button onClick={() => setRaise(Math.ceil(pots / 2))}>
-                    1/2
-                  </Button>
-                ) : null}
-                {has2_3 ? (
-                  <Button onClick={() => setRaise(Math.ceil((pots * 2) / 3))}>
-                    2/3
-                  </Button>
-                ) : null}
-                {has3_4 ? (
-                  <Button onClick={() => setRaise(Math.ceil((pots * 3) / 4))}>
-                    3/4
-                  </Button>
-                ) : null}
-                {has1_1 ? (
-                  <Button onClick={() => setRaise(Math.ceil(pots))}>
-                    1Pots
-                  </Button>
-                ) : null}
+                {useBB ? (
+                  <>
+                    <Button onClick={() => setRaise(bb * 2)}>2BB</Button>
+                    <Button onClick={() => setRaise(Math.floor(bb * 2.5))}>
+                      2.5BB
+                    </Button>
+                    <Button onClick={() => setRaise(bb * 3)}>3BB</Button>
+                    <Button onClick={() => setRaise(bb * 4)}>4BB</Button>
+                  </>
+                ) : (
+                  <>
+                    {has1_3 ? (
+                      <Button onClick={() => setRaise(Math.ceil(pots / 3))}>
+                        1/3
+                      </Button>
+                    ) : null}
+                    {has1_2 ? (
+                      <Button onClick={() => setRaise(Math.ceil(pots / 2))}>
+                        1/2
+                      </Button>
+                    ) : null}
+                    {has2_3 ? (
+                      <Button
+                        onClick={() => setRaise(Math.ceil((pots * 2) / 3))}
+                      >
+                        2/3
+                      </Button>
+                    ) : null}
+                    {has3_4 ? (
+                      <Button
+                        onClick={() => setRaise(Math.ceil((pots * 3) / 4))}
+                      >
+                        3/4
+                      </Button>
+                    ) : null}
+                    {has1_1 ? (
+                      <Button onClick={() => setRaise(Math.ceil(pots))}>
+                        1Pots
+                      </Button>
+                    ) : null}
+                  </>
+                )}
                 <InputNumber
                   min={minRaise}
                   max={maxRaise}
