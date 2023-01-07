@@ -124,6 +124,8 @@ export class Game {
     }
     // not enough users, pause game
     this.initUsers();
+    console.log("cannot find big blind");
+    this.isSettling = true;
     roomMap[this.roomid].pauseGameInteral();
   }
   initUsers() {
@@ -153,15 +155,16 @@ export class Game {
     );
     if (tokens.length < 2) {
       console.log(`only ${tokens} user left, pause game`);
+      this.isSettling = true;
       roomMap[this.roomid].pauseGameInteral();
       return [];
     }
     const smallBlindIndex =
-      (tokens.findIndex((t) => t == this.bigBlindUser) + (tokens.length - 1)) %
+      (tokens.findIndex((t) => t === this.bigBlindUser) + (tokens.length - 1)) %
       tokens.length;
     return [
-      ...[...tokens].slice(smallBlindIndex),
-      ...[...tokens].slice(0, smallBlindIndex),
+      ...tokens.slice(smallBlindIndex),
+      ...tokens.slice(0, smallBlindIndex),
     ];
   }
   removeUser(token: Token) {
@@ -723,6 +726,7 @@ class Room {
     if (!isOwner) {
       throw "not room owner";
     }
+    console.log("owner pause game");
     this.pauseGameInteral();
   }
 
