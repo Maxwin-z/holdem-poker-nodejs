@@ -173,8 +173,8 @@ export class Game {
   doPreBet() {
     const sb = userMap[this.sortedUsers[0]];
     const bb = userMap[this.sortedUsers[1]];
-    sb.bets[0] = roomMap[this.roomid].smallBlind;
-    bb.bets[0] = roomMap[this.roomid].smallBlind * 2;
+    sb.bets[0] = sb.totalBets = roomMap[this.roomid].smallBlind;
+    bb.bets[0] = bb.totalBets = roomMap[this.roomid].smallBlind * 2;
     if (bb.stack == bb.bets[0]) {
       bb.isAllIn = true;
     }
@@ -269,7 +269,7 @@ export class Game {
     publishLog2all(this.roomid, [log]);
 
     user.bets[this.round] = chips;
-    user.totalBets += chips;
+    user.totalBets = sum(user.bets);
     this.setActed(token);
 
     if (chips == availableStack) {
