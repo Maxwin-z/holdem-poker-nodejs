@@ -9,6 +9,7 @@ import {
   setGame,
   setHands,
   setRoom,
+  setSelectSettleTimes,
   setSelf,
   setUser,
 } from "../features/room/roomSlice";
@@ -83,6 +84,13 @@ export const connect2server =
           if (data.logs) {
             dispatch(addLogs(data.logs));
           }
+          if (data.selectSettleTimes === 1) {
+            dispatch(setSelectSettleTimes(true));
+          }
+          if (data.selectSettleTimes === 0) {
+            dispatch(setSelectSettleTimes(false));
+          }
+
           console.log(data);
         } catch (e) {
           console.log(msg.data);
@@ -167,5 +175,12 @@ export function ws_userWatch(watch: boolean) {
   send2server({
     action: ActionType.WATCH,
     watch,
+  });
+}
+
+export function ws_settleTimes(times: number) {
+  send2server({
+    action: ActionType.SET_SETTLE_TIMES,
+    times,
   });
 }

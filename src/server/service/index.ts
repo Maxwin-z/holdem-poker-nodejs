@@ -208,3 +208,13 @@ export function userShowHands(token: Token, index: number) {
     publishLog2all(roomid, [`${user.name}亮牌${card}`]);
   }
 }
+
+export function userSetSettleTimes(token: Token, times: number) {
+  const user = userMap[token];
+  const roomid = user.roomid;
+  const game = roomMap[roomid].game;
+  if (!isInRoom(token, roomid)) {
+    throw "invalid room";
+  }
+  game.userSetSettleTimes(token, times);
+}

@@ -391,7 +391,7 @@ export function settle(players: PlayerInfo[], sb: number): PlayerInfo[] {
   let stage = 0;
   for (let i = 1; i < aliveUsers.length; ++i) {
     // equal to the previous one
-    if (compare(aliveUsers[i].cards, stages[stage][0].cards) == 0) {
+    if (compare(aliveUsers[i].cards, stages[stage][0].cards) === 0) {
       stages[stage].push(aliveUsers[i]);
     } else {
       stages[++stage] = [aliveUsers[i]];

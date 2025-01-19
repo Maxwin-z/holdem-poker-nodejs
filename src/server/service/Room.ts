@@ -13,7 +13,7 @@ import {
   settle,
 } from "../utils/game-engine";
 import { logGame } from "../tests/utils";
-import { publish2all, publishLog2all } from "../api/ws";
+import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
 
 export type RoomID = string;
@@ -58,6 +58,13 @@ export class Game {
   raiseBet: number = 0; // bet of the raise
   raiseBetDiff: number = 0; //  valid rasize count
 
+  multiSettleStart: boolean = false;
+  multiSettleRound: GameRound = GameRound.PreFlop;
+  multiSettleConfirm: boolean = false;
+  multiSettleTimes: number = 1; // settle times
+  multiSettleIndex: number = 0;
+  multiSettleTimer = setTimeout(() => {}, 0);
+
   constructor(
     roomid: RoomID,
     token: Token,
@@ -80,14 +87,23 @@ export class Game {
     this.roundLeader = "";
     this.raiseUser = "";
 
+    this.multiSettleStart = false;
+    this.multiSettleRound = GameRound.PreFlop;
+    this.multiSettleConfirm = false;
+    this.multiSettleTimes = 1;
+    this.multiSettleIndex = 0;
+    clearTimeout(this.multiSettleTimer);
+
     this.sortedUsers = this.sortUsersBySmallBlind();
-    console.log(new Array(10).fill("==").join(""));
-    console.log("START:", this.sortedUsers);
-    console.log(this.cards.map((c) => `${c.num}${c.suit}`).join(""));
-    publishLog2all(this.roomid, ["====游戏开始===="]);
     if (this.sortedUsers.length < 2) {
+      console.log("not enough users");
       return;
     }
+    console.log(new Array(10).fill("==").join(""));
+    console.log("START:", this.sortedUsers);
+    console.log(prettify(this.cards));
+    publishLog2all(this.roomid, ["====游戏开始===="]);
+
     this.dealCards2User();
     this.doPreBet();
     publish2all(this.roomid);
@@ -108,6 +124,8 @@ export class Game {
     }
     // not enough users, pause game
     this.initUsers();
+    console.log("cannot find big blind");
+    this.isSettling = true;
     roomMap[this.roomid].pauseGameInteral();
   }
   initUsers() {
@@ -122,8 +140,10 @@ export class Game {
       user.isWinner = false;
       user.positon = "";
       user.bets = [0, 0, 0, 0];
+      user.totalBets = 0;
       user.maxCards = [];
       user.profits = 0;
+      user.settleTimes = 0;
     });
   }
   sortUsersBySmallBlind(): Token[] {
@@ -135,15 +155,16 @@ export class Game {
     );
     if (tokens.length < 2) {
       console.log(`only ${tokens} user left, pause game`);
+      this.isSettling = true;
       roomMap[this.roomid].pauseGameInteral();
       return [];
     }
     const smallBlindIndex =
-      (tokens.findIndex((t) => t == this.bigBlindUser) + (tokens.length - 1)) %
+      (tokens.findIndex((t) => t === this.bigBlindUser) + (tokens.length - 1)) %
       tokens.length;
     return [
-      ...[...tokens].splice(smallBlindIndex),
-      ...[...tokens].splice(0, smallBlindIndex),
+      ...tokens.slice(smallBlindIndex),
+      ...tokens.slice(0, smallBlindIndex),
     ];
   }
   removeUser(token: Token) {
@@ -152,8 +173,8 @@ export class Game {
   doPreBet() {
     const sb = userMap[this.sortedUsers[0]];
     const bb = userMap[this.sortedUsers[1]];
-    sb.bets[0] = roomMap[this.roomid].smallBlind;
-    bb.bets[0] = roomMap[this.roomid].smallBlind * 2;
+    sb.bets[0] = sb.totalBets = roomMap[this.roomid].smallBlind;
+    bb.bets[0] = bb.totalBets = roomMap[this.roomid].smallBlind * 2;
     if (bb.stack == bb.bets[0]) {
       bb.isAllIn = true;
     }
@@ -181,7 +202,7 @@ export class Game {
       console.error("BET: not action", user.name);
       throw "not your action now";
     }
-    const preRoundBets = sum([...user.bets].splice(0, this.round));
+    const preRoundBets = sum([...user.bets].slice(0, this.round));
     const availableStack = user.stack - preRoundBets;
     // console.log(`round ${this.round}:`, user.token, user.stack, availableStack);
     if (chips > availableStack) {
@@ -248,6 +269,7 @@ export class Game {
     publishLog2all(this.roomid, [log]);
 
     user.bets[this.round] = chips;
+    user.totalBets = sum(user.bets);
     this.setActed(token);
 
     if (chips == availableStack) {
@@ -285,6 +307,16 @@ export class Game {
   settle() {
     console.log("SETTLE NOW");
     logGame(this);
+
+    const subTotal = (total: number) => {
+      const chips = Math.floor(total / this.multiSettleTimes);
+      if (this.multiSettleIndex < this.multiSettleTimes - 1) {
+        return chips;
+      } else {
+        return total - (this.multiSettleTimes - 1) * chips;
+      }
+    };
+
     const availableUsers = this.sortedUsers
       .filter((t) => !userMap[t].isFolded)
       .map((t) => userMap[t]);
@@ -293,20 +325,20 @@ export class Game {
       const user = userMap[t];
       return {
         id: user.token,
-        bets: user.bets,
-        total: sum(user.bets),
+        total: subTotal(user.totalBets),
         profits: 0,
         fold: user.isFolded,
         cards: [...user.hands, ...this.boardCards],
       };
     });
 
+    // console.log(JSON.stringify(players, null, 2));
     const ps = settle(players, 1);
 
     // just log
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const total = sum(user.bets);
+      const total = subTotal(user.totalBets);
       console.log(
         `${user.name} ${prettify(user.hands)} Stage: ${p.stage} Max: ${prettify(
           p.maxCards!
@@ -324,8 +356,8 @@ export class Game {
       (t) => t === this.roundLeader
     );
     const actionOrder = [
-      ...this.sortedUsers.splice(leaderIndex),
-      ...this.sortedUsers.splice(0, leaderIndex),
+      ...this.sortedUsers.slice(leaderIndex),
+      ...this.sortedUsers.slice(0, leaderIndex),
     ];
     const winnerMap: { [x: string]: boolean } = {};
     ps.forEach((p) => {
@@ -342,16 +374,16 @@ export class Game {
 
     ps.forEach((p) => {
       const user = userMap[p.id];
-      const profits = p.profits! - sum(user.bets);
+      const profits = p.profits! - subTotal(user.totalBets);
+      user.bets = [0, 0, 0, 0];
       user.stack += profits;
       user.profits = profits;
-      user.bets = [0, 0, 0, 0];
       user.isWinner = p.isWinner || false;
       user.maxCards = p.maxCards || [];
       user.actionName = "";
       const index = actionOrder.findIndex((t) => t === p.id);
       user.shouldShowHand =
-        this.round == GameRound.River &&
+        this.round === GameRound.River &&
         availableUsers.length > 1 &&
         (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
 
@@ -369,7 +401,7 @@ export class Game {
       if (user.stack < this.smallBlind * 2) {
         user.isReady = false;
       }
-      crs.find((cr) => cr.id == user.chipsRecordID)!.chips = user.stack;
+      crs.find((cr) => cr.id === user.chipsRecordID)!.chips = user.stack;
     });
 
     publishLog2all(this.roomid, logs);
@@ -380,6 +412,29 @@ export class Game {
       console.log(`${user.token}, Stack: ${user.stack}`);
     });
     // end log
+
+    if (++this.multiSettleIndex < this.multiSettleTimes) {
+      publishLog2all(this.roomid, [`第${this.multiSettleIndex + 1}轮`]);
+      // new one
+      this.round = this.multiSettleRound;
+      switch (this.round) {
+        case GameRound.PreFlop:
+          this.boardCards = [];
+          break;
+        case GameRound.Flop:
+          this.boardCards = this.boardCards.slice(0, 3);
+          break;
+        case GameRound.Turn:
+          this.boardCards = this.boardCards.slice(0, 4);
+          break;
+      }
+
+      publish2all(this.roomid);
+      delayTry(() => {
+        this.nextRound();
+      }, 3000);
+      return;
+    }
 
     // next game
     this.isSettling = true;
@@ -421,11 +476,85 @@ export class Game {
     }, 1000);
   }
   nextRound(): void {
-    if (this.round == GameRound.River) {
+    if (this.round === GameRound.River) {
       console.log("already river turn, goto settle");
       this.settle();
       return;
     }
+
+    const activeUsers = this.sortedUsers.filter(
+      (t) => !userMap[t].isFolded && !userMap[t].isAllIn
+    );
+
+    console.log("nextRound", activeUsers);
+
+    // only one or zero user need act
+    if (activeUsers.length <= 1) {
+      // avaiable user show all show hand
+      this.sortedUsers.forEach((t) => {
+        const user = userMap[t];
+        if (user.isInCurrentGame && !user.isFolded) {
+          user.shouldShowHand = true;
+        }
+      });
+
+      const settleUsers = this.sortedUsers.filter((t) => {
+        const user = userMap[t];
+        return (
+          !user.isFolded && user.isInCurrentGame && user.bets[this.round] > 0
+        );
+      });
+
+      console.log("multi settle users:", settleUsers);
+
+      // decide
+      if (!this.multiSettleStart) {
+        // multiple settle users
+        publish2all(this.roomid);
+
+        settleUsers.forEach((t) => {
+          send2user(t, {
+            selectSettleTimes: 1,
+          });
+        });
+
+        this.multiSettleTimer = delayTry(() => {
+          settleUsers.forEach((t) => {
+            this.userSetSettleTimes(t, 4);
+            send2user(t, {
+              selectSettleTimes: 0,
+            });
+          });
+        }, 30000);
+
+        const log =
+          "玩家" +
+          settleUsers.map((t) => userMap[t].name).join(", ") +
+          "决定发牌次数";
+        publishLog2all(this.roomid, [log]);
+
+        this.multiSettleStart = true;
+        this.multiSettleRound = this.round;
+        this.multiSettleIndex = 0;
+        return;
+      } else if (!this.multiSettleConfirm) {
+        // check all settle users selected
+        let settleTimes = Number.MAX_VALUE;
+        settleUsers.forEach(
+          (t) => (settleTimes = Math.min(settleTimes, userMap[t].settleTimes))
+        );
+        console.log("times", settleTimes);
+        if (settleTimes === 0) {
+          // wait for other user
+          return;
+        } else {
+          this.multiSettleTimes = settleTimes;
+          this.multiSettleConfirm = true;
+          publishLog2all(this.roomid, [`发${settleTimes}次`]);
+        }
+      }
+    }
+
     this.round += 1;
     this.roundLeader = "";
     this.sortedUsers.forEach((t) => (userMap[t].actionName = ""));
@@ -434,20 +563,20 @@ export class Game {
     this.raiseBetDiff = this.smallBlind * 2;
     const r = this.round;
     const roundName =
-      r == 0
+      r === GameRound.PreFlop
         ? "PreFlop"
-        : r == 1
+        : r === GameRound.Flop
         ? "Flop"
-        : r == 2
+        : r === GameRound.Turn
         ? "Turn"
-        : r == 3
+        : r === GameRound.River
         ? "River"
         : "Invalid";
 
     let log = `${roundName}: `;
     // deal cards
     this.cardIndex += 1; // skip one
-    if (this.round == GameRound.Flop) {
+    if (this.round === GameRound.Flop) {
       for (let i = 0; i < 3; ++i) {
         const card = this.cards[this.cardIndex];
         this.boardCards.push(card);
@@ -466,31 +595,17 @@ export class Game {
     this.calcUserRank();
 
     publishLog2all(this.roomid, [log]);
-    const activeUsers = this.sortedUsers.filter(
-      (t) => !userMap[t].isFolded && !userMap[t].isAllIn
-    );
 
-    // only one user
-    if (activeUsers.length < 2) {
-      // avaiable user show all show hand
-      this.sortedUsers.forEach((t) => {
-        const user = userMap[t];
-        if (user.isInCurrentGame && !user.isFolded) {
-          user.shouldShowHand = true;
-        }
-      });
+    if (activeUsers.length <= 1) {
       delayTry(() => {
         this.nextRound();
       }, 1000);
-      publish2all(this.roomid);
-      return;
+    } else {
+      activeUsers.forEach((t) => (userMap[t].needAction = true));
+      const token = activeUsers[0];
+      this.roundLeader = token;
+      this.setActingUser(token);
     }
-
-    activeUsers.forEach((t) => (userMap[t].needAction = true));
-
-    const token = activeUsers[0];
-    this.roundLeader = token;
-    this.setActingUser(token);
     publish2all(this.roomid);
   }
   setActingUser(token: Token, delay = 30000) {
@@ -504,10 +619,17 @@ export class Game {
       publish2all(this.roomid);
     }, delay);
   }
+  userSetSettleTimes(token: Token, times: number) {
+    if (!this.multiSettleStart || userMap[token].settleTimes > 0 || times < 1) {
+      return;
+    }
+    userMap[token].settleTimes = times;
+    this.nextRound();
+  }
   buyOverTimeCard(token: Token) {
     const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
     const user = userMap[token];
-    const preRoundBets = sum([...user.bets].splice(0, this.round));
+    const preRoundBets = sum([...user.bets].slice(0, this.round));
     const availableStack = user.stack - preRoundBets;
     const count = this.sortedUsers.length;
     if (availableStack <= count) {
@@ -604,6 +726,7 @@ class Room {
     if (!isOwner) {
       throw "not room owner";
     }
+    console.log("owner pause game");
     this.pauseGameInteral();
   }
 

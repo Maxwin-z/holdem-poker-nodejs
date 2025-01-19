@@ -1,4 +1,4 @@
-import { Button, Input, message, Popconfirm, Row, Tooltip } from "antd";
+import { Button, Input, message, Popconfirm, Tooltip } from "antd";
 import { Card as PokerCard } from "../../ApiType";
 import {
   LoginOutlined,
@@ -13,16 +13,19 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { User } from "./User";
 import { Owner } from "./Owner";
-import { useAppSelector, useAppDispatch } from "../../app/hooks";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   selectSelf,
   selectRoomID,
   selectUsers,
   selectGame,
   selectRoom,
+  getSelectSettleStatus,
+  setSelectSettleTimes,
 } from "./roomSlice";
 import {
   ws_pauseGame,
+  ws_settleTimes,
   ws_startGame,
   ws_userHangup,
   ws_userLeave,
@@ -36,6 +39,7 @@ import { GameHistory } from "../gamehistory/GameHistory";
 import { Spectators } from "./Spectators";
 
 export function Room() {
+  const dispatch = useAppDispatch();
   const centerRef = useRef(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const roomid = useAppSelector(selectRoomID);
@@ -43,11 +47,17 @@ export function Room() {
   const room = useAppSelector(selectRoom);
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
+  const selectSettleStatus = useAppSelector(getSelectSettleStatus);
   const isSettling = game?.isSettling || false;
   const nextGameTime = Math.floor(
     ((game?.nextGameTime || Date.now()) - Date.now()) / 1000
   );
   const cards: PokerCard[] = [...(game?.boardCards || [])];
+
+  function setSettleTimes(times: number) {
+    ws_settleTimes(times);
+    dispatch(setSelectSettleTimes(false));
+  }
 
   useEffect(() => {
     function handleResize() {
@@ -227,6 +237,46 @@ export function Room() {
             </div>
             <div className="pots">底池: {game?.pots || 0}</div>
           </div>
+          {selectSettleStatus ? (
+            <div style={{ margin: "auto", padding: "20px 0" }}>
+              <div>
+                请选择发牌次数
+                <span style={{ width: 100 }}>
+                  <CountDown time={30} total={30} />
+                </span>
+              </div>
+              <div>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(1)}
+                >
+                  发一次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(2)}
+                >
+                  发两次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(3)}
+                >
+                  发三次
+                </Button>
+                <Button
+                  type="primary"
+                  style={{ marginRight: 10 }}
+                  onClick={() => setSettleTimes(4)}
+                >
+                  发四次
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="flex1">
             <Owner />
           </div>

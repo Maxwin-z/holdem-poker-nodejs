@@ -1,7 +1,7 @@
 import Router from "@koa/router";
 import * as jwt from "jsonwebtoken";
 import { secret } from "../config";
-import { createRoom, userEnterRoom, userMap } from "../service";
+import { createRoom, roomMap, userEnterRoom, userMap } from "../service";
 import User from "../service/User";
 
 const router = new Router();
@@ -16,6 +16,13 @@ router.get("/json", (ctx) => {
     name: "maxwin",
   };
 });
+
+// router.get("/debug", (ctx) => {
+//   ctx.data = {
+//     users: userMap,
+//     rooms: roomMap,
+//   };
+// });
 
 router.post("/register", (ctx) => {
   const { name, password, avatar } = ctx.request.body;

@@ -28,12 +28,14 @@ class User {
   actionName: string = "";
   stack: number = 0;
   bets: number[] = [0, 0, 0, 0];
+  totalBets: number = 0; // sum(bets)
   hands: Card[] = [];
   maxCards: Card[] = [];
   profits: number = 0;
   handsType: string = "";
   shouldShowHand: boolean = false;
   autoLeaveTimer: ReturnType<typeof setTimeout> = setTimeout(() => {}, 0);
+  settleTimes: number = 0;
 
   constructor(token: Token, name: string, avatar: string) {
     this.token = token;
