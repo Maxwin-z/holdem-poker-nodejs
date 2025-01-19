@@ -20,6 +20,6 @@ app
 
 app.ws.use(ws);
 
-const PORT = 8080;
+const PORT = 8086;
 app.listen(PORT);
 console.log(`server at: http://localhost:${PORT}`);

@@ -20,86 +20,86 @@ function send2server(data: any) {
 }
 export const connect2server =
   (roomid: string): AppThunk =>
-  (dispatch, getState) => {
-    if (!!ws) {
-      send2server({ action: ActionType.ENTER_GAME, roomid });
-      return;
-    }
-
-    const url =
-      window.location.port == "8080"
-        ? `ws://${window.location.host}`
-        : `ws://${window.location.host.replace(window.location.port, "8080")}`;
-    const token = localStorage["token"];
-
-    ws = new WebSocket(url, token);
-
-    let hideMessage: () => void = () => {};
-    let connectTimer: ReturnType<typeof setTimeout>;
-    let retrys = 0;
-
-    function doConnect() {
-      clearTimeout(connectTimer);
-      if (++retrys < 10) {
-        connectTimer = setTimeout(doConnect, 3000);
+    (dispatch, getState) => {
+      if (!!ws) {
+        send2server({ action: ActionType.ENTER_GAME, roomid });
+        return;
       }
+
+      const url =
+        window.location.port == "8086"
+          ? `ws://${window.location.host}`
+          : `ws://${window.location.host.replace(window.location.port, "8086")}`;
+      const token = localStorage["token"];
+
       ws = new WebSocket(url, token);
-    }
 
-    ws.onopen = () => {
-      console.log("36, connected");
-      clearTimeout(connectTimer);
-      send2server({ action: ActionType.ENTER_GAME, roomid });
-      hideMessage();
-    };
-    ws.onmessage = (msg: MessageEvent) => {
-      try {
-        const data = JSON.parse(msg.data);
-        if (data.code == -1) {
-          message.error(data.error);
+      let hideMessage: () => void = () => { };
+      let connectTimer: ReturnType<typeof setTimeout>;
+      let retrys = 0;
+
+      function doConnect() {
+        clearTimeout(connectTimer);
+        if (++retrys < 10) {
+          connectTimer = setTimeout(doConnect, 3000);
         }
-        if (data.room) {
-          dispatch(setRoom(data.room));
-        }
-        if (data.game) {
-          dispatch(setGame(data.game));
-        }
-        if (data.self) {
-          dispatch(setSelf(data.self));
-        }
-        if (data.user) {
-          dispatch(setUser(data.user));
-        }
-        if (data.hands) {
-          dispatch(setHands(data.hands));
-        }
-        if (data.chips) {
-          dispatch(setChipsRecord(data.chips));
-        }
-        if (data.leave) {
-          dispatch(clearRoomID(""));
-          dispatch(clearCreateRoomID(""));
-        }
-        if (data.logs) {
-          dispatch(addLogs(data.logs));
-        }
-        console.log(data);
-      } catch (e) {
-        console.log(msg.data);
-        console.error(e);
+        ws = new WebSocket(url, token);
       }
-    };
-    ws.onclose = ws.onerror = () => {
-      if (hideMessage) {
+
+      ws.onopen = () => {
+        console.log("36, connected");
+        clearTimeout(connectTimer);
+        send2server({ action: ActionType.ENTER_GAME, roomid });
         hideMessage();
-      }
-      hideMessage = message.loading(
-        "网络链接不稳定，自动重试中。或者刷新页面。",
-        0
-      );
-      setTimeout(doConnect, 1000);
+      };
+      ws.onmessage = (msg: MessageEvent) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (data.code == -1) {
+            message.error(data.error);
+          }
+          if (data.room) {
+            dispatch(setRoom(data.room));
+          }
+          if (data.game) {
+            dispatch(setGame(data.game));
+          }
+          if (data.self) {
+            dispatch(setSelf(data.self));
+          }
+          if (data.user) {
+            dispatch(setUser(data.user));
+          }
+          if (data.hands) {
+            dispatch(setHands(data.hands));
+          }
+          if (data.chips) {
+            dispatch(setChipsRecord(data.chips));
+          }
+          if (data.leave) {
+            dispatch(clearRoomID(""));
+            dispatch(clearCreateRoomID(""));
+          }
+          if (data.logs) {
+            dispatch(addLogs(data.logs));
+          }
+          console.log(data);
+        } catch (e) {
+          console.log(msg.data);
+          console.error(e);
+        }
+      };
+      ws.onclose = ws.onerror = () => {
+        if (hideMessage) {
+          hideMessage();
+        }
+        hideMessage = message.loading(
+          "网络链接不稳定，自动重试中。或者刷新页面。",
+          0
+        );
+        setTimeout(doConnect, 1000);
+      };
     };
-  };
 
 export function ws_startGame() {
   send2server({

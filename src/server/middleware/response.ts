@@ -1,8 +1,7 @@
 import { Context } from "koa";
 require("colors");
-import colors from "colors";
 
-export default async (ctx: Context, next: () => Promise<any>) => {
+const responseMiddleware = async (ctx: Context, next: () => Promise<any>) => {
   Object.defineProperty(ctx, "json", {
     set(json) {
       ctx.type = "application/json";
@@ -35,3 +34,5 @@ export default async (ctx: Context, next: () => Promise<any>) => {
     ctx.error = e;
   }
 };
+
+export default responseMiddleware;
