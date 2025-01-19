@@ -2,7 +2,7 @@ import { Card } from "../../ApiType";
 import { useAppSelector } from "../../app/hooks";
 import { selectGameHistory } from "./gameHistorySlice";
 import { useState } from "react";
-
+import { ws_sendMessage } from "../../app/websocket";
 export function card2html(cards: Card[]): string {
   return cards
     .map((card) => {
@@ -57,8 +57,8 @@ export default function GameHistory() {
   
   const handleSend = () => {
     if (!message.trim()) return;
-    // Add your send message logic here
-    setMessage(""); // Clear input after sending
+    ws_sendMessage(message);
+    setMessage("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

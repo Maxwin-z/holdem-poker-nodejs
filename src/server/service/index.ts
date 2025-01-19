@@ -218,3 +218,8 @@ export function userSetSettleTimes(token: Token, times: number) {
   }
   game.userSetSettleTimes(token, times);
 }
+
+export function userSendMessage(token: Token, message: string) {
+  const roomid = userMap[token].roomid;
+  publishLog2all(roomid, [`<strong>${userMap[token].name}</strong>: ${message}`]);
+}

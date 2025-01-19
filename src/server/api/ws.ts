@@ -18,6 +18,7 @@ import {
   userSetSettleTimes,
   userShowHands,
   userWatch,
+  userSendMessage,
 } from "../service";
 import { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
@@ -160,8 +161,12 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
       break;
     case ActionType.SET_SETTLE_TIMES:
       userSetSettleTimes(token, data.times);
+      break;
+    case ActionType.SEND_MESSAGE:
+      userSendMessage(token, data.message);
+      break;
   }
-  if (data.action != ActionType.LEAVE) {
+  if (data.action !== ActionType.LEAVE) {
     publish(token, data, ws);
   }
 }

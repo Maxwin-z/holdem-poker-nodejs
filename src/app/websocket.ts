@@ -184,3 +184,10 @@ export function ws_settleTimes(times: number) {
     times,
   });
 }
+
+export function ws_sendMessage(message: string) {
+  send2server({
+    action: ActionType.SEND_MESSAGE,
+    message,
+  });
+}

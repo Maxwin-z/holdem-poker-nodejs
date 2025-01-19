@@ -69,7 +69,7 @@ export interface SimpleSelf {
   handsType: string;
 }
 
-export interface SimpleUserHands extends SimpleSelf {}
+export interface SimpleUserHands extends SimpleSelf { }
 
 export interface SimpleChipsRecord {
   id: string;
@@ -97,4 +97,5 @@ export enum ActionType {
   SHOW_HANDS = "SHOW_HANDS",
   WATCH = "WATCH",
   SET_SETTLE_TIMES = "SET_SETTLE_TIMES",
+  SEND_MESSAGE = "SEND_MESSAGE",
 }
