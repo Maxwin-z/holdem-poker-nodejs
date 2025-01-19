@@ -78,7 +78,7 @@ export class Game {
   }
 
   start() {
-    this.initUsers();
+    if (!this.initUsers()) return;
     this.cards = randomHands(52);
     this.cardIndex = 0;
     this.boardCards = [];
@@ -129,6 +129,7 @@ export class Game {
     roomMap[this.roomid].pauseGameInteral();
   }
   initUsers() {
+    let balance = 0;
     roomMap[this.roomid].users.forEach((t) => {
       const user = userMap[t];
       user.isActing = false;
@@ -144,7 +145,18 @@ export class Game {
       user.maxCards = [];
       user.profits = 0;
       user.settleTimes = 0;
+
+      const cr = roomMap[this.roomid].chipsRecords.find(cr => cr.id === user.chipsRecordID);
+      if (cr) {
+        balance += cr.buyIn - cr.chips;
+      }
     });
+    console.log(`balance: ${balance}`);
+    if (balance !== 0) {
+      publishLog2all(this.roomid, [`<strong style="color: red;">⚠️注意，帐不平，差异${balance}。游戏无法继续，请核算，并将日志保留。</strong>`]);
+      return false;
+    }
+    return true;
   }
   sortUsersBySmallBlind(): Token[] {
     let tokens = roomMap[this.roomid].users.filter(
