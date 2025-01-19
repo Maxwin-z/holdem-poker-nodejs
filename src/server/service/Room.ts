@@ -50,7 +50,7 @@ export class Game {
   cardIndex: number = 0;
   round: GameRound = GameRound.PreFlop;
   sortedUsers: Token[] = [];
-  actingUserTimer = setTimeout(() => {}, 0);
+  actingUserTimer = setTimeout(() => { }, 0);
   isSettling: boolean = true;
   nextGameTime: number = 0;
   roundLeader: Token = ""; // the max bet
@@ -63,7 +63,7 @@ export class Game {
   multiSettleConfirm: boolean = false;
   multiSettleTimes: number = 1; // settle times
   multiSettleIndex: number = 0;
-  multiSettleTimer = setTimeout(() => {}, 0);
+  multiSettleTimer = setTimeout(() => { }, 0);
 
   constructor(
     roomid: RoomID,
@@ -234,9 +234,8 @@ export class Game {
     }
     // bet
     console.log(
-      `USER ${
-        chips == availableStack ? "AllIn" : chips == preBets ? "Call" : "NBet"
-      }:`.green,
+      `USER ${chips == availableStack ? "AllIn" : chips == preBets ? "Call" : "NBet"
+        }:`.green,
       user.name,
       prettify(user.hands),
       chips
@@ -342,8 +341,7 @@ export class Game {
       console.log(
         `${user.name} ${prettify(user.hands)} Stage: ${p.stage} Max: ${prettify(
           p.maxCards!
-        )}  total: ${total} ${p.fold ? "Fold" : "Alive"} Profits: ${
-          p.profits
+        )}  total: ${total} ${p.fold ? "Fold" : "Alive"} Profits: ${p.profits
         } Stack:${user.stack} => ${user.stack + p.profits! - total}`
       );
     });
@@ -388,15 +386,14 @@ export class Game {
         (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
 
       logs.push(
-        `${user.name} ${
-          user.shouldShowHand
-            ? `【${user.hands
-                .map((c) => `${c.num}${c.suit}`)
-                .join("")}】${p.maxCards
-                ?.map((c) => `${c.num}${c.suit}`)
-                .join("")} ${user.handsType} `
-            : ""
-        }${profits >= 0 ? "win" : "lose"} ${profits}`
+        `${user.name} ${user.shouldShowHand
+          ? `【${user.hands
+            .map((c) => `${c.num}${c.suit}`)
+            .join("")}】${p.maxCards
+              ?.map((c) => `${c.num}${c.suit}`)
+              .join("")} ${user.handsType} `
+          : ""
+        }${profits >= 0 ? "win💰" : "lose"} ${profits}`
       );
       if (user.stack < this.smallBlind * 2) {
         user.isReady = false;
@@ -566,12 +563,12 @@ export class Game {
       r === GameRound.PreFlop
         ? "PreFlop"
         : r === GameRound.Flop
-        ? "Flop"
-        : r === GameRound.Turn
-        ? "Turn"
-        : r === GameRound.River
-        ? "River"
-        : "Invalid";
+          ? "Flop"
+          : r === GameRound.Turn
+            ? "Turn"
+            : r === GameRound.River
+              ? "River"
+              : "Invalid";
 
     let log = `${roundName}: `;
     // deal cards
