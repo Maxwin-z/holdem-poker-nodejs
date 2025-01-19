@@ -9,18 +9,25 @@ export function _randomPickOne(items: any) {
 }
 
 export function randomHands(len = 7): Card[] {
-  return new Array(NUMS.length * SUITS.length)
+  const deck = new Array(NUMS.length * SUITS.length)
     .fill(0)
     .map(
       (_, i) =>
-        <Card>{
-          num: NUMS[i % NUMS.length],
-          suit: SUITS[Math.floor(i / NUMS.length) % SUITS.length],
-        }
-    )
-    .sort(() => Math.random() - 0.5)
-    .splice(0, len);
+      ({
+        num: NUMS[i % NUMS.length],
+        suit: SUITS[Math.floor(i / NUMS.length) % SUITS.length],
+      } as Card)
+    );
+
+  // Fisher-Yates Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  return deck.slice(0, len);
 }
+
 export function hands2cards(hands: string | Card[]): Card[] {
   return typeof hands == "string"
     ? parse(hands.match(/(\d+\w)/g))
@@ -33,23 +40,23 @@ export function prettify(cards: Card[]) {
         c.num == 14
           ? "A"
           : c.num == 13
-          ? "K"
-          : c.num == 12
-          ? "Q"
-          : c.num == 11
-          ? "J"
-          : c.num == 10
-          ? "T"
-          : c.num == 1
-          ? "A"
-          : c.num;
+            ? "K"
+            : c.num == 12
+              ? "Q"
+              : c.num == 11
+                ? "J"
+                : c.num == 10
+                  ? "T"
+                  : c.num == 1
+                    ? "A"
+                    : c.num;
       return c.suit == "c"
         ? colors.green(`${num}♣︎`)
         : c.suit == "d"
-        ? colors.magenta(`${num}♦︎`)
-        : c.suit == "h"
-        ? colors.red(`${num}︎♥︎`)
-        : colors.white(`${num}︎♠︎`);
+          ? colors.magenta(`${num}♦︎`)
+          : c.suit == "h"
+            ? colors.red(`${num}︎♥︎`)
+            : colors.white(`${num}︎♠︎`);
     })
     .join(" ");
 }
@@ -64,12 +71,12 @@ export function parse(hands: any, sort: boolean = true): Card[] {
     typeof hands[0] == "object"
       ? hands
       : hands.map(
-          (hand: string) =>
-            <Card>{
-              num: parseInt(hand.substr(0, hand.length - 1), 10),
-              suit: hand.substr(-1),
-            }
-        );
+        (hand: string) =>
+        ({
+          num: parseInt(hand.substr(0, hand.length - 1), 10),
+          suit: hand.substr(-1),
+        } as Card)
+      );
   if (sort) {
     return cards.sort(
       (
@@ -136,10 +143,10 @@ export function isStraight(cards: Card[]): Card[] {
   }
   return nums[0] == 14
     ? isStraight(
-        cards
-          .map((c) => (c.num == 14 ? { num: 1, suit: c.suit } : c))
-          .sort((a, b) => b.num - a.num)
-      )
+      cards
+        .map((c) => (c.num == 14 ? { num: 1, suit: c.suit } : c))
+        .sort((a, b) => b.num - a.num)
+    )
     : [];
 }
 
@@ -156,12 +163,12 @@ export function isFour(cards: Card[]) {
   const fourCard = cards2counters(cards).findIndex((num) => num == 4);
   return fourCard > 0
     ? [
-        ...SUITS.map((suit) => ({
-          num: fourCard,
-          suit,
-        })),
-        cards.filter((c) => c.num != fourCard)[0],
-      ]
+      ...SUITS.map((suit) => ({
+        num: fourCard,
+        suit,
+      })),
+      cards.filter((c) => c.num != fourCard)[0],
+    ]
     : [];
 }
 
@@ -197,9 +204,9 @@ export function isThreeKinds(cards: Card[]) {
   const threeCard = cards2counters(cards).findIndex((num) => num == 3);
   return threeCard > 0
     ? [
-        ...cards.filter((c) => c.num == threeCard),
-        ...cards.filter((c) => c.num != threeCard).splice(0, 2),
-      ]
+      ...cards.filter((c) => c.num == threeCard),
+      ...cards.filter((c) => c.num != threeCard).splice(0, 2),
+    ]
     : [];
 }
 
@@ -209,11 +216,11 @@ export function isTwoPair(cards: Card[]) {
   const head = cards.filter((c) => counters[c.num] == 2).splice(0, 4);
   return head.length == 4
     ? [
-        ...head,
-        ...cards
-          .filter((c) => c.num != head[0].num && c.num != head[2].num)
-          .splice(0, 1),
-      ]
+      ...head,
+      ...cards
+        .filter((c) => c.num != head[0].num && c.num != head[2].num)
+        .splice(0, 1),
+    ]
     : [];
 }
 
@@ -222,9 +229,9 @@ export function isPair(cards: Card[]) {
   const twoCard = cards2counters(cards).findIndex((num) => num == 2);
   return twoCard > 0
     ? [
-        ...cards.filter((c) => c.num == twoCard),
-        ...cards.filter((c) => c.num != twoCard).splice(0, 3),
-      ]
+      ...cards.filter((c) => c.num == twoCard),
+      ...cards.filter((c) => c.num != twoCard).splice(0, 3),
+    ]
     : [];
 }
 

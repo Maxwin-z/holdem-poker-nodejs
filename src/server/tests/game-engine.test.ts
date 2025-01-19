@@ -27,18 +27,29 @@ import {
 require("colors");
 const assert = require("assert");
 
-// describe("Game Engine", () => {
-//   describe("_randomPickOne()", () => {
-//     it("每个都有概率被选择", () => {
-//       const items = [1, 2, 3];
-//       const results = new Array(10 * items.length)
-//         .fill(0)
-//         .map((_) => _randomPickOne(items));
-//       for (let i in items) {
-//         assert(results.indexOf(items[i]) >= 0);
-//       }
-//     });
-//   });
+describe("Game Engine", () => {
+  describe("_randomPickOne()", () => {
+    it("每个都有概率被选择", () => {
+      const items = [1, 2, 3];
+      const results = new Array(10 * items.length)
+        .fill(0)
+        .map((_) => _randomPickOne(items));
+      for (let i in items) {
+        assert(results.indexOf(items[i]) >= 0);
+      }
+    });
+  });
+
+  describe("randomHands()", () => {
+    it("长度测试", () => {
+      for (let i = 51; i <= 53; ++i) {
+        let hands = randomHands(i);
+        console.log(prettify(hands));
+        assert.equal(hands.length, i);
+      }
+    });
+  });
+});
 
 //   describe("parse()", () => {
 //     it("hand -> card", () => {
