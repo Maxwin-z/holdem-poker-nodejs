@@ -221,5 +221,11 @@ export function userSetSettleTimes(token: Token, times: number) {
 
 export function userSendMessage(token: Token, message: string) {
   const roomid = userMap[token].roomid;
-  publishLog2all(roomid, [`<strong>${userMap[token].name}</strong>: ${message}`]);
+  publishLog2all(roomid, [`<strong>${userMap[token].name}</strong>: 
+      ${message
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/ /g, "&nbsp;")
+    }`]);
 }
