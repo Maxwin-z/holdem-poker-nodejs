@@ -1,6 +1,7 @@
 import { Card } from "../../ApiType";
 import { useAppSelector } from "../../app/hooks";
 import { selectGameHistory } from "./gameHistorySlice";
+import { useState } from "react";
 
 export function card2html(cards: Card[]): string {
   return cards
@@ -8,25 +9,27 @@ export function card2html(cards: Card[]): string {
       const n = card.num;
       const s = card.suit;
       const ret =
-        (n == 14
+        (n === 14
           ? "A"
-          : n == 13
+          : n === 13
           ? "K"
-          : n == 12
+          : n === 12
           ? "Q"
-          : n == 11
+          : n === 11
           ? "J"
+          : n === 10
+          ? "T"
           : `${n}`) +
-        (s == "c"
+        (s === "c"
           ? "♣︎"
-          : s == "d"
+          : s === "d"
           ? "♦︎"
-          : s == "h"
+          : s === "h"
           ? "♥︎"
-          : s == "s"
+          : s === "s"
           ? "♠︎"
           : "");
-      if (s == "d" || s == "h") {
+      if (s === "d" || s === "h") {
         return `<span style="color: #ae2f11">${ret}</span>`;
       } else {
         return ret;
@@ -49,16 +52,47 @@ function prettify(log: string) {
   };
 }
 
-export function GameHistory() {
+export default function GameHistory() {
+  const [message, setMessage] = useState("");
+  
+  const handleSend = () => {
+    if (!message.trim()) return;
+    // Add your send message logic here
+    setMessage(""); // Clear input after sending
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      handleSend();
+    }
+  };
+
   const logs = useAppSelector(selectGameHistory);
   return (
-    <div>
+    <>
+    <div style={{ overflow: "auto", flex: 1 }}>
       {logs.map((log, i) => (
         <div
           dangerouslySetInnerHTML={prettify(log)}
           key={logs.length - i}
         ></div>
       ))}
-    </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "row" }}>
+        <input 
+          placeholder="CMD/Ctrl+Enter发送"
+          style={{ flex: 1, minWidth: 100 }} 
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <button 
+          style={{ marginLeft: 10, whiteSpace: "nowrap" }}
+          onClick={handleSend}
+        >
+          &gt;
+        </button>
+      </div>
+    </>
   );
 }

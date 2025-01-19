@@ -35,7 +35,7 @@ import {
 import { Poker } from "./Poker";
 import { CountDown } from "./CountDown";
 import { ChipsRecord } from "../chipsrecord/ChipsRecord";
-import { GameHistory } from "../gamehistory/GameHistory";
+import GameHistory from "../gamehistory/GameHistory";
 import { Spectators } from "./Spectators";
 
 export function Room() {
@@ -62,7 +62,7 @@ export function Room() {
   useEffect(() => {
     function handleResize() {
       const centerDiv: HTMLDivElement = centerRef.current!;
-      centerDiv.style.height = `${window.innerHeight - 30}px`;
+      centerDiv.style.height = `${window.innerHeight - 40}px`;
     }
     window.addEventListener("resize", handleResize);
     handleResize();
@@ -72,7 +72,7 @@ export function Room() {
     <div
       ref={centerRef}
       style={{
-        margin: 30,
+        margin: 20,
         display: "flex",
         flexDirection: "row",
       }}
@@ -80,9 +80,11 @@ export function Room() {
       <div
         className="card"
         style={{
-          marginRight: 20,
+          marginRight: 10,
           overflow: "auto",
           minWidth: 200,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <GameHistory />
@@ -90,7 +92,7 @@ export function Room() {
       <div
         className="card"
         style={{
-          marginRight: 20,
+          marginRight: 10,
           flex: 4,
           position: "relative",
         }}
