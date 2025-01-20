@@ -42,6 +42,8 @@ export function Room() {
   const dispatch = useAppDispatch();
   const centerRef = useRef(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [showSidebar, setShowSidebar] = useState(false);
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
   const room = useAppSelector(selectRoom);
@@ -61,8 +63,13 @@ export function Room() {
 
   useEffect(() => {
     function handleResize() {
-      const centerDiv: HTMLDivElement = centerRef.current!;
-      centerDiv.style.height = `${window.innerHeight - 40}px`;
+      // const centerDiv: HTMLDivElement = centerRef.current!;
+      // centerDiv.style.height = `${window.innerHeight - 40}px`;
+      const minWidth = 1200;
+      const minHeight = 600;
+      const ratio = Math.min(window.innerWidth / minWidth, window.innerHeight / minHeight);
+      setZoom(Math.min(1, ratio));
+      setShowSidebar(ratio > 0.8);
     }
     window.addEventListener("resize", handleResize);
     handleResize();
@@ -75,6 +82,8 @@ export function Room() {
         margin: 20,
         display: "flex",
         flexDirection: "row",
+        flex: 1,
+        overflow: "hidden",
       }}
     >
       <div
@@ -83,7 +92,7 @@ export function Room() {
           marginRight: 10,
           overflow: "auto",
           minWidth: 200,
-          display: "flex",
+          display: showSidebar ? "flex" : "none",
           flexDirection: "column",
         }}
       >
@@ -95,6 +104,7 @@ export function Room() {
           marginRight: 10,
           flex: 4,
           position: "relative",
+          zoom: zoom,
         }}
       >
         <Spectators />
@@ -284,7 +294,11 @@ export function Room() {
           </div>
         </div>
       </div>
-      <div className="card">
+      <div className="card" style={{ 
+        minWidth: 230, 
+        overflow: "auto", 
+        display: showSidebar ? "flex" : "none" 
+      }}>
         <ChipsRecord />
       </div>
     </div>
