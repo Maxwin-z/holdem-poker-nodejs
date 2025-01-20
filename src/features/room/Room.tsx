@@ -304,7 +304,7 @@ export function Room() {
             </div>
           ) : null}
           <div className="flex1">
-            <Owner />
+            <Owner zoom={zoom} />
           </div>
         </div>
       </div>

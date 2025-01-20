@@ -24,7 +24,7 @@ import { card2html } from "../gamehistory/GameHistory";
 const hintsound = require("../../assets/hint.wav");
 const dealcardsound = require("../../assets/dealcard.wav");
 
-export function Owner() {
+export function Owner({ zoom }: { zoom: number }) {
   const hintSoundRef = useRef<HTMLAudioElement>(null);
   const dealCardSoundRef = useRef<HTMLAudioElement>(null);
 
@@ -203,7 +203,13 @@ export function Owner() {
           )}
         </div>
       </div>
-      <div className="flex4 flex flex-colomn user-actions">
+      <div className="flex4 flex flex-colomn user-actions" style={{
+        transform: `scale(${ zoom < 1 ? 0.8/zoom : 1})`,
+        zoom: `${zoom < 1 ? 1/zoom : 1}`,
+        flex: zoom < 1 ? 12 : 4,
+        transformOrigin: "bottom left",
+        userSelect: "none",
+      }}>
         {isWaiting ? (
           <div>
             <Switch
