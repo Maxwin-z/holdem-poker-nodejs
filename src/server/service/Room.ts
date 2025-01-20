@@ -129,7 +129,6 @@ export class Game {
     roomMap[this.roomid].pauseGameInteral();
   }
   initUsers() {
-    let balance = 0;
     roomMap[this.roomid].users.forEach((t) => {
       const user = userMap[t];
       user.isActing = false;
@@ -145,11 +144,10 @@ export class Game {
       user.maxCards = [];
       user.profits = 0;
       user.settleTimes = 0;
-
-      const cr = roomMap[this.roomid].chipsRecords.find(cr => cr.id === user.chipsRecordID);
-      if (cr) {
-        balance += cr.buyIn - cr.chips;
-      }
+    });
+    let balance = 0;
+    roomMap[this.roomid].chipsRecords.forEach(cr => {
+      balance += cr.buyIn - cr.chips;
     });
     console.log(`balance: ${balance}`);
     if (balance !== 0) {

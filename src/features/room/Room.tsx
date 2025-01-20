@@ -44,6 +44,7 @@ export function Room() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [fixedSidebar, setFixedSidebar] = useState(false);
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
   const room = useAppSelector(selectRoom);
@@ -92,7 +93,7 @@ export function Room() {
           marginRight: 10,
           overflow: "auto",
           minWidth: 200,
-          display: showSidebar ? "flex" : "none",
+          display: showSidebar || fixedSidebar ? "flex" : "none",
           flexDirection: "column",
         }}
       >
@@ -114,7 +115,7 @@ export function Room() {
           zIndex: 1000,
           display: zoom > 0.8 ? "none" : "flex",
         }}>
-          <Button onClick={() => setShowSidebar(!showSidebar)}>
+          <Button onClick={() => setFixedSidebar(!fixedSidebar)}>
             侧边栏
           </Button>
         </div>
@@ -311,7 +312,7 @@ export function Room() {
       <div className="card" style={{ 
         minWidth: 230, 
         overflow: "auto", 
-        display: showSidebar ? "flex" : "none" 
+        display: showSidebar || fixedSidebar ? "flex" : "none" 
       }}>
         <ChipsRecord />
       </div>
