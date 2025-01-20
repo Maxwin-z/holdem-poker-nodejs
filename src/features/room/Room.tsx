@@ -107,6 +107,17 @@ export function Room() {
           zoom: zoom,
         }}
       >
+        <div style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          zIndex: 1000,
+          display: zoom > 0.8 ? "none" : "flex",
+        }}>
+          <Button onClick={() => setShowSidebar(!showSidebar)}>
+            侧边栏
+          </Button>
+        </div>
         <Spectators />
         <div
           style={{
