@@ -111,8 +111,11 @@ export function Room() {
         <div
           style={{
             display: "flex",
-            height: "100%",
             flexDirection: "column",
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+            width: `${100/zoom}%`,
+            height: `${100/zoom}%`,
           }}
         >
           <div className="roominfo flex-row flex-center">
