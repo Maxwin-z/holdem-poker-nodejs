@@ -1,12 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { PageHeader, Button, Avatar, Dropdown, Menu } from "antd";
-import { DownOutlined } from "@ant-design/icons";
-
+import { useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "../../app/hooks";
 import { Register } from "../register/Register";
 import {
   selectToken,
-  logout,
   selectRoomID,
   loadRoomInfoAsync,
 } from "./homeSlice";
@@ -33,15 +29,8 @@ export function Home() {
   }, [roomid]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100vw",
-        height: "100vh",
-      }}
-    >
-      {!token ? <Register /> : roomid ? <Room></Room> : <CreateRoom />}
+    <div className="home-root">
+      {!token ? <Register /> : roomid ? <Room /> : <CreateRoom />}
     </div>
   );
 }

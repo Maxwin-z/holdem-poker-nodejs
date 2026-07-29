@@ -1,84 +1,140 @@
-import { Card } from "antd";
-import Table, { ColumnsType } from "antd/lib/table";
+import { ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
 import { SimpleChipsRecord } from "../../ApiType";
-import { TableData } from "../chipsrecord/ChipsRecord";
 
-export function RecentGameRecords() {
-  let crs: {
+export type RecentGameEntry = {
+  roomid: string;
+  date: number;
+  records: SimpleChipsRecord[];
+};
+
+function formatChips(value: number) {
+  return value.toLocaleString("en-US");
+}
+
+function formatDate(timestamp: number) {
+  return new Date(timestamp).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function RecentGameRecords({
+  previewRecords,
+}: {
+  previewRecords?: RecentGameEntry[];
+}) {
+  let storedRecords: {
     [roomid: string]: {
       date: number;
       records: SimpleChipsRecord[];
     };
   } = {};
-  try {
-    crs = JSON.parse(localStorage["chipsRecords"] || "({})");
-  } catch (ignore) {}
 
-  const arr: { roomid: string; date: number; records: SimpleChipsRecord[] }[] =
-    [];
-  Object.keys(crs).forEach((roomid) => {
-    const cr = crs[roomid];
-    arr.push({
-      roomid,
-      date: cr.date,
-      records: cr.records,
-    });
-  });
-  arr.sort((a, b) => b.date - a.date);
+  if (!previewRecords) {
+    try {
+      storedRecords = JSON.parse(localStorage["chipsRecords"] || "({})");
+    } catch (ignore) {}
+  }
 
-  const columns: ColumnsType<any> = [
-    {
-      title: "玩家",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "筹码",
-      dataIndex: "chips",
-      key: "chips",
-      sorter: (a: TableData, b: TableData) => a.chips - b.chips,
-    },
-    {
-      title: "买入",
-      dataIndex: "buyIn",
-      key: "buyIn",
-      sorter: (a: TableData, b: TableData) => a.buyIn - b.buyIn,
-    },
-    {
-      title: "盈亏",
-      dataIndex: "profit",
-      key: "profit",
-      sorter: (a: TableData, b: TableData) => a.profit - b.profit,
-    },
-  ];
+  const recentGames: RecentGameEntry[] = previewRecords
+    ? [...previewRecords]
+    : Object.keys(storedRecords).map((roomid) => ({
+        roomid,
+        date: storedRecords[roomid].date,
+        records: storedRecords[roomid].records,
+      }));
+
+  recentGames.sort((first, second) => second.date - first.date);
 
   return (
-    <div>
-      <h1 style={{ marginTop: 30 }}>最近的游戏记录</h1>
-      {arr.map((item) => {
-        const data: TableData[] = item.records.map((cr) => ({
-          id: cr.id,
-          name: cr.name,
-          chips: cr.chips,
-          buyIn: cr.buyIn,
-          profit: cr.chips - cr.buyIn,
-        }));
-        return (
-          <Card
-            title={`时间${new Date(item.date)}`}
-            bordered={false}
-            key={item.roomid}
-            style={{ marginBottom: 10 }}
-          >
-            <Table
-              rowKey={"id"}
-              columns={columns}
-              dataSource={data}
-              pagination={false}
-            />
-          </Card>
-        );
-      })}
-    </div>
+    <section className="lobby-recent">
+      <div className="lobby-recent__heading">
+        <div>
+          <span className="lobby-eyebrow">RECENT SESSIONS</span>
+          <h2>最近牌局</h2>
+        </div>
+        <HistoryOutlined />
+      </div>
+
+      {recentGames.length ? (
+        <div className="lobby-recent__list">
+          {recentGames.map((game, gameIndex) => {
+            const totalBuyIn = game.records.reduce(
+              (sum, record) => sum + record.buyIn,
+              0
+            );
+            return (
+              <details
+                className="lobby-session-card"
+                key={game.roomid}
+                open={gameIndex === 0}
+              >
+                <summary>
+                  <div className="lobby-session-card__room">
+                    <span>#{game.roomid}</span>
+                    <strong>{game.records.length} 人牌局</strong>
+                  </div>
+                  <div className="lobby-session-card__meta">
+                    <span>
+                      <ClockCircleOutlined />
+                      {formatDate(game.date)}
+                    </span>
+                    <strong>总买入 {formatChips(totalBuyIn)}</strong>
+                  </div>
+                  <i />
+                </summary>
+
+                <div className="lobby-session-table">
+                  <div className="lobby-session-table__header">
+                    <span>玩家</span>
+                    <span>筹码</span>
+                    <span>买入</span>
+                    <span>盈亏</span>
+                  </div>
+                  {game.records.map((record) => {
+                    const profit = record.chips - record.buyIn;
+                    return (
+                      <div
+                        className="lobby-session-table__row"
+                        key={record.id}
+                      >
+                        <div>
+                          <span>
+                            {record.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <strong>{record.name}</strong>
+                        </div>
+                        <b>{formatChips(record.chips)}</b>
+                        <b>{formatChips(record.buyIn)}</b>
+                        <b
+                          className={
+                            profit > 0
+                              ? "is-positive"
+                              : profit < 0
+                              ? "is-negative"
+                              : ""
+                          }
+                        >
+                          {profit > 0 ? "+" : ""}
+                          {formatChips(profit)}
+                        </b>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="lobby-recent__empty">
+          <HistoryOutlined />
+          <strong>还没有完成的牌局</strong>
+          <span>牌局结束后，积分记录会保存在这里。</span>
+        </div>
+      )}
+    </section>
   );
 }
