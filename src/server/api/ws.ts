@@ -1,5 +1,4 @@
-import { Context } from "koa";
-import * as ws from "ws";
+import type { Context } from "koa";
 import * as jwt from "jsonwebtoken";
 import { secret } from "../config";
 import {
@@ -20,7 +19,7 @@ import {
   userWatch,
   userSendMessage,
 } from "../service";
-import { Token } from "../service/User";
+import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
 import {
   ActionType,
@@ -32,9 +31,11 @@ import {
   SimpleUser,
 } from "../../ApiType";
 
-export interface PokerWebSocket extends ws {
+export interface PokerWebSocket {
   name?: string;
   token?: string;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
 }
 
 export interface ActionBase {
@@ -66,16 +67,62 @@ export function send2all(roomid: RoomID, data: any) {
 }
 
 // eslint-disable-next-line import/no-anonymous-default-export
+export function attachPokerWebSocket(
+  websocket: PokerWebSocket,
+  token: Token,
+  user: string
+) {
+  if (!userMap[token]) {
+    userMap[token] = new User(token, user, "");
+  }
+  websocket.name = user;
+  websocket.token = token;
+  userMap[token].addWebsocket(websocket);
+  console.log("client connect", user);
+}
+
+export function handlePokerWebSocketMessage(
+  websocket: PokerWebSocket,
+  message: string
+) {
+  try {
+    let data: ActionBase | null = null;
+    try {
+      data = JSON.parse(message);
+    } catch (e) {
+      send2client(websocket, {
+        code: -1,
+        error: `${e}`,
+      });
+    }
+    if (!data) {
+      return;
+    }
+    handle(websocket, data);
+  } catch (e) {
+    console.log("server catch error", e);
+    sendError(websocket, `${e}`);
+  }
+}
+
+export function detachPokerWebSocket(websocket: PokerWebSocket, token: Token) {
+  console.log("client closed");
+  const user = userMap[token];
+  if (user) {
+    user.removeWebSocket(websocket);
+    if (user.roomid) {
+      publish2all(user.roomid);
+    }
+  }
+}
+
 export default async (ctx: Context) => {
   const token = ctx.request.header["sec-websocket-protocol"]?.toString() || "";
   let websocket: PokerWebSocket | null = null;
   try {
     const user = jwt.verify(token.toString(), secret).toString().split("@")[0];
     websocket = ctx.websocket;
-    websocket.name = user;
-    websocket.token = token;
-    userMap[token].addWebsocket(websocket);
-    console.log("client connect", token, user);
+    attachPokerWebSocket(websocket, token, user);
   } catch (e) {
     ctx.websocket.send("invalid token");
     ctx.websocket.close();
@@ -85,43 +132,21 @@ export default async (ctx: Context) => {
     return;
   }
 
-  websocket.on("message", (msg: string) => {
-    try {
-      let data: ActionBase | null = null;
-      try {
-        data = JSON.parse(msg);
-      } catch (e) {
-        send2client(websocket!, {
-          code: -1,
-          error: e,
-        });
-      }
-      if (!data) {
-        return;
-      }
-      handle(websocket!, data);
-    } catch (e) {
-      console.log("server catch error", e);
-      sendError(websocket!, `${e}`);
-    }
+  ctx.websocket.on("message", (msg: string | { toString(): string }) => {
+    handlePokerWebSocketMessage(
+      websocket!,
+      typeof msg === "string" ? msg : msg.toString()
+    );
   });
   ctx.websocket.on("close", () => {
-    console.log("client closed");
-    const user = userMap[token];
-    if (user) {
-      user.removeWebSocket(websocket!);
-      if (user.roomid) {
-        publish2all(user.roomid);
-      }
-    }
-
+    detachPokerWebSocket(websocket!, token);
     websocket = null;
   });
 };
 
 function handle(ws: PokerWebSocket, data: ActionBase) {
   const token = ws.token!;
-  console.log("handle", token, data);
+  console.log("handle", ws.name, data);
   switch (data.action) {
     case ActionType.ENTER_GAME:
       userEnterRoom(token, data.roomid);

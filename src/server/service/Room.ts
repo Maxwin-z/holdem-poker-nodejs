@@ -15,6 +15,7 @@ import {
 import { logGame } from "../tests/utils";
 import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
+import { calculateOvertimeCost } from "../../shared/overtime";
 
 export type RoomID = string;
 export enum GameRound {
@@ -633,25 +634,33 @@ export class Game {
     userMap[token].settleTimes = times;
     this.nextRound();
   }
-  buyOverTimeCard(token: Token) {
-    const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
+  buyOverTimeCard(token: Token): number {
     const user = userMap[token];
-    const preRoundBets = sum([...user.bets].slice(0, this.round));
-    const availableStack = user.stack - preRoundBets;
-    const count = this.sortedUsers.length;
-    if (availableStack <= count) {
-      return;
+    if (
+      !user ||
+      !user.isActing ||
+      !this.sortedUsers.includes(token) ||
+      this.isSettling
+    ) {
+      throw "当前不是你的行动时间";
     }
-    const cost = Math.ceil(
-      Math.min(
-        this.smallBlind * 2,
-        Math.max(1, pots / 4 / count),
-        availableStack / count
-      )
-    );
-    this.sortedUsers.forEach((t) => (userMap[t].stack += cost));
-    user.stack -= count * cost;
+
+    const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));
+    const cost = calculateOvertimeCost({
+      bigBlind: this.smallBlind * 2,
+      pots,
+      playerCount: this.sortedUsers.length,
+      availableStack: user.leftStack(),
+    });
+    if (cost <= 0) {
+      throw "剩余筹码不足，无法购买加时";
+    }
+
+    const recipients = this.sortedUsers.filter((t) => t !== token);
+    recipients.forEach((t) => (userMap[t].stack += cost));
+    user.stack -= recipients.length * cost;
     publish2all(this.roomid);
+    return cost;
   }
   setActed(token: Token) {
     userMap[token].isActing = false;

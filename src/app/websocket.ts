@@ -27,10 +27,15 @@ export const connect2server =
         return;
       }
 
+      const isLocalReactDevServer =
+        window.location.hostname === "localhost" &&
+        window.location.port !== "8086";
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const url =
-        window.location.port == "8086"
-          ? `ws://${window.location.host}`
-          : `ws://${window.location.host.replace(window.location.port, "8086")}`;
+        process.env.REACT_APP_WS_URL ||
+        (isLocalReactDevServer
+          ? `ws://${window.location.hostname}:8086/ws`
+          : `${protocol}//${window.location.host}/ws`);
       const token = localStorage["token"];
 
       ws = new WebSocket(url, token);

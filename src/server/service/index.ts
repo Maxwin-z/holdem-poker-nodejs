@@ -144,13 +144,14 @@ export function userHangup(token: Token) {
 
 export function userOverTime(token: Token) {
   const user = userMap[token];
-  if (!user) {
-    throw `not your action`;
+  if (!user || !user.roomid || !isInRoom(token, user.roomid)) {
+    throw "invalid room";
   }
   const roomid = user.roomid;
   const game = roomMap[roomid].game;
-  game.buyOverTimeCard(token);
+  const cost = game.buyOverTimeCard(token);
   game.setActingUser(token, 60000);
+  return cost;
 }
 
 export function userWatch(token: Token, watch: boolean) {

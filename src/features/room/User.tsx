@@ -1,11 +1,10 @@
-import { Avatar, Popover, Tooltip } from "antd";
+import { Avatar, Tooltip } from "antd";
 import { ApiOutlined, CoffeeOutlined } from "@ant-design/icons";
 import { shallowEqual, useSelector } from "react-redux";
 import { RootState } from "../../app/store";
 import { CountDown } from "./CountDown";
 import { Poker } from "./Poker";
 import { AllIn, BigBlind, Dealer, SmallBlind } from "./Symbol";
-import { card2html } from "../gamehistory/GameHistory";
 
 export function User({ id, seat }: { id: string; seat: string }) {
   const user = useSelector((state: RootState) => {
@@ -53,6 +52,14 @@ export function User({ id, seat }: { id: string; seat: string }) {
         .filter(Boolean)
         .join(" ")}
     >
+      {user.isWinner && user.profits >= 0 ? (
+        <div className="live-winner-tip" role="status">
+          <small>WIN</small>
+          <span>{user.handsType || "本手胜出"}</span>
+          <strong>+{user.profits.toLocaleString("en-US")}</strong>
+        </div>
+      ) : null}
+
       {user.hasCards ? (
         <div
           className={`live-seat__cards ${
@@ -77,25 +84,20 @@ export function User({ id, seat }: { id: string; seat: string }) {
       ) : null}
 
       <div className="live-seat__profile">
-        <Popover
-          content={
-            <div
-              dangerouslySetInnerHTML={{
-                __html: `${card2html(
-                  user.maxCards || []
-                )} <strong style="color: #FF6F00">+$${
-                  user.profits
-                }</strong> `,
-              }}
-            />
-          }
-          trigger="click"
-          visible={user.isWinner && user.profits >= 0}
-        >
+        <div className="live-seat__avatar-wrap">
           <Avatar className="live-seat__avatar">
             {name.slice(0, 2).toUpperCase()}
           </Avatar>
-        </Popover>
+          {isActing ? (
+            <div className="live-seat__countdown">
+              <CountDown
+                time={Math.floor((actionEndTime - Date.now()) / 1000)}
+                now={Date.now()}
+                variant="ring"
+              />
+            </div>
+          ) : null}
+        </div>
         <div className="live-seat__copy">
           <div className="live-seat__name">
             <span>{name}</span>
@@ -129,15 +131,6 @@ export function User({ id, seat }: { id: string; seat: string }) {
           <em>{user.handsType}</em>
         ) : null}
       </div>
-
-      {isActing ? (
-        <div className="live-seat__countdown">
-          <CountDown
-            time={Math.floor((actionEndTime - Date.now()) / 1000)}
-            now={Date.now()}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

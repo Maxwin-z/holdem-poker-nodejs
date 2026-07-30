@@ -244,6 +244,9 @@ export function Room({
           <div className="live-table-stage">
             <div className="live-table-felt" aria-hidden="true">
               <div />
+              <span className="live-table-room-code">
+                ROOM&nbsp;&nbsp;{roomid || "—"}
+              </span>
             </div>
 
             {users.slice(0, 8).map((id, index) => (

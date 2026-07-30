@@ -36,7 +36,11 @@
   "scripts": {
     "start": "node dist/src/server/app-server.js",
     "start:web": "react-scripts start",
+    "build:web": "react-scripts build",
     "build": "react-scripts build && npm run build:server",
+    "deploy:cloudflare": "./deploy/deploy-cloudflare.sh deploy",
+    "setup:cloudflare": "./deploy/deploy-cloudflare.sh setup",
+    "dev:cloudflare": "./deploy/deploy-cloudflare.sh dev",
     "build:server": "tsc -p server.tsconfig.json",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -47,6 +51,7 @@
     "test:room": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/room.user.test.ts",
     "test:autoplay": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay.test.ts",
     "test:autoplay-single": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay-single.ts",
+    "test:overtime": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/overtime.test.ts",
     "watch-server": "nodemon --watch './src/server/***/*.ts' -e ts,tsx --exec 'ts-node' ./src/server/app-server.ts"
   },
   "eslintConfig": {
@@ -80,6 +85,7 @@
     "mocha": "^9.2.2",
     "nodemon": "^2.0.15",
     "ts-node": "^10.7.0",
-    "websocket": "^1.0.34"
+    "websocket": "^1.0.34",
+    "wrangler": "4.84.1"
   }
 }

@@ -1,17 +1,23 @@
-import { Avatar, Button, Popover, Switch, Tooltip } from "antd";
+import {
+  CaretRightOutlined,
+  CheckOutlined,
+} from "@ant-design/icons";
+import { Avatar, Button, Switch, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useAppSelector } from "../../app/hooks";
 import {
   ws_overtime,
+  ws_startGame,
   ws_userBet,
   ws_userFold,
+  ws_userReady,
   ws_userRebuy,
 } from "../../app/websocket";
 import { CountDown } from "./CountDown";
 import { Poker } from "./Poker";
 import { BigBlind, Dealer, SmallBlind } from "./Symbol";
 import { selectGame, selectRoom, selectSelf } from "./roomSlice";
-import { card2html } from "../gamehistory/GameHistory";
+import { calculateOvertimeCost } from "../../shared/overtime";
 const hintsound = require("../../assets/hint.wav");
 const dealcardsound = require("../../assets/dealcard.wav");
 
@@ -67,18 +73,16 @@ export function Owner() {
 
   const chips2call = Math.min(stack, preBet - bet);
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
-  const overtimeCost = Math.min(
-    bb,
-    Math.max(1, pots / 4 / (game?.userCount || 1)),
-    stack / (game?.userCount || 1)
-  );
+  const overtimeCost = calculateOvertimeCost({
+    bigBlind: bb,
+    pots,
+    playerCount: game?.userCount || 0,
+    availableStack: stack,
+  });
 
   const [raise, setRaise] = useState(0);
   const [now, setNow] = useState(0);
   const [autoCheck, setAutoCheck] = useState(false);
-  const [remainingSeconds, setRemainingSeconds] = useState(
-    Math.max(0, Math.ceil(leftTime / 1000))
-  );
 
   useEffect(() => {
     if (hintSoundRef.current && isActing) {
@@ -109,17 +113,6 @@ export function Owner() {
     }
   }, [game?.boardCards.length, room?.isGaming]);
 
-  useEffect(() => {
-    if (!isActing) return;
-    const updateRemainingTime = () =>
-      setRemainingSeconds(
-        Math.max(0, Math.ceil((actionEndTime - Date.now()) / 1000))
-      );
-    updateRemainingTime();
-    const timer = window.setInterval(updateRemainingTime, 250);
-    return () => window.clearInterval(timer);
-  }, [actionEndTime, isActing, now]);
-
   const positionComponent =
     position === "SB" ? (
       <SmallBlind />
@@ -131,6 +124,35 @@ export function Owner() {
 
   const showRaiseControls =
     isActing && canRaise && !onlyRaiseAllIn && !shouldAllIn;
+  const canStartGame = Boolean(self?.isRoomOwner && !room?.isGaming);
+  const canReady = Boolean(!self?.isSpectator && !self?.isReady);
+  const canRebuy =
+    stack + bet < reBuyLimit * bb &&
+    Boolean(
+      game?.isSettling || !self?.isInCurrentGame || self?.isFoled
+    );
+  const idleTitle = canReady
+    ? room?.isGaming
+      ? "准备加入下一手"
+      : "准备加入牌局"
+    : !room?.isGaming
+    ? self?.isRoomOwner
+      ? "牌桌等待开局"
+      : "等待房主开始游戏"
+    : isSettling
+    ? "本手正在结算"
+    : self?.isSpectator
+    ? "当前为观战模式"
+    : self?.isFoled
+    ? "本手已弃牌"
+    : "等待下一手开始";
+  const idleDescription = canReady
+    ? room?.isGaming
+      ? "准备后将在下一手自动入座"
+      : "点击准备，告诉房主你已就绪"
+    : canStartGame
+    ? "至少两名玩家准备后即可开始"
+    : "操作区会在需要行动时自动更新";
   const sliderValue = Math.min(
     maxRaise,
     Math.max(minRaise, raise || minRaise)
@@ -142,6 +164,14 @@ export function Owner() {
       <audio src={dealcardsound} autoPlay={false} ref={dealCardSoundRef} />
 
       <div className="live-owner-row">
+        {self?.isWinner && self.profits >= 0 ? (
+          <div className="live-owner-winner-tip" role="status">
+            <small>WIN</small>
+            <span>{self.handsType || "本手胜出"}</span>
+            <strong>+{formatChips(self.profits)}</strong>
+          </div>
+        ) : null}
+
         <div className="live-owner-cards">
           <Poker
             card={self?.hands[0] || null}
@@ -164,23 +194,37 @@ export function Owner() {
             .filter(Boolean)
             .join(" ")}
         >
-          <Popover
-            content={
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: `${card2html(
-                    self?.maxCards || []
-                  )} <strong style="color: #FF6F00">+$${
-                    self?.profits
-                  }</strong> `,
-                }}
-              />
-            }
-            trigger="click"
-            visible={Boolean(self?.isWinner && self.profits >= 0)}
-          >
+          <div className="live-owner-avatar-wrap">
             <Avatar className="live-owner-avatar">YOU</Avatar>
-          </Popover>
+            {isActing ? (
+              <Tooltip
+                title={
+                  overtimeCost > 0
+                    ? `点击加时，需支付其他玩家各 ${formatChips(
+                        overtimeCost
+                      )} 筹码`
+                    : "剩余筹码不足，无法购买加时"
+                }
+              >
+                <button
+                  type="button"
+                  className="live-owner-avatar-timer"
+                  aria-label="行动倒计时与加时"
+                  disabled={overtimeCost <= 0}
+                  onClick={() => {
+                    ws_overtime();
+                    setNow(now + 1);
+                  }}
+                >
+                  <CountDown
+                    time={Math.floor(leftTime / 1000)}
+                    now={now}
+                    variant="ring"
+                  />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
           <div className="live-owner-copy">
             <div>
               <strong>{name}</strong>
@@ -192,25 +236,6 @@ export function Owner() {
             </div>
             <b>{formatChips(stack)}</b>
           </div>
-          {isActing ? (
-            <Tooltip
-              title={`点击加时，需支付其他玩家各 ${formatChips(
-                overtimeCost
-              )} 筹码`}
-            >
-              <button
-                type="button"
-                className="live-owner-timer"
-                onClick={() => {
-                  ws_overtime();
-                  setNow(now + 1);
-                }}
-              >
-                <CountDown time={Math.floor(leftTime / 1000)} now={now} />
-                <span>{remainingSeconds}</span>
-              </button>
-            </Tooltip>
-          ) : null}
         </div>
 
         <div className="live-owner-bet">
@@ -451,24 +476,41 @@ export function Owner() {
           <div className="live-action-idle">
             <span className="live-preaction__indicator" />
             <div>
-              <strong>
-                {isSettling
-                  ? "本手正在结算"
-                  : self?.isSpectator
-                  ? "当前为观战模式"
-                  : self?.isFoled
-                  ? "本手已弃牌"
-                  : "等待牌局开始"}
-              </strong>
-              <span>操作区会在需要行动时自动更新</span>
+              <strong>{idleTitle}</strong>
+              <span>{idleDescription}</span>
             </div>
-            {stack + bet < reBuyLimit * bb &&
-            (game?.isSettling ||
-              !self?.isInCurrentGame ||
-              self?.isFoled) ? (
-              <Button type="primary" onClick={() => ws_userRebuy()}>
-                再次买入
-              </Button>
+            {canReady || canStartGame || canRebuy ? (
+              <div className="live-action-idle__actions">
+                {canReady ? (
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<CheckOutlined />}
+                    onClick={ws_userReady}
+                  >
+                    {room?.isGaming ? "准备下一手" : "准备加入"}
+                  </Button>
+                ) : null}
+                {canStartGame ? (
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<CaretRightOutlined />}
+                    onClick={ws_startGame}
+                  >
+                    开始游戏
+                  </Button>
+                ) : null}
+                {canRebuy ? (
+                  <Button
+                    className="live-action-idle__secondary"
+                    size="large"
+                    onClick={() => ws_userRebuy()}
+                  >
+                    再次买入
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         )}

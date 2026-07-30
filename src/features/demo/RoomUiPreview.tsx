@@ -81,19 +81,48 @@ export function RoomUiPreview() {
     new URLSearchParams(window.location.search).get("state") || "acting";
   const isOwnerActing = previewState === "acting";
   const isSelectingRunTimes = previewState === "settling";
+  const isShowdown = previewState === "showdown";
+  const isOwnerWaiting = previewState === "owner-waiting";
+  const isNewUser = previewState === "new-user";
 
   useEffect(() => {
     const users: SimpleUser[] = [
       makeUser("momo", "Momo", 128450, {
+        isRoomOwner: isNewUser,
         position: "D",
-        actionName: "已跟注",
+        actionName: isShowdown ? "赢家" : "已跟注",
         bet: 80,
+        isWinner: isShowdown,
+        hands: isShowdown
+          ? [
+              { num: 14, suit: "d" },
+              { num: 14, suit: "c" },
+            ]
+          : [null, null],
+        handsType: isShowdown ? "三条 A" : "",
+        maxCards: isShowdown
+          ? [
+              { num: 14, suit: "s" },
+              { num: 14, suit: "d" },
+              { num: 14, suit: "c" },
+              { num: 10, suit: "h" },
+              { num: 7, suit: "d" },
+            ]
+          : [],
+        profits: isShowdown ? 1280 : 0,
       }),
       makeUser("leo", "Leo", 1940, {
         position: "SB",
-        isActing: !isOwnerActing,
-        actionName: !isOwnerActing ? "思考中" : "",
+        isActing: !isOwnerActing && !isShowdown,
+        actionName: !isOwnerActing && !isShowdown ? "思考中" : "等待",
         bet: 160,
+        hands: isShowdown
+          ? [
+              { num: 10, suit: "s" },
+              { num: 10, suit: "d" },
+            ]
+          : [null, null],
+        handsType: isShowdown ? "三条 10" : "",
       }),
       makeUser("river", "River", 3120, {
         position: "BB",
@@ -120,29 +149,37 @@ export function RoomUiPreview() {
         actionName: "已弃牌",
       }),
       makeUser("maxwin", "Maxwin", 124860, {
-        isRoomOwner: true,
+        isRoomOwner: !isNewUser,
+        isReady: !isNewUser,
+        isInCurrentGame: !isOwnerWaiting && !isNewUser,
         isActing: isOwnerActing,
         actionName: isOwnerActing ? "行动中" : "已投入",
         bet: 80,
         handsType: "两对 · A 和 10",
+        hands: isShowdown
+          ? [
+              { num: 14, suit: "h" },
+              { num: 10, suit: "c" },
+            ]
+          : [null, null],
       }),
     ];
     const room: SimpleRoom = {
       roomid: "8K21",
-      isGaming: true,
+      isGaming: !isOwnerWaiting,
       users,
     };
     const game: SimpleGame = {
       boardCards,
       pots: 960,
-      acting: isOwnerActing ? "maxwin" : "leo",
+      acting: isShowdown ? "" : isOwnerActing ? "maxwin" : "leo",
       raiseUser: "leo",
       raiseBet: 240,
       raiseBetDiff: 160,
       preBet: 240,
       bb: 40,
       reBuyLimit: 100,
-      isSettling: isSelectingRunTimes,
+      isSettling: isSelectingRunTimes || isShowdown,
       nextGameTime: Date.now() + 10000,
       userCount: 9,
     };
@@ -159,7 +196,14 @@ export function RoomUiPreview() {
     dispatch(setGame(game));
     dispatch(setSelf(self));
     dispatch(setSelectSettleTimes(isSelectingRunTimes));
-  }, [dispatch, isOwnerActing, isSelectingRunTimes]);
+  }, [
+    dispatch,
+    isNewUser,
+    isOwnerActing,
+    isOwnerWaiting,
+    isSelectingRunTimes,
+    isShowdown,
+  ]);
 
   return (
     <Room

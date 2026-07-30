@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "codecrab-poker",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./build",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "POKER_SERVER",
+        "class_name": "PokerServer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "PokerServer"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "codecrab.dev",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.codecrab.dev",
+      "custom_domain": true
+    }
+  ]
+}
