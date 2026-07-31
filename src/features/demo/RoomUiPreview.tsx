@@ -21,6 +21,7 @@ const boardCards: Card[] = [
   { num: 10, suit: "h" },
   { num: 7, suit: "d" },
   { num: 2, suit: "c" },
+  { num: 13, suit: "s" },
 ];
 
 const previewLogs = [

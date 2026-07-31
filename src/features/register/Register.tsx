@@ -8,7 +8,7 @@ import {
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { registerAsync, selectError } from "./registerSlice";
 
-export function Register() {
+export function Register({ inviteRoomID = "" }: { inviteRoomID?: string }) {
   const dispatch = useAppDispatch();
   const error = useAppSelector(selectError);
   const status = useAppSelector((state) => state.register.status);
@@ -63,7 +63,11 @@ export function Register() {
         <div className="lobby-auth-card__heading">
           <span className="lobby-eyebrow">WELCOME BACK</span>
           <h2>进入牌桌</h2>
-          <p>首次使用会自动创建账号，无需额外注册。</p>
+          <p>
+            {inviteRoomID
+              ? `登录后将自动加入房间 ${inviteRoomID}。`
+              : "首次使用会自动创建账号，无需额外注册。"}
+          </p>
         </div>
 
         <Form

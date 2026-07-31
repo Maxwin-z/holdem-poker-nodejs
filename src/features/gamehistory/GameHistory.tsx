@@ -1,7 +1,7 @@
 import { Card } from "../../ApiType";
 import { useAppSelector } from "../../app/hooks";
 import { selectGameHistory } from "./gameHistorySlice";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ws_sendMessage } from "../../app/websocket";
 import { SendOutlined } from "@ant-design/icons";
 
@@ -61,6 +61,25 @@ export default function GameHistory({
   const [message, setMessage] = useState("");
   const liveLogs = useAppSelector(selectGameHistory);
   const logs = previewLogs || liveLogs;
+  const logRef = useRef<HTMLDivElement>(null);
+  const shouldFollowLatestRef = useRef(true);
+  const latestLog = logs[logs.length - 1] || "";
+
+  useLayoutEffect(() => {
+    const logElement = logRef.current;
+    if (!logElement || !shouldFollowLatestRef.current) return;
+    logElement.scrollTop = logElement.scrollHeight;
+  }, [latestLog, logs.length]);
+
+  const handleLogScroll = () => {
+    const logElement = logRef.current;
+    if (!logElement) return;
+    const distanceFromBottom =
+      logElement.scrollHeight -
+      logElement.scrollTop -
+      logElement.clientHeight;
+    shouldFollowLatestRef.current = distanceFromBottom <= 48;
+  };
 
   const handleSend = () => {
     if (!message.trim()) return;
@@ -87,7 +106,12 @@ export default function GameHistory({
         <span>{logs.length}</span>
       </header>
 
-      <div className="live-chat-log" aria-live="polite">
+      <div
+        className="live-chat-log"
+        aria-live="polite"
+        ref={logRef}
+        onScroll={handleLogScroll}
+      >
         {logs.length ? (
           logs.map((log, index) => (
             <div
@@ -95,7 +119,7 @@ export default function GameHistory({
                 log.includes("</strong>:") ? "is-message" : "is-system"
               }`}
               dangerouslySetInnerHTML={prettify(log)}
-              key={`${logs.length - index}-${log}`}
+              key={`${index}-${log}`}
             />
           ))
         ) : (

@@ -136,6 +136,23 @@
   gap: 7px;
 }
 
+.live-room-menu-actions,
+.live-room-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.live-mobile-menu-item {
+  display: contents;
+}
+
+.live-mobile-menu-item > span,
+.live-mobile-menu-toggle,
+.live-mobile-menu-backdrop {
+  display: none;
+}
+
 .live-room-online {
   display: flex;
   align-items: center;
@@ -587,19 +604,49 @@
 }
 
 .live-seat__position {
-  width: 17px;
-  height: 17px;
+  min-width: 20px;
+  height: 18px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 50%;
-  overflow: hidden;
 }
 
-.live-seat__position img {
-  width: 17px;
-  height: 17px;
-  display: block;
+.live-position-badge {
+  min-width: 21px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  color: #fff;
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, 0.38),
+    inset 0 1px rgba(255, 255, 255, 0.25);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+}
+
+.live-position-badge--dealer {
+  min-width: 18px;
+  padding: 0;
+  border-color: #ffe1a2;
+  color: #3b2600;
+  background: linear-gradient(145deg, #ffe19b, #d99b31);
+  text-shadow: none;
+}
+
+.live-position-badge--sb {
+  border-color: #9bdcff;
+  background: linear-gradient(145deg, #39a9e7, #1b68ae);
+}
+
+.live-position-badge--bb {
+  border-color: #ffd78f;
+  background: linear-gradient(145deg, #f2a735, #c65b1c);
 }
 
 .live-seat__status {
@@ -1038,15 +1085,13 @@
 }
 
 .live-owner-position {
-  width: 17px;
-  height: 17px;
+  min-width: 20px;
+  height: 18px;
   flex: 0 0 auto;
 }
 
-.live-owner-position img {
-  width: 17px;
-  height: 17px;
-  display: block;
+.live-owner-position .live-position-badge {
+  display: inline-grid;
 }
 
 .live-owner-timer {
@@ -2049,21 +2094,30 @@
 
 @media (max-width: 600px) {
   .live-room-topbar {
-    height: 58px;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 8px;
-    padding: 7px 9px;
+    width: 100%;
+    height: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    pointer-events: none;
   }
 
   .live-room-brand {
-    gap: 0;
+    position: absolute;
+    z-index: 43;
+    top: 10px;
+    left: 10px;
+    display: block;
+    pointer-events: auto;
   }
 
   .live-room-brand__mark {
-    width: 41px;
-    height: 41px;
-    border-radius: 13px;
-    font-size: 21px;
+    display: none;
   }
 
   .live-room-brand > div {
@@ -2071,12 +2125,115 @@
   }
 
   .live-room-controls {
-    overflow-x: auto;
-    scrollbar-width: none;
+    width: auto;
+    position: absolute;
+    z-index: 43;
+    top: 10px;
+    right: 10px;
+    display: block;
+    overflow: visible;
+    pointer-events: none;
   }
 
-  .live-room-controls::-webkit-scrollbar {
+  .live-room-quick-actions {
+    display: flex;
+    gap: 7px;
+    pointer-events: auto;
+  }
+
+  .live-room-menu-actions {
+    width: min(318px, calc(100vw - 20px));
+    position: fixed;
+    z-index: 44;
+    top: 59px;
+    left: 10px;
     display: none;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 6px;
+    padding: 13px 10px 12px;
+    border: 1px solid rgba(102, 178, 151, 0.3);
+    border-radius: 17px;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(47, 211, 155, 0.11), transparent 42%),
+      rgba(7, 23, 18, 0.97);
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+  }
+
+  .live-room-menu-actions.is-open {
+    display: grid;
+  }
+
+  .live-room-menu-actions .live-room-online {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-start;
+    margin: 0;
+    padding: 0 4px 2px;
+    color: #b7c9c2;
+    font-size: 10px;
+  }
+
+  .live-mobile-menu-item {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+  }
+
+  .live-mobile-menu-item:has(.spectators:empty) {
+    display: none;
+  }
+
+  .live-mobile-menu-item > span {
+    width: 100%;
+    display: block;
+    overflow: hidden;
+    color: #a9bbb4;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .live-mobile-menu-item .spectators {
+    min-height: 36px;
+  }
+
+  .live-mobile-menu-backdrop {
+    position: fixed;
+    z-index: 42;
+    inset: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(1px);
+    pointer-events: auto;
+  }
+
+  .live-room-shell .live-mobile-menu-toggle.ant-btn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-color: rgba(231, 188, 99, 0.45);
+    border-radius: 13px;
+    color: var(--live-gold);
+    background: rgba(7, 24, 19, 0.94);
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.32),
+      inset 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .live-room-shell .live-mobile-menu-toggle.ant-btn.is-open {
+    color: #062017;
+    border-color: var(--live-green);
+    background: var(--live-green);
   }
 
   .live-room-shell .live-room-icon-button.ant-btn,
@@ -2087,8 +2244,14 @@
     border-radius: 11px;
   }
 
+  .live-room-quick-actions .live-room-icon-button.ant-btn {
+    border-color: rgba(222, 239, 232, 0.2);
+    background: rgba(7, 24, 19, 0.94);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  }
+
   .live-room-main {
-    height: calc(100dvh - 58px);
+    height: 100dvh;
     padding: 6px;
   }
 
@@ -2098,10 +2261,10 @@
 
   .live-table-stage {
     grid-template-rows:
-      minmax(52px, 0.76fr)
-      minmax(49px, 0.82fr)
-      minmax(79px, 1.32fr)
-      minmax(49px, 0.82fr);
+      minmax(48px, 0.7fr)
+      minmax(48px, 0.8fr)
+      minmax(116px, 1.42fr)
+      minmax(54px, 0.9fr);
     padding: 3px 2px;
     border-radius: 22px;
   }
@@ -2113,62 +2276,58 @@
   }
 
   .live-seat {
-    width: min(104px, 28vw);
+    width: min(94px, 24vw);
   }
 
-  /*
-   * Reserve an unobstructed center lane for all five community cards.
-   * Side seats otherwise share the board's third grid row on phone screens.
-   */
   .live-seat--upper-left,
   .live-seat--upper-right {
-    transform: translateY(-12px);
+    transform: translateY(-8px);
   }
 
   .live-seat--middle-left,
   .live-seat--middle-right {
-    transform: translateY(-61px);
+    transform: translateY(32px);
   }
 
   .live-seat__cards {
-    height: 42px;
-    margin-bottom: -5px;
+    height: 37px;
+    margin-bottom: -4px;
   }
 
   .live-card-back {
-    width: 36px;
-    height: 50px;
+    width: 32px;
+    height: 45px;
     border-radius: 5px;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .live-seat__cards.has-visible-cards {
-    height: 45px;
+    height: 40px;
   }
 
   .live-seat__cards .poker-card {
-    width: 36px;
-    height: 50px;
-    font-size: 13px;
+    width: 32px;
+    height: 45px;
+    font-size: 12px;
   }
 
   .live-seat__profile {
-    gap: 5px;
-    padding: 4px 6px 4px 4px;
+    gap: 4px;
+    padding: 3px 5px 3px 3px;
   }
 
   .live-room-shell .live-seat__avatar.ant-avatar {
-    width: 29px;
-    min-width: 29px;
-    height: 29px;
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
     font-size: 8px;
-    line-height: 25px;
+    line-height: 23px;
   }
 
   .live-seat__avatar-wrap {
-    width: 29px;
-    min-width: 29px;
-    height: 29px;
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
   }
 
   .live-countdown-ring > span {
@@ -2177,17 +2336,28 @@
 
   .live-seat__name > span:first-child,
   .live-seat__copy > strong {
-    font-size: 9px;
+    font-size: 8.5px;
   }
 
   .live-seat.has-large-stack .live-seat__copy > strong {
     font-size: 8px;
   }
 
-  .live-seat__position,
-  .live-seat__position img {
-    width: 14px;
-    height: 14px;
+  .live-seat__position {
+    min-width: 18px;
+    height: 16px;
+  }
+
+  .live-position-badge {
+    min-width: 19px;
+    height: 16px;
+    padding: 0 3px;
+    font-size: 7px;
+  }
+
+  .live-position-badge--dealer {
+    min-width: 16px;
+    padding: 0;
   }
 
   .live-seat__status {
@@ -2201,19 +2371,21 @@
   }
 
   .live-seat__meta {
-    min-height: 23px;
+    min-height: 21px;
     max-width: 96%;
-    padding: 3px 6px;
-    font-size: 10px;
+    padding: 2px 6px;
+    font-size: 9px;
   }
 
   .live-seat__meta b {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .live-board {
     grid-column: 2 / 8;
-    gap: 8px;
+    grid-row: 3;
+    gap: 6px;
+    transform: translateY(-8px);
   }
 
   .live-pot {
@@ -2231,7 +2403,13 @@
   }
 
   .live-community-cards {
+    width: clamp(114px, calc(31.5vw + 6px), 138px);
+    flex-wrap: wrap;
     gap: 3px;
+  }
+
+  .live-community-cards > .poker-card {
+    flex: 0 0 auto;
   }
 
   .live-owner-dock {
@@ -2552,5 +2730,165 @@
 @media (max-width: 600px) and (max-height: 690px) {
   .live-action-panel {
     --live-action-panel-height: 158px;
+  }
+}
+
+/* Interactive feedback */
+.live-room-shell button,
+.live-room-shell .live-preaction__choice,
+.live-room-shell .ant-switch,
+.live-room-popconfirm button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.live-room-shell button:not(:disabled):not(.live-room-drawer-backdrop),
+.live-room-shell .live-preaction__choice,
+.live-room-shell .ant-switch:not(.ant-switch-disabled),
+.live-room-popconfirm button:not(:disabled) {
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    filter 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.live-room-shell button:focus-visible,
+.live-room-shell .live-preaction__choice:focus-within,
+.live-room-shell .ant-switch:focus-visible,
+.live-room-popconfirm button:focus-visible {
+  outline: 2px solid rgba(83, 230, 184, 0.95);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .live-room-shell
+    button:not(:disabled):not(.live-room-drawer-backdrop):hover,
+  .live-room-popconfirm button:not(:disabled):hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  .live-room-shell .live-room-icon-button.ant-btn:hover,
+  .live-room-controls .spectators .ant-btn:hover {
+    border-color: rgba(47, 211, 155, 0.45);
+    color: #f4fffb;
+    background: rgba(47, 211, 155, 0.12);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  }
+
+  .live-room-shell .live-room-icon-button.ant-btn.is-primary:hover {
+    color: #041b13;
+    border-color: #53e6b8;
+    background: #53e6b8;
+    box-shadow: 0 10px 25px rgba(47, 211, 155, 0.2);
+  }
+
+  .live-action-buttons button.is-fold:hover {
+    border-color: rgba(238, 113, 103, 0.72);
+    background: rgba(238, 113, 103, 0.15);
+    box-shadow: 0 10px 24px rgba(238, 113, 103, 0.1);
+  }
+
+  .live-action-buttons button.is-call:hover {
+    border-color: rgba(190, 226, 212, 0.52);
+    background: rgba(190, 226, 212, 0.17);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  }
+
+  .live-action-buttons button.is-raise:hover {
+    border-color: #5ce9bb;
+    background: linear-gradient(145deg, #52e5b7, #32d29b);
+    box-shadow: 0 12px 28px rgba(47, 211, 155, 0.22);
+  }
+
+  .live-preaction__choice:hover {
+    border-color: rgba(47, 211, 155, 0.48);
+    background: rgba(47, 211, 155, 0.075);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+    transform: translateY(-1px);
+  }
+
+  .live-room-drawer__tabs button:hover {
+    color: var(--live-text);
+    background: rgba(255, 255, 255, 0.065);
+  }
+
+  .live-chip-table__header button:hover {
+    color: var(--live-green);
+  }
+}
+
+.live-room-shell
+  button:not(:disabled):not(.live-room-drawer-backdrop):active,
+.live-room-popconfirm button:not(:disabled):active {
+  box-shadow: none;
+  filter: brightness(0.88);
+  transform: translateY(1px) scale(0.965);
+  transition-duration: 55ms;
+}
+
+.live-room-shell .live-room-icon-button.ant-btn.is-primary:not(:disabled):active,
+.live-action-buttons button.is-raise:not(:disabled):active,
+.live-action-idle__actions .ant-btn-primary:not(:disabled):active,
+.live-chat-composer button:not(:disabled):active {
+  color: #031710;
+  border-color: #20ad78;
+  background: #20ad78;
+}
+
+.live-action-buttons button.is-fold:not(:disabled):active {
+  border-color: rgba(238, 113, 103, 0.78);
+  background: rgba(238, 113, 103, 0.22);
+}
+
+.live-action-buttons button.is-call:not(:disabled):active {
+  border-color: rgba(190, 226, 212, 0.58);
+  background: rgba(190, 226, 212, 0.22);
+}
+
+.live-raise-presets button:not(:disabled):active,
+.live-room-drawer__tabs button:not(:disabled):active {
+  border-color: rgba(47, 211, 155, 0.68);
+  color: var(--live-green);
+  background: rgba(47, 211, 155, 0.16);
+}
+
+.live-room-shell .live-preaction__choice:active {
+  border-color: rgba(47, 211, 155, 0.72);
+  background: rgba(47, 211, 155, 0.15);
+  box-shadow: none;
+  filter: brightness(0.9);
+  transform: translateY(1px) scale(0.985);
+  transition-duration: 55ms;
+}
+
+.live-room-shell .ant-switch:not(.ant-switch-disabled):active {
+  filter: brightness(0.88);
+  transform: scale(0.92);
+  transition-duration: 55ms;
+}
+
+.live-room-drawer-backdrop:active {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.live-room-shell button:disabled,
+.live-room-shell .ant-switch-disabled,
+.live-room-popconfirm button:disabled {
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-room-shell button,
+  .live-room-shell .live-preaction__choice,
+  .live-room-shell .ant-switch,
+  .live-room-popconfirm button {
+    transition-duration: 0.01ms !important;
   }
 }

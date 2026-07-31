@@ -27,9 +27,11 @@ import {
 } from "./RecentGameRecords";
 
 export function CreateRoom({
+  initialRoomID = "",
   previewName,
   previewRecords,
 }: {
+  initialRoomID?: string;
   previewName?: string;
   previewRecords?: RecentGameEntry[];
 } = {}) {
@@ -38,7 +40,7 @@ export function CreateRoom({
   const [smallBlind, setSmallBlind] = useState(1);
   const [buyIn, setBuyIn] = useState(200);
   const [reBuyLimit, setReBuyLimit] = useState(10);
-  const [roomid, setRoomID] = useState("");
+  const [roomid, setRoomID] = useState(initialRoomID);
   const status = useAppSelector(selectStatus);
   const playerName = previewName || localStorage["name"] || "玩家";
 

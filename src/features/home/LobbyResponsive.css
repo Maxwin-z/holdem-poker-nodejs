@@ -1064,3 +1064,117 @@
     padding-bottom: 27px;
   }
 }
+
+/* Interactive feedback */
+.lobby-shell button,
+.lobby-shell summary,
+.lobby-shell .ant-input-number-handler,
+.lobby-account-menu button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.lobby-shell button:not(:disabled),
+.lobby-shell summary,
+.lobby-shell .ant-input-number-handler,
+.lobby-account-menu button:not(:disabled) {
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    filter 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.lobby-shell button:focus-visible,
+.lobby-shell summary:focus-visible,
+.lobby-account-menu button:focus-visible {
+  outline: 2px solid rgba(83, 230, 184, 0.92);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lobby-shell button:not(:disabled):hover,
+  .lobby-account-menu button:not(:disabled):hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .lobby-shell .lobby-primary-button.ant-btn:hover {
+    box-shadow: 0 15px 34px rgba(47, 211, 155, 0.23);
+  }
+
+  .lobby-shell .lobby-secondary-button.ant-btn:hover {
+    box-shadow: 0 13px 30px rgba(231, 188, 99, 0.14);
+  }
+
+  .lobby-shell .lobby-account-button.ant-btn:hover {
+    color: var(--lobby-text);
+    border-color: var(--lobby-line-strong);
+    background: rgba(255, 255, 255, 0.075);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  .lobby-session-card summary:hover {
+    background: rgba(47, 211, 155, 0.045);
+  }
+
+  .lobby-shell .ant-input-number-handler:hover {
+    color: var(--lobby-green);
+    background: rgba(47, 211, 155, 0.1);
+  }
+}
+
+.lobby-shell button:not(:disabled):active,
+.lobby-account-menu button:not(:disabled):active {
+  box-shadow: none;
+  filter: brightness(0.9);
+  transform: translateY(1px) scale(0.975);
+  transition-duration: 55ms;
+}
+
+.lobby-shell .lobby-primary-button.ant-btn:not(:disabled):active {
+  color: #031710;
+  border-color: #25b982;
+  background: #25b982;
+}
+
+.lobby-shell .lobby-secondary-button.ant-btn:not(:disabled):active {
+  color: #1b180e;
+  border-color: #c99d47;
+  background: #c99d47;
+}
+
+.lobby-shell .lobby-account-button.ant-btn:not(:disabled):active {
+  border-color: rgba(47, 211, 155, 0.48);
+  background: rgba(47, 211, 155, 0.12);
+}
+
+.lobby-session-card summary:active {
+  background: rgba(47, 211, 155, 0.09);
+  filter: brightness(0.92);
+  transform: scale(0.995);
+  transition-duration: 55ms;
+}
+
+.lobby-shell .ant-input-number-handler:active {
+  color: #062017;
+  background: var(--lobby-green);
+}
+
+.lobby-shell button:disabled {
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-shell button,
+  .lobby-shell summary,
+  .lobby-shell .ant-input-number-handler,
+  .lobby-account-menu button {
+    transition-duration: 0.01ms !important;
+  }
+}

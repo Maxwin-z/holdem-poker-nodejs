@@ -74,6 +74,10 @@ export const createRoomSlice = createSlice({
         } else {
           message.error(rsp.error);
         }
+      })
+      .addCase(joinRoomAsync.rejected, (state, action) => {
+        state.joinRoomStatus = "failed";
+        message.error(action.error.message || "加入房间失败");
       });
   },
 });

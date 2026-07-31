@@ -150,6 +150,21 @@ describe("Game", () => {
     );
   });
 
+  it("moves a user from the previous room when joining another room", () => {
+    const owner1 = createUser(token1, "maxwin", "/pig");
+    const owner2 = createUser(token2, "alan", "/pig");
+    const user = createUser(token3, "bob", "/pig");
+    const room1 = createRoom(owner1.token, sb, buyIn);
+    const room2 = createRoom(owner2.token, sb, buyIn);
+
+    userEnterRoom(user.token, room1.id);
+    userEnterRoom(user.token, room2.id);
+
+    assert.notInclude(room1.users, user.token);
+    assert.include(room2.users, user.token);
+    assert.equal(user.roomid, room2.id);
+  });
+
   it("user leave room", () => {
     const user1 = createUser(token1, "maxwin", "/pig");
     const user2 = createUser(token2, "alan", "/pig");

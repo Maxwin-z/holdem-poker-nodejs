@@ -13,6 +13,7 @@ import {
   EyeOutlined,
   EyeInvisibleOutlined,
   CloseOutlined,
+  MenuOutlined,
   MessageOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
@@ -44,6 +45,7 @@ import { ChipsRecord } from "../chipsrecord/ChipsRecord";
 import GameHistory from "../gamehistory/GameHistory";
 import { Spectators } from "./Spectators";
 import "./RoomResponsive.css";
+import { createRoomInviteText } from "./roomInvite";
 
 const seatNames = [
   // Keep the rotated player list moving continuously around the table.
@@ -70,6 +72,7 @@ export function Room({
   const dispatch = useAppDispatch();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"chat" | "chips">("chat");
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
@@ -87,11 +90,16 @@ export function Room({
     dispatch(setSelectSettleTimes(false));
   }
 
-  function copyRoomID() {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(roomid || "");
+  async function copyRoomInvite() {
+    if (!roomid) {
+      message.error("无法获取房间号");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(createRoomInviteText(roomid));
       message.success("复制成功");
-    } else {
+    } catch (error) {
       message.error("无法获取剪切板权限，请手动复制");
     }
   }
@@ -101,6 +109,16 @@ export function Room({
       <header className="live-room-topbar">
         <div className="live-room-brand">
           <span className="live-room-brand__mark">♠</span>
+          <Button
+            className={`live-room-icon-button live-mobile-menu-toggle ${
+              showMobileMenu ? "is-open" : ""
+            }`}
+            icon={showMobileMenu ? <CloseOutlined /> : <MenuOutlined />}
+            aria-label={showMobileMenu ? "收起牌桌菜单" : "展开牌桌菜单"}
+            aria-controls="live-mobile-room-menu"
+            aria-expanded={showMobileMenu}
+            onClick={() => setShowMobileMenu((visible) => !visible)}
+          />
           <div>
             <strong>River Club</strong>
             <span>九人桌 · 房间 {roomid || "—"}</span>
@@ -122,113 +140,188 @@ export function Room({
           </span>
         </div>
 
+        {showMobileMenu ? (
+          <button
+            type="button"
+            className="live-mobile-menu-backdrop"
+            aria-label="收起牌桌菜单"
+            onClick={() => setShowMobileMenu(false)}
+          />
+        ) : null}
+
         <div className="live-room-controls">
-          <span className="live-room-online">
-            <i />
-            {onlineCount} 人在线
-          </span>
-          <Spectators />
-          <Tooltip title="复制房间 ID">
-            <Button
-              className="live-room-icon-button"
-              icon={<CopyOutlined />}
-              onClick={copyRoomID}
-            />
-          </Tooltip>
-          {self?.isRoomOwner ? (
-            room?.isGaming ? (
-              <Tooltip title="下一场暂停游戏">
-                <Button
-                  className="live-room-icon-button"
-                  icon={<PauseOutlined />}
-                  onClick={ws_pauseGame}
-                />
-              </Tooltip>
-            ) : (
-              <Tooltip title="开始游戏">
-                <Button
-                  className="live-room-icon-button is-primary"
-                  icon={<CaretRightOutlined />}
-                  onClick={ws_startGame}
-                />
-              </Tooltip>
-            )
-          ) : null}
-          {!self?.isSpectator ? (
-            self?.isReady ? (
-              <Tooltip title="暂时不参与游戏">
-                <Button
-                  className="live-room-icon-button"
-                  icon={<CoffeeOutlined />}
-                  onClick={ws_userHangup}
-                />
-              </Tooltip>
-            ) : (
-              <Tooltip title="准备">
-                <Button
-                  className="live-room-icon-button is-primary"
-                  icon={<CheckOutlined />}
-                  onClick={ws_userReady}
-                />
-              </Tooltip>
-            )
-          ) : null}
-          {!self?.isReady ? (
-            !self?.isSpectator ? (
-              <Tooltip title="进入观战模式">
-                <Button
-                  className="live-room-icon-button"
-                  icon={<EyeOutlined />}
-                  onClick={() => ws_userWatch(true)}
-                />
-              </Tooltip>
-            ) : (
-              <Tooltip title="参与游戏">
-                <Button
-                  className="live-room-icon-button is-primary"
-                  icon={<EyeInvisibleOutlined />}
-                  onClick={() => ws_userWatch(false)}
-                />
-              </Tooltip>
-            )
-          ) : null}
-          <Tooltip title="聊天与牌局记录">
-            <Button
-              className="live-room-icon-button live-chat-details-trigger"
-              icon={<MessageOutlined />}
-              onClick={() => {
-                setDetailsTab("chat");
-                setShowDetails(true);
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="积分信息">
-            <Button
-              className="live-room-icon-button live-chips-details-trigger"
-              icon={<TrophyOutlined />}
-              onClick={() => {
-                setDetailsTab("chips");
-                setShowDetails(true);
-              }}
-            />
-          </Tooltip>
-          <Popconfirm
-            title="如果在游戏中，将会自动弃牌。确认离开？"
-            okText="确定离开"
-            cancelText="留下"
-            onConfirm={() => ws_userLeave()}
-            onCancel={() => setShowConfirm(false)}
-            visible={showConfirm}
-            overlayClassName="live-room-popconfirm"
+          <div
+            id="live-mobile-room-menu"
+            className={`live-room-menu-actions ${
+              showMobileMenu ? "is-open" : ""
+            }`}
           >
-            <Tooltip title="退出房间">
+            <span className="live-room-online">
+              <i />
+              {onlineCount} 人在线
+            </span>
+            <div className="live-mobile-menu-item">
+              <Spectators />
+              <span>观战者</span>
+            </div>
+            <div className="live-mobile-menu-item">
+              <Tooltip title="复制房间邀请">
+                <Button
+                  className="live-room-icon-button"
+                  icon={<CopyOutlined />}
+                  aria-label="复制房间邀请"
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    copyRoomInvite();
+                  }}
+                />
+              </Tooltip>
+              <span>复制邀请</span>
+            </div>
+            {self?.isRoomOwner ? (
+              room?.isGaming ? (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="下一场暂停游戏">
+                    <Button
+                      className="live-room-icon-button"
+                      icon={<PauseOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_pauseGame();
+                      }}
+                    />
+                  </Tooltip>
+                  <span>暂停游戏</span>
+                </div>
+              ) : (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="开始游戏">
+                    <Button
+                      className="live-room-icon-button is-primary"
+                      icon={<CaretRightOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_startGame();
+                      }}
+                    />
+                  </Tooltip>
+                  <span>开始游戏</span>
+                </div>
+              )
+            ) : null}
+            {!self?.isSpectator ? (
+              self?.isReady ? (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="暂时不参与游戏">
+                    <Button
+                      className="live-room-icon-button"
+                      icon={<CoffeeOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_userHangup();
+                      }}
+                    />
+                  </Tooltip>
+                  <span>暂时挂起</span>
+                </div>
+              ) : (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="准备">
+                    <Button
+                      className="live-room-icon-button is-primary"
+                      icon={<CheckOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_userReady();
+                      }}
+                    />
+                  </Tooltip>
+                  <span>准备游戏</span>
+                </div>
+              )
+            ) : null}
+            {!self?.isReady ? (
+              !self?.isSpectator ? (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="进入观战模式">
+                    <Button
+                      className="live-room-icon-button"
+                      icon={<EyeOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_userWatch(true);
+                      }}
+                    />
+                  </Tooltip>
+                  <span>进入观战</span>
+                </div>
+              ) : (
+                <div className="live-mobile-menu-item">
+                  <Tooltip title="参与游戏">
+                    <Button
+                      className="live-room-icon-button is-primary"
+                      icon={<EyeInvisibleOutlined />}
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        ws_userWatch(false);
+                      }}
+                    />
+                  </Tooltip>
+                  <span>参与游戏</span>
+                </div>
+              )
+            ) : null}
+            <div className="live-mobile-menu-item">
+              <Popconfirm
+                title="如果在游戏中，将会自动弃牌。确认离开？"
+                okText="确定离开"
+                cancelText="留下"
+                onConfirm={() => {
+                  setShowMobileMenu(false);
+                  ws_userLeave();
+                }}
+                onCancel={() => setShowConfirm(false)}
+                visible={showConfirm}
+                overlayClassName="live-room-popconfirm"
+              >
+                <Tooltip title="退出房间">
+                  <Button
+                    className="live-room-icon-button"
+                    icon={<LoginOutlined />}
+                    onClick={() => setShowConfirm(true)}
+                  />
+                </Tooltip>
+              </Popconfirm>
+              <span>退出房间</span>
+            </div>
+          </div>
+
+          <div className="live-room-quick-actions">
+            <Tooltip title="聊天与牌局记录">
               <Button
-                className="live-room-icon-button"
-                icon={<LoginOutlined />}
-                onClick={() => setShowConfirm(true)}
+                className="live-room-icon-button live-chat-details-trigger"
+                icon={<MessageOutlined />}
+                aria-label="聊天与牌局记录"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setDetailsTab("chat");
+                  setShowDetails(true);
+                }}
               />
             </Tooltip>
-          </Popconfirm>
+            <Tooltip title="积分信息">
+              <Button
+                className="live-room-icon-button live-chips-details-trigger"
+                icon={<TrophyOutlined />}
+                aria-label="积分信息"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setDetailsTab("chips");
+                  setShowDetails(true);
+                }}
+              />
+            </Tooltip>
+          </div>
         </div>
       </header>
 

@@ -11,3 +11,15 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/*
+ * iOS Safari zooms the page when a focused form control renders below 16px.
+ * Keep pinch zoom available while preventing that focus-triggered zoom.
+ */
+@media (max-width: 600px) {
+  input:not([type='range']):not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

@@ -1,6 +1,12 @@
 import User, { Token } from "./User";
 import Room, { RoomID } from "./Room";
-import { PokerWebSocket, publishLog2all, send2all, send2user } from "../api/ws";
+import {
+  PokerWebSocket,
+  publish2all,
+  publishLog2all,
+  send2all,
+  send2user,
+} from "../api/ws";
 
 type UserMap = {
   [token: string]: User;
@@ -60,8 +66,36 @@ export function userEnterRoom(token: Token, roomid: RoomID) {
   if (!room) {
     throw `房间${roomid}不存在`;
   }
+  const user = userMap[token];
+  if (!user) {
+    throw "invalid user";
+  }
+  if (user.roomid == roomid) {
+    return;
+  }
+  if (user.roomid) {
+    const previousRoom = roomMap[user.roomid];
+    if (
+      previousRoom &&
+      previousRoom.isGaming &&
+      !user.isFolded &&
+      user.isInCurrentGame &&
+      !previousRoom.game.isSettling
+    ) {
+      throw `请结束本局后再离开`;
+    }
+    if (previousRoom) {
+      const previousRoomID = previousRoom.id;
+      previousRoom.removeUser(token);
+      if (roomMap[previousRoomID]) {
+        publish2all(previousRoomID);
+      }
+    } else {
+      user.leaveRoom();
+    }
+  }
   if (room.addUser(token)) {
-    userMap[token].setRoom(roomid);
+    user.setRoom(roomid);
   }
 }
 
