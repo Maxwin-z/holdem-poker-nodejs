@@ -76,14 +76,16 @@ body {
   font-size: 24px;
   margin: 0 10px;
   position: relative;
+  color: #141817;
 }
 
 .poker-card p {
   flex: 1;
 }
 
-.poker-card.hd {
-  color: #ae2f11;
+.poker-card--d,
+.poker-card--h {
+  color: #d92f3a;
 }
 
 .poker-card.empty {
@@ -106,10 +108,51 @@ body {
 }
 
 .poker-card .content {
+  position: relative;
+  overflow: hidden;
   box-shadow: 0px 2px 1px -1px rgb(0 0 0 / 20%),
     0px 1px 1px 0px rgb(0 0 0 / 14%), 0px 1px 3px 0px rgb(0 0 0 / 12%);
   border: 1px solid lightgray;
   border-radius: 2px;
+  color: inherit;
+  background: white;
+}
+
+.poker-card__corner {
+  position: absolute;
+  z-index: 1;
+  top: 7%;
+  left: 10%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 0.84;
+}
+
+.poker-card__corner strong {
+  font-size: 0.78em;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+}
+
+.poker-card__corner i {
+  margin-top: 0.2em;
+  font-size: 0.55em;
+  font-style: normal;
+}
+
+.poker-card__hero-suit {
+  position: absolute;
+  top: 57%;
+  left: 55%;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.65em;
+  font-weight: 900;
+  line-height: 1;
+  transform: translate(-50%, -50%);
 }
 
 .roominfo {

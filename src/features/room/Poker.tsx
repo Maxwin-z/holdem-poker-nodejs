@@ -13,7 +13,7 @@ export function Poker({
   index?: number;
   showHand?: boolean;
 }) {
-  const color = card?.suit == "d" || card?.suit == "h" ? "hd" : "";
+  const suitClass = card ? `poker-card--${card.suit}` : "";
   const empty = !card ? "empty" : "";
   function num2s(n: number) {
     switch (n) {
@@ -44,13 +44,24 @@ export function Poker({
     return "";
   }
   useEffect(() => {}, [card]);
+  const rank = num2s(card?.num || 0);
+  const suit = suit2s(card?.suit || "");
+
   return (
-    <div className={`poker-card ${color} ${empty}`}>
+    <div
+      className={`poker-card ${suitClass} ${empty}`}
+      aria-label={card ? `${rank}${suit}` : "空牌位"}
+    >
       <QueueAnim delay={0} type="bottom" className="full">
         {card ? (
-          <div key="a" className="full flex-column flex-center content">
-            {num2s(card?.num || 0)}
-            {suit2s(card?.suit || "")}
+          <div key="a" className="full content">
+            <span className="poker-card__corner" aria-hidden="true">
+              <strong>{rank}</strong>
+              <i>{suit}</i>
+            </span>
+            <span className="poker-card__hero-suit" aria-hidden="true">
+              {suit}
+            </span>
             {showHand ? (
               <Button type="primary" onClick={() => ws_userShowHands(index)}>
                 亮牌

@@ -125,11 +125,10 @@ export function User({ id, seat }: { id: string; seat: string }) {
       </div>
 
       <div className="live-seat__meta">
-        <span className={isActing ? "is-thinking" : ""}>{actionText}</span>
+        <span className={isActing ? "is-thinking" : ""} title={actionText}>
+          {actionText}
+        </span>
         {bet > 0 ? <b>+{bet.toLocaleString("en-US")}</b> : null}
-        {showHands && user.handsType ? (
-          <em>{user.handsType}</em>
-        ) : null}
       </div>
     </div>
   );

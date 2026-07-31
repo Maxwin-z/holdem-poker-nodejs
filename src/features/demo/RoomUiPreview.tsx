@@ -91,7 +91,7 @@ export function RoomUiPreview() {
       makeUser("momo", "Momo", 128450, {
         isRoomOwner: isNewUser,
         position: "D",
-        actionName: isShowdown ? "赢家" : "已跟注",
+        actionName: "已跟注",
         bet: 80,
         isWinner: isShowdown,
         hands: isShowdown
@@ -115,7 +115,11 @@ export function RoomUiPreview() {
       makeUser("leo", "Leo", 1940, {
         position: "SB",
         isActing: !isOwnerActing && !isShowdown,
-        actionName: !isOwnerActing && !isShowdown ? "思考中" : "等待",
+        actionName: isShowdown
+          ? "已加注"
+          : !isOwnerActing
+          ? "思考中"
+          : "等待",
         bet: 160,
         hands: isShowdown
           ? [
