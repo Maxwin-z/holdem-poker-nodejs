@@ -34,7 +34,9 @@ export function User({ id, seat }: { id: string; seat: string }) {
       <Dealer />
     ) : null;
   const inGame = user.isInCurrentGame && !user.isFoled;
-  const actionText = user.isFoled
+  const actionText = !user.isReady
+    ? "休息"
+    : user.isFoled
     ? "已弃牌"
     : user.isAllIn
     ? "All-in"

@@ -141,6 +141,9 @@ export class Game {
       user.isInCurrentGame = false;
       user.isWinner = false;
       user.positon = "";
+      user.hands = [];
+      user.handsType = "";
+      user.actionName = "";
       user.bets = [0, 0, 0, 0];
       user.totalBets = 0;
       user.maxCards = [];

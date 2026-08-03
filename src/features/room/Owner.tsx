@@ -73,6 +73,10 @@ export function Owner() {
 
   const chips2call = Math.min(stack, preBet - bet);
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
+  const actionText =
+    self && !self.isReady
+      ? "休息"
+      : self?.actionName || (isActing ? "轮到你" : "等待");
   const overtimeCost = calculateOvertimeCost({
     bigBlind: bb,
     pots,
@@ -242,7 +246,7 @@ export function Owner() {
         </div>
 
         <div className="live-owner-bet">
-          <span>{self?.actionName || (isActing ? "轮到你" : "等待")}</span>
+          <span>{actionText}</span>
           {bet > 0 ? <b>+{formatChips(bet)}</b> : null}
           {self?.handsType ? <em>{self.handsType}</em> : null}
         </div>

@@ -7,6 +7,7 @@ import {
   userBet,
   userEnterRoom,
   userFold,
+  userHangup,
   userMap,
   userReady,
   userReBuy,
@@ -61,6 +62,28 @@ function testCase_sb199_bb200_sbFold(): [Room, Game, User[]] {
 }
 
 describe("Game Test", () => {
+  describe("starting a new hand", () => {
+    beforeEach(clean);
+
+    it("clears the previous hand for a resting user", () => {
+      const [, game, users] = createGameWithUsers(3);
+      const restingUser = users[0];
+
+      assert.lengthOf(restingUser.hands, 2);
+      restingUser.handsType = "上一手牌型";
+      restingUser.actionName = "上一手行动";
+      userHangup(restingUser.token);
+
+      clearTimeout(game.actingUserTimer);
+      game.start();
+
+      assert.deepEqual(restingUser.hands, []);
+      assert.equal(restingUser.handsType, "");
+      assert.equal(restingUser.actionName, "");
+      clearTimeout(game.actingUserTimer);
+    });
+  });
+
   describe("sb raise 4, bb fold.", () => {
     beforeEach(clean);
 
