@@ -280,7 +280,7 @@ describe("all-in runout selection edge case", () => {
 
   beforeEach(clean);
 
-  it("reproduces the deadlock when the flop checks through before the other caller folds", () => {
+  it("asks both eligible players when the flop checks through before the other caller folds", () => {
     const { game, a, b, c, messages, restoreTimers } =
       createFlopAfterShortStackAllIn();
 
@@ -293,12 +293,36 @@ describe("all-in runout selection edge case", () => {
       assert.isTrue(game.multiSettleStart);
       assert.isFalse(game.multiSettleConfirm);
       assert.isFalse(game.isSettling);
+      assert.deepEqual(
+        game.multiSettleUsers.map((token) => userMap[token].name),
+        ["B", "A"]
+      );
       assert.isFalse(a.isActing);
       assert.isFalse(b.isActing);
       assert.isFalse(c.isActing);
-      assert.lengthOf(runoutPrompts(messages, "A"), 0);
-      assert.lengthOf(runoutPrompts(messages, "B"), 0);
+      assert.lengthOf(runoutPrompts(messages, "A"), 1);
+      assert.lengthOf(runoutPrompts(messages, "B"), 1);
       assert.lengthOf(runoutPrompts(messages, "C"), 0);
+
+      game.userSetSettleTimes(c.token, 1);
+      assert.equal(c.settleTimes, 0);
+      assert.equal(game.round, GameRound.Flop);
+
+      game.userSetSettleTimes(a.token, 2);
+      assert.equal(game.round, GameRound.Flop);
+      assert.isFalse(game.multiSettleConfirm);
+
+      game.userSetSettleTimes(b.token, 1);
+      assert.equal(game.round, GameRound.Turn);
+      assert.isTrue(game.multiSettleConfirm);
+      assert.equal(game.multiSettleTimes, 1);
+
+      game.nextRound();
+      assert.equal(game.round, GameRound.River);
+      game.nextRound();
+
+      assert.isTrue(game.isSettling);
+      assert.lengthOf(game.boardCards, 5);
     } finally {
       restoreTimers();
     }
@@ -314,10 +338,11 @@ describe("all-in runout selection edge case", () => {
       game.nextRound();
 
       assert.equal(game.round, GameRound.Flop);
-      assert.lengthOf(runoutPrompts(messages, "A"), 0);
+      assert.lengthOf(runoutPrompts(messages, "A"), 1);
       assert.lengthOf(runoutPrompts(messages, "B"), 1);
       assert.lengthOf(runoutPrompts(messages, "C"), 0);
 
+      game.userSetSettleTimes(a.token, 2);
       game.userSetSettleTimes(b.token, 1);
       assert.equal(game.round, GameRound.Turn);
       assert.isTrue(game.multiSettleConfirm);

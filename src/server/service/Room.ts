@@ -65,6 +65,7 @@ export class Game {
   multiSettleConfirm: boolean = false;
   multiSettleTimes: number = 1; // settle times
   multiSettleIndex: number = 0;
+  multiSettleUsers: Token[] = [];
   multiSettleTimer = setTimeout(() => { }, 0);
 
   constructor(
@@ -95,6 +96,7 @@ export class Game {
     this.multiSettleConfirm = false;
     this.multiSettleTimes = 1;
     this.multiSettleIndex = 0;
+    this.multiSettleUsers = [];
     clearTimeout(this.multiSettleTimer);
 
     this.sortedUsers = this.sortUsersBySmallBlind();
@@ -515,53 +517,68 @@ export class Game {
         }
       });
 
-      const settleUsers = this.sortedUsers.filter((t) => {
-        const user = userMap[t];
-        return (
-          !user.isFolded && user.isInCurrentGame && user.bets[this.round] > 0
-        );
-      });
+      const settleUsers = this.multiSettleStart
+        ? this.multiSettleUsers
+        : this.sortedUsers.filter((t) => {
+            const user = userMap[t];
+            return (
+              !user.isFolded &&
+              user.isInCurrentGame &&
+              user.totalBets > 0
+            );
+          });
 
       console.log("multi settle users:", settleUsers);
 
       // decide
       if (!this.multiSettleStart) {
-        // multiple settle users
-        publish2all(this.roomid);
-
-        settleUsers.forEach((t) => {
-          send2user(t, {
-            selectSettleTimes: 1,
-          });
-        });
-
-        this.multiSettleTimer = delayTry(() => {
-          settleUsers.forEach((t) => {
-            this.userSetSettleTimes(t, 4);
-            send2user(t, {
-              selectSettleTimes: 0,
-            });
-          });
-        }, 30000);
-
-        const log =
-          "玩家" +
-          settleUsers.map((t) => userMap[t].name).join(", ") +
-          "决定发牌次数";
-        publishLog2all(this.roomid, [log]);
-
         this.multiSettleStart = true;
         this.multiSettleRound = this.round;
         this.multiSettleIndex = 0;
-        return;
+        this.multiSettleUsers = settleUsers;
+
+        // A runout decision needs at least two players who can still win a pot.
+        // Never enter a waiting state when there is nobody to answer it.
+        if (settleUsers.length < 2) {
+          this.multiSettleTimes = 1;
+          this.multiSettleConfirm = true;
+        } else {
+          // multiple settle users
+          publish2all(this.roomid);
+
+          settleUsers.forEach((t) => {
+            send2user(t, {
+              selectSettleTimes: 1,
+            });
+          });
+
+          this.multiSettleTimer = delayTry(() => {
+            this.multiSettleUsers.forEach((t) => {
+              this.userSetSettleTimes(t, 4);
+              send2user(t, {
+                selectSettleTimes: 0,
+              });
+            });
+          }, 30000);
+
+          const log =
+            "玩家" +
+            settleUsers.map((t) => userMap[t].name).join(", ") +
+            "决定发牌次数";
+          publishLog2all(this.roomid, [log]);
+
+          return;
+        }
       } else if (!this.multiSettleConfirm) {
         // check all settle users selected
-        let settleTimes = Number.MAX_VALUE;
-        settleUsers.forEach(
-          (t) => (settleTimes = Math.min(settleTimes, userMap[t].settleTimes))
+        const settleTimes = Math.min(
+          ...this.multiSettleUsers.map((t) => userMap[t].settleTimes)
         );
         console.log("times", settleTimes);
-        if (settleTimes === 0) {
+        if (!Number.isFinite(settleTimes)) {
+          this.multiSettleTimes = 1;
+          this.multiSettleConfirm = true;
+        } else if (settleTimes === 0) {
           // wait for other user
           return;
         } else {
@@ -638,7 +655,14 @@ export class Game {
     }, delay);
   }
   userSetSettleTimes(token: Token, times: number) {
-    if (!this.multiSettleStart || userMap[token].settleTimes > 0 || times < 1) {
+    if (
+      !this.multiSettleStart ||
+      !this.multiSettleUsers.includes(token) ||
+      userMap[token].settleTimes > 0 ||
+      !Number.isInteger(times) ||
+      times < 1 ||
+      times > 4
+    ) {
       return;
     }
     userMap[token].settleTimes = times;
