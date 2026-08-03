@@ -13,6 +13,7 @@ import {
   userMap,
   userOverTime,
   userReady,
+  userRunItOut,
   userSetSettleTimes,
   userShowHands,
   userWatch,
@@ -187,6 +188,9 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.SET_SETTLE_TIMES:
       userSetSettleTimes(token, data.times);
       break;
+    case ActionType.RUN_IT_OUT:
+      userRunItOut(token);
+      break;
     case ActionType.SEND_MESSAGE:
       userSendMessage(token, data.message);
       break;
@@ -292,11 +296,13 @@ function getSimpleUser(token: Token): SimpleUser {
 
 function getSimpleSelf(token: Token): SimpleSelf {
   const user = userMap[token];
+  const game = roomMap[user.roomid]?.game;
   return {
     id: user.chipsRecordID,
     hands: user.hands,
     handsType: user.handsType,
     nextBuyIn: user.nextBuyIn,
+    runItOutBoardCards: game?.getRunItOutBoardCards(token) || [],
   };
 }
 
@@ -325,6 +331,13 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
       send2all(room.id, {
         game: simpleGame,
         room: simpleRoom,
+      });
+      break;
+    case ActionType.RUN_IT_OUT:
+      send2all(room.id, {
+        game: simpleGame,
+        room: simpleRoom,
+        chips: getSimpleChipsRecords(room),
       });
       break;
     case ActionType.READY:

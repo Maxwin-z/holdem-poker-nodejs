@@ -268,6 +268,53 @@ export function userSetSettleTimes(token: Token, times: number) {
   game.userSetSettleTimes(token, times);
 }
 
+export function userRunItOut(token: Token) {
+  const user = userMap[token];
+  if (!user || !user.roomid || !isInRoom(token, user.roomid)) {
+    throw "invalid room";
+  }
+
+  const game = roomMap[user.roomid].game;
+  const boardCardCount = game.boardCards.length;
+  const result = game.runItOut(token);
+  let cardIndex = 0;
+  const streets: string[] = [];
+  if (boardCardCount === 0) {
+    streets.push(
+      `Flop: ${result.remainingCards
+        .slice(cardIndex, cardIndex + 3)
+        .map((card) => `${card.num}${card.suit}`)
+        .join("")}`
+    );
+    cardIndex += 3;
+  }
+  if (boardCardCount <= 3) {
+    const card = result.remainingCards[cardIndex++];
+    streets.push(`Turn: ${card.num}${card.suit}`);
+  }
+  if (boardCardCount <= 4) {
+    const card = result.remainingCards[cardIndex];
+    streets.push(`River: ${card.num}${card.suit}`);
+  }
+
+  send2user(token, {
+    logs: [
+      `你支付了${result.paid ? result.recipientCount : 0}BB，查看了公共牌`,
+      streets.join("，"),
+    ],
+  });
+  result.recipientTokens.forEach((recipientToken) => {
+    send2user(recipientToken, {
+      logs: [
+        result.paid
+          ? `${user.name}玩家查看了公共牌，支付了你1BB`
+          : `${user.name}玩家查看了公共牌，但是他很穷，未支付你任何筹码`,
+      ],
+    });
+  });
+  return result;
+}
+
 export function userSendMessage(token: Token, message: string) {
   const roomid = userMap[token].roomid;
   publishLog2all(roomid, [`<strong>${userMap[token].name}</strong>: 

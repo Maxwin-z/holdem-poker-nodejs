@@ -359,6 +359,12 @@ export function ws_settleTimes(times: number) {
   });
 }
 
+export function ws_runItOut() {
+  send2server({
+    action: ActionType.RUN_IT_OUT,
+  });
+}
+
 export function ws_sendMessage(message: string) {
   send2server({
     action: ActionType.SEND_MESSAGE,

@@ -47,6 +47,7 @@ import { Spectators } from "./Spectators";
 import "./RoomResponsive.css";
 import { createRoomInviteText } from "./roomInvite";
 import { BuyInSettingButton } from "./BuyInSetting";
+import { getVisibleBoardCards } from "./runItOut";
 
 const seatNames = [
   // Keep the rotated player list moving continuously around the table.
@@ -81,7 +82,12 @@ export function Room({
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
   const selectSettleStatus = useAppSelector(getSelectSettleStatus);
-  const cards: PokerCard[] = [...(game?.boardCards || [])];
+  const cards: PokerCard[] = [
+    ...getVisibleBoardCards(
+      game?.boardCards || [],
+      self?.runItOutBoardCards || []
+    ),
+  ];
   const boardCards = [...cards, null, null, null, null, null].splice(0, 5);
   const onlineCount =
     room?.users.filter((user) => !user.isOffline).length || 0;

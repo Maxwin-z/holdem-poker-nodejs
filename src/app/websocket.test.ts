@@ -3,6 +3,7 @@ import { ActionType } from "../ApiType";
 import {
   connect2server,
   disconnectFromServer,
+  ws_runItOut,
   ws_setNextBuyIn,
 } from "./websocket";
 
@@ -108,6 +109,20 @@ describe("websocket reconnect", () => {
 
     expect(socket.send).toHaveBeenCalledWith(
       JSON.stringify({ action: ActionType.SET_NEXT_BUY_IN, chips: 320 })
+    );
+  });
+
+  it("sends a run-it-out request without any client-supplied cards", () => {
+    const dispatch = jest.fn();
+    (connect2server("1238") as any)(dispatch);
+    const socket = MockWebSocket.instances[0];
+    socket.open();
+    socket.send.mockClear();
+
+    ws_runItOut();
+
+    expect(socket.send).toHaveBeenCalledWith(
+      JSON.stringify({ action: ActionType.RUN_IT_OUT })
     );
   });
 });

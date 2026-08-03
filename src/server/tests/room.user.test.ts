@@ -1,5 +1,9 @@
 import { assert } from "chai";
 import {
+  ActionType,
+  Card,
+} from "../../ApiType";
+import {
   createRoom,
   createUser,
   roomMap,
@@ -10,8 +14,10 @@ import {
   userHangup,
   userMap,
   userReady,
+  userRunItOut,
   userSetNextBuyIn,
 } from "../service";
+import { handlePokerWebSocketMessage } from "../api/ws";
 import Room, { Game, GameRound } from "../service/Room";
 import User, { Token } from "../service/User";
 
@@ -325,6 +331,257 @@ describe("all-in runout selection edge case", () => {
     } finally {
       restoreTimers();
     }
+  });
+});
+
+describe("settled hand run it out", () => {
+  function createSettledGame(boardCardCount: 0 | 3 | 4 = 0) {
+    const [room, game, users] = createGameWithUsers(3);
+    clearTimeout(game.actingUserTimer);
+    game.isSettling = true;
+    users.forEach((user) => {
+      user.bets = [0, 0, 0, 0];
+      user.totalBets = 0;
+      user.isActing = false;
+      user.isInCurrentGame = true;
+      user.isSpectator = false;
+    });
+
+    const fixedCards: { [index: number]: Card } = {
+      6: { num: 14, suit: "s" }, // burn before flop
+      7: { num: 2, suit: "c" },
+      8: { num: 3, suit: "d" },
+      9: { num: 4, suit: "h" },
+      10: { num: 13, suit: "s" }, // burn before turn
+      11: { num: 5, suit: "s" },
+      12: { num: 12, suit: "s" }, // burn before river
+      13: { num: 6, suit: "c" },
+    };
+    Object.entries(fixedCards).forEach(([index, card]) => {
+      game.cards[Number(index)] = card;
+    });
+
+    if (boardCardCount === 0) {
+      game.boardCards = [];
+      game.cardIndex = 6;
+    } else if (boardCardCount === 3) {
+      game.boardCards = [fixedCards[7], fixedCards[8], fixedCards[9]];
+      game.cardIndex = 10;
+    } else {
+      game.boardCards = [
+        fixedCards[7],
+        fixedCards[8],
+        fixedCards[9],
+        fixedCards[11],
+      ];
+      game.cardIndex = 12;
+    }
+
+    const messages: Record<string, any[]> = {};
+    users.forEach((user) => {
+      messages[user.token] = [];
+      user.wss = [
+        {
+          token: user.token,
+          name: user.name,
+          send(data: string) {
+            messages[user.token].push(JSON.parse(data));
+          },
+          close() {},
+        },
+      ];
+    });
+    return { room, game, users, messages };
+  }
+
+  beforeEach(clean);
+
+  it("peeks the original flop, turn, and river while respecting every burn card", () => {
+    const { game, users } = createSettledGame(0);
+    const originalCardIndex = game.cardIndex;
+
+    const result = userRunItOut(users[0].token);
+
+    assert.deepEqual(result.remainingCards, [
+      { num: 2, suit: "c" },
+      { num: 3, suit: "d" },
+      { num: 4, suit: "h" },
+      { num: 5, suit: "s" },
+      { num: 6, suit: "c" },
+    ]);
+    assert.deepEqual(game.boardCards, []);
+    assert.equal(game.cardIndex, originalCardIndex);
+  });
+
+  it("only peeks the turn and river after the flop", () => {
+    const { game, users } = createSettledGame(3);
+
+    const result = userRunItOut(users[0].token);
+
+    assert.deepEqual(result.remainingCards, [
+      { num: 5, suit: "s" },
+      { num: 6, suit: "c" },
+    ]);
+    assert.lengthOf(result.boardCards, 5);
+    assert.lengthOf(game.boardCards, 3);
+  });
+
+  it("only peeks the river after the turn", () => {
+    const { game, users } = createSettledGame(4);
+
+    const result = userRunItOut(users[0].token);
+
+    assert.deepEqual(result.remainingCards, [{ num: 6, suit: "c" }]);
+    assert.lengthOf(result.boardCards, 5);
+    assert.lengthOf(game.boardCards, 4);
+  });
+
+  it("pays one big blind to every other hand participant and keeps the ledger balanced", () => {
+    const { room, users, messages } = createSettledGame(0);
+    const [buyer, foldedRecipient, recipient] = users;
+    foldedRecipient.isFolded = true;
+    const totalBefore = room.chipsRecords.reduce(
+      (total, record) => total + record.chips,
+      0
+    );
+
+    const result = userRunItOut(buyer.token);
+
+    assert.isTrue(result.paid);
+    assert.equal(buyer.stack, 196);
+    assert.equal(foldedRecipient.stack, 202);
+    assert.equal(recipient.stack, 202);
+    assert.deepEqual(messages[buyer.token][0].logs, [
+      "你支付了2BB，查看了公共牌",
+      "Flop: 2c3d4h，Turn: 5s，River: 6c",
+    ]);
+    [foldedRecipient, recipient].forEach((user) => {
+      assert.equal(
+        messages[user.token][0].logs[0],
+        `${buyer.name}玩家查看了公共牌，支付了你1BB`
+      );
+    });
+    users.forEach((user) => {
+      assert.equal(getChipsRecoud(room, user.token).chips, user.stack);
+    });
+    assert.equal(
+      room.chipsRecords.reduce((total, record) => total + record.chips, 0),
+      totalBefore
+    );
+  });
+
+  it("is completely free when the buyer cannot pay every recipient", () => {
+    const { room, users, messages } = createSettledGame(0);
+    const buyer = users[0];
+    buyer.stack = 3;
+    getChipsRecoud(room, buyer.token).chips = 3;
+    const stacksBefore = users.map((user) => user.stack);
+
+    const result = userRunItOut(buyer.token);
+
+    assert.isFalse(result.paid);
+    assert.deepEqual(
+      users.map((user) => user.stack),
+      stacksBefore
+    );
+    assert.deepEqual(messages[buyer.token][0].logs, [
+      "你支付了0BB，查看了公共牌",
+      "Flop: 2c3d4h，Turn: 5s，River: 6c",
+    ]);
+    users.slice(1).forEach((user) => {
+      assert.equal(
+        messages[user.token][0].logs[0],
+        `${buyer.name}玩家查看了公共牌，但是他很穷，未支付你任何筹码`
+      );
+    });
+    assert.lengthOf(result.boardCards, 5);
+  });
+
+  it("sends cards and the log only to the buyer", () => {
+    const { game, users, messages } = createSettledGame(0);
+    const buyer = users[0];
+    const buyerSocket = buyer.wss[0];
+
+    handlePokerWebSocketMessage(
+      buyerSocket,
+      JSON.stringify({ action: ActionType.RUN_IT_OUT })
+    );
+
+    assert.isTrue(
+      messages[buyer.token].some(
+        (message) =>
+          message.logs?.length === 2 &&
+          message.self.runItOutBoardCards.length === 5
+      )
+    );
+    users.slice(1).forEach((user) => {
+      const recipientLogs = messages[user.token].reduce(
+        (logs: string[], message: any) => [
+          ...logs,
+          ...(message.logs || []),
+        ],
+        [] as string[]
+      );
+      assert.deepEqual(recipientLogs, [
+        `${buyer.name}玩家查看了公共牌，支付了你1BB`,
+      ]);
+      assert.isFalse(
+        recipientLogs.some((log: string) =>
+          /(Flop|Turn|River|\d+(c|d|h|s))/.test(log)
+        )
+      );
+      assert.isTrue(
+        messages[user.token].every(
+          (message) => message.self.runItOutBoardCards.length === 0
+        )
+      );
+      assert.isTrue(
+        messages[user.token].every(
+          (message) => !message.game || message.game.boardCards.length === 0
+        )
+      );
+    });
+    assert.deepEqual(game.boardCards, []);
+  });
+
+  it("rejects repeat requests, active hands, completed boards, and spectators", () => {
+    const { game, users } = createSettledGame(0);
+    const buyer = users[0];
+    userRunItOut(buyer.token);
+    assert.throws(() => userRunItOut(buyer.token), "本手已经发发看过了");
+
+    const active = createSettledGame(0);
+    active.game.isSettling = false;
+    assert.throws(
+      () => userRunItOut(active.users[0].token),
+      "当前不能发发看"
+    );
+
+    const completed = createSettledGame(4);
+    completed.game.boardCards.push({ num: 6, suit: "c" });
+    assert.throws(
+      () => userRunItOut(completed.users[0].token),
+      "公共牌已经发完"
+    );
+
+    const spectator = createSettledGame(0);
+    spectator.users[0].isSpectator = true;
+    assert.throws(
+      () => userRunItOut(spectator.users[0].token),
+      "当前不能发发看"
+    );
+  });
+
+  it("clears every private preview when the next hand starts", () => {
+    const { game, users } = createSettledGame(0);
+    const buyer = users[0];
+    userRunItOut(buyer.token);
+    assert.lengthOf(game.getRunItOutBoardCards(buyer.token), 5);
+
+    game.start();
+
+    assert.deepEqual(game.getRunItOutBoardCards(buyer.token), []);
+    clearTimeout(game.actingUserTimer);
   });
 });
 

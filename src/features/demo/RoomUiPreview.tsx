@@ -204,6 +204,7 @@ export function RoomUiPreview() {
       ],
       handsType: "两对 · A 和 10",
       nextBuyIn: null,
+      runItOutBoardCards: [],
     };
 
     dispatch(setRoom(room));

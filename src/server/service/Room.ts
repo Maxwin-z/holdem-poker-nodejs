@@ -67,6 +67,8 @@ export class Game {
   multiSettleUsers: Token[] = [];
   multiSettleTimer = setTimeout(() => { }, 0);
 
+  runItOutBoardCardsByUser: { [token: string]: Card[] } = {};
+
   constructor(
     roomid: RoomID,
     token: Token,
@@ -95,6 +97,7 @@ export class Game {
     this.multiSettleIndex = 0;
     this.multiSettleUsers = [];
     clearTimeout(this.multiSettleTimer);
+    this.runItOutBoardCardsByUser = {};
 
     this.sortedUsers = this.sortUsersBySmallBlind();
     if (this.sortedUsers.length < 2) {
@@ -692,6 +695,95 @@ export class Game {
     user.stack -= recipients.length * cost;
     publish2all(this.roomid);
     return cost;
+  }
+  getRunItOutBoardCards(token: Token): Card[] {
+    return this.runItOutBoardCardsByUser[token] || [];
+  }
+  runItOut(token: Token): {
+    boardCards: Card[];
+    remainingCards: Card[];
+    paid: boolean;
+    recipientCount: number;
+    recipientTokens: Token[];
+  } {
+    const user = userMap[token];
+    if (
+      !user ||
+      !this.isSettling ||
+      !user.isInCurrentGame ||
+      user.isSpectator ||
+      !this.sortedUsers.includes(token)
+    ) {
+      throw "当前不能发发看";
+    }
+    if (this.boardCards.length >= 5) {
+      throw "公共牌已经发完";
+    }
+    if (this.runItOutBoardCardsByUser[token]) {
+      throw "本手已经发发看过了";
+    }
+    if (![0, 3, 4].includes(this.boardCards.length)) {
+      throw "公共牌状态异常";
+    }
+
+    const remainingCards: Card[] = [];
+    let nextCardIndex = this.cardIndex;
+    let boardCardCount = this.boardCards.length;
+    if (boardCardCount === 0) {
+      nextCardIndex += 1; // burn before the flop
+      remainingCards.push(...this.cards.slice(nextCardIndex, nextCardIndex + 3));
+      nextCardIndex += 3;
+      boardCardCount = 3;
+    }
+    while (boardCardCount < 5) {
+      nextCardIndex += 1; // burn before the turn and river
+      remainingCards.push(this.cards[nextCardIndex]);
+      nextCardIndex += 1;
+      boardCardCount += 1;
+    }
+    if (
+      remainingCards.length !== 5 - this.boardCards.length ||
+      remainingCards.some((card) => !card)
+    ) {
+      throw "牌堆剩余牌不足";
+    }
+
+    const boardCards = [...this.boardCards, ...remainingCards];
+    const recipients = this.sortedUsers.filter((t) => t !== token && userMap[t]);
+    const costPerRecipient = this.smallBlind * 2; // one big blind
+    const totalCost = recipients.length * costPerRecipient;
+    const paid = user.stack >= totalCost;
+
+    if (paid && totalCost > 0) {
+      const touchedTokens = [token, ...recipients];
+      const chipsRecords = touchedTokens.map((t) => {
+        const touchedUser = userMap[t];
+        const chipsRecord = roomMap[this.roomid].chipsRecords.find(
+          (record) => record.id === touchedUser.chipsRecordID
+        );
+        if (!chipsRecord) {
+          throw "chips record not found";
+        }
+        return chipsRecord;
+      });
+
+      user.stack -= totalCost;
+      recipients.forEach((recipientToken) => {
+        userMap[recipientToken].stack += costPerRecipient;
+      });
+      touchedTokens.forEach((t, index) => {
+        chipsRecords[index].chips = userMap[t].stack;
+      });
+    }
+
+    this.runItOutBoardCardsByUser[token] = boardCards;
+    return {
+      boardCards,
+      remainingCards,
+      paid,
+      recipientCount: recipients.length,
+      recipientTokens: recipients,
+    };
   }
   setActed(token: Token) {
     userMap[token].isActing = false;

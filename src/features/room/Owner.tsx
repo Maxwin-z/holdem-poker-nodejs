@@ -1,12 +1,14 @@
 import {
   CaretRightOutlined,
   CheckOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import { Avatar, Button, Switch, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useAppSelector } from "../../app/hooks";
 import {
   ws_overtime,
+  ws_runItOut,
   ws_startGame,
   ws_userBet,
   ws_userFold,
@@ -18,6 +20,7 @@ import { BigBlind, Dealer, SmallBlind } from "./Symbol";
 import { selectGame, selectRoom, selectSelf } from "./roomSlice";
 import { calculateOvertimeCost } from "../../shared/overtime";
 import { BuyInSettingButton } from "./BuyInSetting";
+import { canRunItOut as getCanRunItOut } from "./runItOut";
 const hintsound = require("../../assets/hint.wav");
 const dealcardsound = require("../../assets/dealcard.wav");
 
@@ -47,6 +50,7 @@ export function Owner() {
   const bet = self?.bet || 0;
   const isActing = self?.isActing || false;
   const isWaiting =
+    !isSettling &&
     !self?.isActing &&
     !self?.isAllIn &&
     !self?.isFoled &&
@@ -132,6 +136,13 @@ export function Owner() {
     isActing && canRaise && !onlyRaiseAllIn && !shouldAllIn;
   const canStartGame = Boolean(self?.isRoomOwner && !room?.isGaming);
   const canReady = Boolean(self && !self.isSpectator && !self.isReady);
+  const canRunItOut = getCanRunItOut({
+    isSettling,
+    publicCardCount: game?.boardCards.length || 0,
+    isInCurrentGame: Boolean(self?.isInCurrentGame),
+    isSpectator: Boolean(self?.isSpectator),
+    privateCardCount: self?.runItOutBoardCards?.length || 0,
+  });
   const idleTitle = canReady
     ? room?.isGaming
       ? "准备加入下一手"
@@ -153,6 +164,8 @@ export function Owner() {
       : "点击准备，告诉房主你已就绪"
     : canStartGame
     ? "至少两名玩家准备后即可开始"
+    : canRunItOut
+    ? "查看原牌堆剩余公共牌；筹码足够时向其他本手玩家各支付 1BB"
     : "操作区会在需要行动时自动更新";
   const sliderValue = Math.min(
     maxRaise,
@@ -483,8 +496,18 @@ export function Owner() {
               <strong>{idleTitle}</strong>
               <span>{idleDescription}</span>
             </div>
-            {canReady || canStartGame ? (
+            {canReady || canStartGame || canRunItOut ? (
               <div className="live-action-idle__actions">
+                {canRunItOut ? (
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<EyeOutlined />}
+                    onClick={ws_runItOut}
+                  >
+                    发发看
+                  </Button>
+                ) : null}
                 {canReady ? (
                   <>
                     <Button

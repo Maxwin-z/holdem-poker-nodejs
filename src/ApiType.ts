@@ -70,6 +70,7 @@ export interface SimpleSelf {
   hands: Card[];
   handsType: string;
   nextBuyIn: number | null;
+  runItOutBoardCards: Card[];
 }
 
 export interface SimpleUserHands extends SimpleSelf { }
@@ -100,5 +101,6 @@ export enum ActionType {
   WATCH = "WATCH",
   SET_NEXT_BUY_IN = "SET_NEXT_BUY_IN",
   SET_SETTLE_TIMES = "SET_SETTLE_TIMES",
+  RUN_IT_OUT = "RUN_IT_OUT",
   SEND_MESSAGE = "SEND_MESSAGE",
 }
