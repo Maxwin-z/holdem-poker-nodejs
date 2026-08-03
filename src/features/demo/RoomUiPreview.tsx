@@ -86,6 +86,7 @@ export function RoomUiPreview() {
   const isShowdown = previewState === "showdown";
   const isOwnerWaiting = previewState === "owner-waiting";
   const isNewUser = previewState === "new-user";
+  const showAllDealerPositions = previewState === "dealer-positions";
 
   useEffect(() => {
     const users: SimpleUser[] = [
@@ -170,6 +171,11 @@ export function RoomUiPreview() {
           : [null, null],
       }),
     ];
+    if (showAllDealerPositions) {
+      users.forEach((user) => {
+        user.position = "D";
+      });
+    }
     const room: SimpleRoom = {
       roomid: "8K21",
       isGaming: !isOwnerWaiting,
@@ -209,6 +215,7 @@ export function RoomUiPreview() {
     isOwnerWaiting,
     isSelectingRunTimes,
     isShowdown,
+    showAllDealerPositions,
   ]);
 
   return (

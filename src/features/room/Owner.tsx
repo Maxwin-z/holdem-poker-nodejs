@@ -163,7 +163,7 @@ export function Owner() {
       <audio src={hintsound} autoPlay={false} ref={hintSoundRef} />
       <audio src={dealcardsound} autoPlay={false} ref={dealCardSoundRef} />
 
-      <div className="live-owner-row">
+      <div className={`live-owner-row ${!inGame ? "is-folded" : ""}`}>
         {self?.isWinner && self.profits >= 0 ? (
           <div className="live-owner-winner-tip" role="status">
             <small>WIN</small>
@@ -185,58 +185,59 @@ export function Owner() {
           />
         </div>
 
-        <div
-          className={[
-            "live-owner-profile",
-            !inGame ? "is-folded" : "",
-            stack >= 100000 ? "has-large-stack" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          <div className="live-owner-avatar-wrap">
-            <Avatar className="live-owner-avatar">YOU</Avatar>
-            {isActing ? (
-              <Tooltip
-                title={
-                  overtimeCost > 0
-                    ? `点击加时，需支付其他玩家各 ${formatChips(
-                        overtimeCost
-                      )} 筹码`
-                    : "剩余筹码不足，无法购买加时"
-                }
-              >
-                <button
-                  type="button"
-                  className="live-owner-avatar-timer"
-                  aria-label="行动倒计时与加时"
-                  disabled={overtimeCost <= 0}
-                  onClick={() => {
-                    ws_overtime();
-                    setNow(now + 1);
-                  }}
+        <div className="live-owner-profile-slot">
+          {position ? (
+            <span className="live-owner-position" title={position}>
+              {positionComponent}
+            </span>
+          ) : null}
+          <div
+            className={[
+              "live-owner-profile",
+              stack >= 100000 ? "has-large-stack" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <div className="live-owner-avatar-wrap">
+              <Avatar className="live-owner-avatar">YOU</Avatar>
+              {isActing ? (
+                <Tooltip
+                  title={
+                    overtimeCost > 0
+                      ? `点击加时，需支付其他玩家各 ${formatChips(
+                          overtimeCost
+                        )} 筹码`
+                      : "剩余筹码不足，无法购买加时"
+                  }
                 >
-                  <CountDown
-                    time={Math.max(0, Math.ceil(leftTime / 1000))}
-                    total={self?.actionTimeLimit}
-                    now={now}
-                    variant="ring"
-                    playUrgentSound
-                  />
-                </button>
-              </Tooltip>
-            ) : null}
-          </div>
-          <div className="live-owner-copy">
-            <div>
-              <strong>{name}</strong>
-              {position ? (
-                <span className="live-owner-position" title={position}>
-                  {positionComponent}
-                </span>
+                  <button
+                    type="button"
+                    className="live-owner-avatar-timer"
+                    aria-label="行动倒计时与加时"
+                    disabled={overtimeCost <= 0}
+                    onClick={() => {
+                      ws_overtime();
+                      setNow(now + 1);
+                    }}
+                  >
+                    <CountDown
+                      time={Math.max(0, Math.ceil(leftTime / 1000))}
+                      total={self?.actionTimeLimit}
+                      now={now}
+                      variant="ring"
+                      playUrgentSound
+                    />
+                  </button>
+                </Tooltip>
               ) : null}
             </div>
-            <b>{formatChips(stack)}</b>
+            <div className="live-owner-copy">
+              <div>
+                <strong>{name}</strong>
+              </div>
+              <b>{formatChips(stack)}</b>
+            </div>
           </div>
         </div>
 

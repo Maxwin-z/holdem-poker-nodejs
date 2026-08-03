@@ -83,6 +83,12 @@ export function User({ id, seat }: { id: string; seat: string }) {
         </div>
       ) : null}
 
+      {position ? (
+        <span className="live-seat__position" title={position}>
+          {posComp}
+        </span>
+      ) : null}
+
       <div className="live-seat__profile">
         <div className="live-seat__avatar-wrap">
           <Avatar className="live-seat__avatar">
@@ -106,11 +112,6 @@ export function User({ id, seat }: { id: string; seat: string }) {
         <div className="live-seat__copy">
           <div className="live-seat__name">
             <span>{name}</span>
-            {position ? (
-              <span className="live-seat__position" title={position}>
-                {posComp}
-              </span>
-            ) : null}
           </div>
           <strong>{stack.toLocaleString("en-US")}</strong>
         </div>

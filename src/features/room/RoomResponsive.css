@@ -318,7 +318,8 @@
 .live-seat {
   width: min(130px, 100%);
   position: relative;
-  z-index: 4;
+  /* Keep children in the table's shared stack so every action label can outrank sibling cards. */
+  z-index: auto;
   display: grid;
   justify-items: center;
   color: var(--live-text);
@@ -364,9 +365,14 @@
   grid-row: 4;
 }
 
-.live-seat.is-folded {
-  opacity: 0.46;
-  filter: grayscale(0.7);
+.live-seat.is-folded .live-seat__cards,
+.live-seat.is-folded .live-seat__profile {
+  opacity: 0.38;
+  filter: grayscale(0.78);
+}
+
+.live-seat.is-folded .live-seat__meta {
+  opacity: 0.66;
 }
 
 .live-seat.is-active .live-seat__profile {
@@ -381,7 +387,7 @@
 .live-owner-winner-tip {
   min-height: 30px;
   position: absolute;
-  z-index: 12;
+  z-index: 40;
   bottom: calc(100% + 7px);
   left: 50%;
   display: flex;
@@ -519,7 +525,7 @@
   width: 100%;
   min-width: 0;
   position: relative;
-  z-index: 2;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -592,26 +598,63 @@
 }
 
 .live-seat__position {
-  min-width: 20px;
-  height: 18px;
+  width: max-content;
+  height: max-content;
+  position: absolute;
+  z-index: 35;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.live-seat--top-left .live-seat__position,
+.live-seat--top-right .live-seat__position {
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.live-seat--upper-left .live-seat__position,
+.live-seat--lower-left .live-seat__position {
+  top: 56%;
+  left: calc(100% + 5px);
+  transform: translateY(-50%);
+}
+
+.live-seat--upper-right .live-seat__position,
+.live-seat--lower-right .live-seat__position {
+  top: 56%;
+  right: calc(100% + 5px);
+  transform: translateY(-50%);
+}
+
+.live-seat--middle-left .live-seat__position,
+.live-seat--middle-right .live-seat__position {
+  top: 20%;
+  transform: translateY(-50%);
+}
+
+.live-seat--middle-left .live-seat__position {
+  left: calc(100% - 3px);
+}
+
+.live-seat--middle-right .live-seat__position {
+  right: calc(100% - 3px);
 }
 
 .live-position-badge {
-  min-width: 21px;
-  height: 18px;
+  min-width: 26px;
+  height: 22px;
   display: inline-grid;
   place-items: center;
-  padding: 0 4px;
+  padding: 0 5px;
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 999px;
   color: #fff;
   box-shadow:
-    0 2px 7px rgba(0, 0, 0, 0.38),
+    0 4px 12px rgba(0, 0, 0, 0.48),
     inset 0 1px rgba(255, 255, 255, 0.25);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 950;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -619,22 +662,47 @@
 }
 
 .live-position-badge--dealer {
-  min-width: 18px;
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
   padding: 0;
-  border-color: #ffe1a2;
+  border: 2px solid #fff1ca;
   color: #3b2600;
-  background: linear-gradient(145deg, #ffe19b, #d99b31);
+  background: linear-gradient(145deg, #ffe9b1, #dda43d);
+  box-shadow:
+    0 0 0 2px rgba(92, 59, 7, 0.34),
+    0 5px 14px rgba(0, 0, 0, 0.5),
+    inset 0 1px rgba(255, 255, 255, 0.45);
+  font-size: 10px;
   text-shadow: none;
 }
 
 .live-position-badge--sb {
-  border-color: #9bdcff;
-  background: linear-gradient(145deg, #39a9e7, #1b68ae);
+  min-width: 21px;
+  height: 18px;
+  padding: 0 3px;
+  border-color: rgba(139, 202, 229, 0.4);
+  color: rgba(231, 245, 249, 0.74);
+  background: linear-gradient(145deg, #2e6c89, #244961);
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.28),
+    inset 0 1px rgba(255, 255, 255, 0.1);
+  font-size: 7px;
+  opacity: 0.62;
 }
 
 .live-position-badge--bb {
-  border-color: #ffd78f;
-  background: linear-gradient(145deg, #f2a735, #c65b1c);
+  min-width: 21px;
+  height: 18px;
+  padding: 0 3px;
+  border-color: rgba(224, 177, 101, 0.42);
+  color: rgba(255, 241, 215, 0.76);
+  background: linear-gradient(145deg, #966426, #683e23);
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.28),
+    inset 0 1px rgba(255, 255, 255, 0.1);
+  font-size: 7px;
+  opacity: 0.62;
 }
 
 .live-seat__status {
@@ -660,13 +728,16 @@
 .live-seat__meta {
   min-height: 27px;
   max-width: 94%;
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
   border-radius: 0 0 8px 8px;
   overflow: hidden;
-  background: rgba(4, 15, 12, 0.84);
+  background: rgba(4, 15, 12, 0.96);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.26);
   font-size: 12px;
   line-height: 1.25;
   white-space: nowrap;
@@ -1000,6 +1071,16 @@
   column-gap: 10px;
 }
 
+.live-owner-row.is-folded .live-owner-cards,
+.live-owner-row.is-folded .live-owner-profile {
+  opacity: 0.4;
+  filter: grayscale(0.72);
+}
+
+.live-owner-row.is-folded .live-owner-bet {
+  opacity: 0.66;
+}
+
 .live-owner-winner-tip {
   bottom: calc(100% + 8px);
   left: 50%;
@@ -1008,6 +1089,8 @@
 .live-owner-cards {
   grid-column: 1;
   grid-row: 1 / 3;
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 6px;
 }
@@ -1018,8 +1101,8 @@
 
 .live-owner-profile {
   min-width: 172px;
-  grid-column: 2;
-  grid-row: 1;
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1030,9 +1113,11 @@
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
 }
 
-.live-owner-profile.is-folded {
-  opacity: 0.57;
-  filter: grayscale(0.55);
+.live-owner-profile-slot {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  z-index: 10;
 }
 
 .live-room-shell .live-owner-avatar.ant-avatar {
@@ -1115,9 +1200,16 @@
 }
 
 .live-owner-position {
-  min-width: 20px;
-  height: 18px;
-  flex: 0 0 auto;
+  width: max-content;
+  height: max-content;
+  position: absolute;
+  z-index: 35;
+  top: -16px;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .live-owner-position .live-position-badge {
@@ -1174,13 +1266,16 @@
   grid-column: 2;
   grid-row: 2;
   justify-self: center;
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
   border-radius: 0 0 8px 8px;
   overflow: hidden;
-  background: rgba(5, 18, 14, 0.9);
+  background: rgba(5, 18, 14, 0.96);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.24);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -2290,9 +2385,10 @@
   }
 
   .live-table-stage {
+    /* Safari's expanded browser chrome can leave less than 400px for the table. */
     grid-template-rows:
-      minmax(150px, 0.8fr)
-      repeat(3, minmax(100px, 1fr));
+      minmax(0, 0.8fr)
+      repeat(3, minmax(0, 1fr));
     padding: 3px 2px;
     border-radius: 22px;
   }
@@ -2370,20 +2466,41 @@
   }
 
   .live-seat__position {
-    min-width: 18px;
-    height: 16px;
+    width: max-content;
+    min-width: 0;
+    height: max-content;
+  }
+
+  .live-seat--middle-left .live-seat__position,
+  .live-seat--middle-right .live-seat__position {
+    top: -35%;
   }
 
   .live-position-badge {
-    min-width: 19px;
-    height: 16px;
+    min-width: 22px;
+    height: 19px;
     padding: 0 3px;
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .live-position-badge--dealer {
-    min-width: 16px;
+    width: 23px;
+    min-width: 23px;
+    height: 23px;
     padding: 0;
+    font-size: 9px;
+  }
+
+  .live-position-badge--sb,
+  .live-position-badge--bb {
+    min-width: 19px;
+    height: 16px;
+    padding: 0 2px;
+    font-size: 6px;
+  }
+
+  .live-owner-position {
+    top: -13px;
   }
 
   .live-seat__status {
