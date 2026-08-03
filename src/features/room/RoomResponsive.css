@@ -2473,7 +2473,15 @@
 
   .live-seat--middle-left .live-seat__position,
   .live-seat--middle-right .live-seat__position {
-    top: -35%;
+    top: 20%;
+  }
+
+  .live-seat--middle-left .live-seat__position {
+    left: calc(100% - 16px);
+  }
+
+  .live-seat--middle-right .live-seat__position {
+    right: calc(100% - 16px);
   }
 
   .live-position-badge {
