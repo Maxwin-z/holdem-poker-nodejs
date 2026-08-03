@@ -867,6 +867,40 @@
   overflow: visible;
 }
 
+.demo-action-panel.is-hero-turn {
+  border-color: rgba(44, 212, 156, 0.62);
+  box-shadow:
+    0 0 0 2px rgba(44, 212, 156, 0.1),
+    0 24px 80px rgba(0, 0, 0, 0.24),
+    0 0 34px rgba(44, 212, 156, 0.14);
+  animation: demo-action-panel-ready 760ms ease-out;
+}
+
+.demo-action-panel.is-waiting {
+  border-color: rgba(154, 162, 158, 0.1);
+  background:
+    linear-gradient(180deg, rgba(25, 27, 26, 0.92), rgba(13, 15, 14, 0.95));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+}
+
+@keyframes demo-action-panel-ready {
+  0% {
+    border-color: rgba(75, 242, 184, 0.95);
+    box-shadow:
+      0 0 0 4px rgba(44, 212, 156, 0.2),
+      0 24px 80px rgba(0, 0, 0, 0.24),
+      0 0 52px rgba(44, 212, 156, 0.34);
+  }
+
+  100% {
+    border-color: rgba(44, 212, 156, 0.62);
+    box-shadow:
+      0 0 0 2px rgba(44, 212, 156, 0.1),
+      0 24px 80px rgba(0, 0, 0, 0.24),
+      0 0 34px rgba(44, 212, 156, 0.14);
+  }
+}
+
 .demo-action-panel__grabber {
   display: none;
 }
@@ -1808,6 +1842,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .demo-action-panel.is-hero-turn {
+    animation: none;
+  }
+
   .poker-demo-shell *,
   .poker-demo-shell *::before,
   .poker-demo-shell *::after {
