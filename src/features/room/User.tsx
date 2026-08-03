@@ -106,7 +106,6 @@ export function User({ id, seat }: { id: string; seat: string }) {
                 total={user.actionTimeLimit}
                 now={Date.now()}
                 variant="ring"
-                playUrgentSound
               />
             </div>
           ) : null}
