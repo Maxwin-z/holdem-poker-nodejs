@@ -13,7 +13,6 @@ import {
   userMap,
   userOverTime,
   userReady,
-  userReBuy,
   userSetSettleTimes,
   userShowHands,
   userWatch,
@@ -173,9 +172,6 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.READY:
       userReady(token);
       break;
-    case ActionType.REBUY:
-      userReBuy(token);
-      break;
     case ActionType.OVERTIME:
       userOverTime(token);
       break;
@@ -235,7 +231,6 @@ function getSimpleGame(game: Game): SimpleGame {
       acting: "",
       preBet: 0,
       bb: 0,
-      reBuyLimit: 1,
       isSettling: false,
       nextGameTime: 0,
       raiseUser: "",
@@ -255,7 +250,6 @@ function getSimpleGame(game: Game): SimpleGame {
     acting: actingUser ? userMap[actingUser].chipsRecordID : "",
     preBet,
     bb: game.smallBlind * 2,
-    reBuyLimit: game.reBuyLimit,
     isSettling: game.isSettling,
     nextGameTime: game.nextGameTime,
     raiseUser: game.raiseUser,
@@ -327,7 +321,6 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
     case ActionType.BET:
     case ActionType.FOLD:
     case ActionType.OVERTIME:
-    case ActionType.REBUY:
     case ActionType.WATCH:
       send2all(room.id, {
         game: simpleGame,

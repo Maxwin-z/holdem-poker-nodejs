@@ -11,7 +11,6 @@ import {
   ws_userBet,
   ws_userFold,
   ws_userReady,
-  ws_userRebuy,
 } from "../../app/websocket";
 import { CountDown } from "./CountDown";
 import { Poker } from "./Poker";
@@ -41,7 +40,6 @@ export function Owner() {
   const raiseBetDiff = game?.raiseBetDiff || 0;
   const pots = game?.pots || 0;
   const bb = game?.bb || 0;
-  const reBuyLimit = game?.reBuyLimit || 1;
   const isSettling = game?.isSettling || false;
 
   const name = self?.name || "";
@@ -134,11 +132,6 @@ export function Owner() {
     isActing && canRaise && !onlyRaiseAllIn && !shouldAllIn;
   const canStartGame = Boolean(self?.isRoomOwner && !room?.isGaming);
   const canReady = Boolean(self && !self.isSpectator && !self.isReady);
-  const canRebuy =
-    stack + bet < reBuyLimit * bb &&
-    Boolean(
-      game?.isSettling || !self?.isInCurrentGame || self?.isFoled
-    );
   const idleTitle = canReady
     ? room?.isGaming
       ? "准备加入下一手"
@@ -490,7 +483,7 @@ export function Owner() {
               <strong>{idleTitle}</strong>
               <span>{idleDescription}</span>
             </div>
-            {canReady || canStartGame || canRebuy ? (
+            {canReady || canStartGame ? (
               <div className="live-action-idle__actions">
                 {canReady ? (
                   <>
@@ -516,15 +509,6 @@ export function Owner() {
                     onClick={ws_startGame}
                   >
                     开始游戏
-                  </Button>
-                ) : null}
-                {canRebuy ? (
-                  <Button
-                    className="live-action-idle__secondary"
-                    size="large"
-                    onClick={() => ws_userRebuy()}
-                  >
-                    再次买入
                   </Button>
                 ) : null}
               </div>

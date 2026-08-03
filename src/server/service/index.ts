@@ -49,11 +49,10 @@ export function createUser(token: Token, name: string, avatar: string): User {
 export function createRoom(
   token: Token,
   sb: number,
-  buyIn: number,
-  reBuyLimit: number = 1
+  buyIn: number
 ): Room {
   const user = userMap[token];
-  const room = new Room(genRoomID(), sb, buyIn, reBuyLimit);
+  const room = new Room(genRoomID(), sb, buyIn);
   roomMap[room.id] = room;
   userEnterRoom(token, room.id);
   user.isRoomOwner = true;
@@ -180,15 +179,6 @@ export function userFold(token: Token) {
     throw "invalid room";
   }
   return roomMap[roomid].game.fold(token);
-}
-
-export function userReBuy(token: Token) {
-  const roomid = userMap[token].roomid;
-
-  if (!isInRoom(token, roomid)) {
-    throw "invalid room";
-  }
-  return roomMap[roomid].reBuy(token);
 }
 
 export function userHangup(token: Token) {

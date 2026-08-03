@@ -20,16 +20,8 @@ const initialState: CreateRoomState = {
 
 export const createRoomAsync = createAsyncThunk(
   "home/createroom",
-  async ({
-    sb,
-    buyIn,
-    reBuyLimit,
-  }: {
-    sb: number;
-    buyIn: number;
-    reBuyLimit: number;
-  }) => {
-    return await createroom(sb, buyIn, reBuyLimit);
+  async ({ sb, buyIn }: { sb: number; buyIn: number }) => {
+    return await createroom(sb, buyIn);
   }
 );
 

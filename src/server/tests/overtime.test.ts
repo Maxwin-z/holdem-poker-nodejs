@@ -22,7 +22,7 @@ function createOvertimeGame() {
   const room = createRoom(tokens[0], 1, 200);
   tokens.slice(1).forEach((token) => userEnterRoom(token, room.id));
 
-  const game = new Game(room.id, tokens[0], 1, 1);
+  const game = new Game(room.id, tokens[0], 1);
   room.game = game;
   game.isSettling = false;
   game.sortedUsers = [...tokens];

@@ -326,12 +326,6 @@ export function ws_userBet(chips: number) {
   });
 }
 
-export function ws_userRebuy() {
-  send2server({
-    action: ActionType.REBUY,
-  });
-}
-
 export function ws_userLeave() {
   send2server({
     action: ActionType.LEAVE,

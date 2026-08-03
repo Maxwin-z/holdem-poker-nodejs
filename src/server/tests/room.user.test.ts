@@ -10,12 +10,10 @@ import {
   userHangup,
   userMap,
   userReady,
-  userReBuy,
   userSetNextBuyIn,
 } from "../service";
 import Room, { Game, GameRound } from "../service/Room";
 import User, { Token } from "../service/User";
-import { logGame } from "./utils";
 
 function clean() {
   Object.keys(userMap).forEach((k) => delete userMap[k]);
@@ -168,36 +166,6 @@ describe("Game Test", () => {
     it("it should be game pause", () => {
       const [room, game, users] = testCase_sb199_bb200_sbFold();
       assert.equal(room.isGaming, false);
-    });
-  });
-
-  describe("re buy in", () => {
-    beforeEach(clean);
-    it("can rebuy", () => {
-      const [room, game, users] = testCase_sb199_bb200_sbFold();
-      const [sb, bb] = users.map((u) => u.token);
-      userReBuy(sb);
-      assert.equal(userMap[sb].stack, 201);
-      const sbCr = getChipsRecoud(room, sb);
-      assert.equal(sbCr.chips, 201);
-      assert.equal(sbCr.buyIn, 400);
-    });
-
-    it("cannot rebuy", () => {
-      const [room, game, users] = testCase_bbFold();
-      const [sb, bb] = users.map((u) => u.token);
-      assert.throws(() => userReBuy(sb), "cannot rebuy now");
-    });
-
-    it("re buy and continue game", () => {
-      const [room, game, users] = testCase_sb199_bb200_sbFold();
-      const [sb, bb] = users;
-      userReBuy(sb.token);
-      userReady(sb.token);
-      startGame(sb.isRoomOwner ? sb.token : bb.token);
-      assert.equal(room.isGaming, true);
-      logGame(game);
-      clearTimeout(room.game.actingUserTimer);
     });
   });
 });
@@ -521,7 +489,7 @@ describe("next hand buy in", () => {
     setLedgerStack(room, owner, 399);
     setLedgerStack(room, resting, 1);
     room.isGaming = true;
-    room.game = new Game(room.id, owner.token, room.smallBlind, room.reBuyLimit);
+    room.game = new Game(room.id, owner.token, room.smallBlind);
     room.game.isSettling = false;
     resting.isInCurrentGame = true;
 

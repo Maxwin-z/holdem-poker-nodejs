@@ -192,7 +192,6 @@ export function RoomUiPreview() {
       raiseBetDiff: 160,
       preBet: 240,
       bb: 40,
-      reBuyLimit: 100,
       isSettling: isSelectingRunTimes || isShowdown,
       nextGameTime: Date.now() + 10000,
       userCount: 9,

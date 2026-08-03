@@ -39,7 +39,6 @@ export function CreateRoom({
 
   const [smallBlind, setSmallBlind] = useState(1);
   const [buyIn, setBuyIn] = useState(200);
-  const [reBuyLimit, setReBuyLimit] = useState(10);
   const [roomid, setRoomID] = useState(initialRoomID);
   const status = useAppSelector(selectStatus);
   const playerName = previewName || localStorage["name"] || "玩家";
@@ -130,18 +129,6 @@ export function CreateRoom({
                 />
                 <small>默认小盲的 200 倍</small>
               </label>
-              <label className="is-wide">
-                <span>再次买入线</span>
-                <div className="lobby-inline-input">
-                  <InputNumber
-                    min={1}
-                    value={reBuyLimit}
-                    onChange={(value) => setReBuyLimit(value!)}
-                  />
-                  <b>个大盲</b>
-                </div>
-                <small>筹码低于该数值时允许再次买入</small>
-              </label>
             </div>
 
             <Button
@@ -155,7 +142,6 @@ export function CreateRoom({
                   createRoomAsync({
                     sb: smallBlind,
                     buyIn,
-                    reBuyLimit,
                   })
                 )
               }

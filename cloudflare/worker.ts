@@ -159,8 +159,8 @@ export class PokerServer {
   private async createRoom(request: Request): Promise<Response> {
     const { token, name } = authenticatedUser(request, this.env.JWT_SECRET);
     ensureUser(token, name);
-    const { sb, buyin, reBuyLimit } = await readJson(request);
-    const room = createRoom(token, Number(sb), Number(buyin), Number(reBuyLimit));
+    const { sb, buyin } = await readJson(request);
+    const room = createRoom(token, Number(sb), Number(buyin));
     return success(room.id);
   }
 

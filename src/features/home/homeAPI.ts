@@ -16,15 +16,13 @@ export async function roominfo(): Promise<ApiRsp> {
 
 export async function createroom(
   sb: number,
-  buyin: number,
-  reBuyLimit: number
+  buyin: number
 ): Promise<ApiRsp> {
   const rsp = await fetch("/createroom", {
     method: "POST",
     body: JSON.stringify({
       sb,
       buyin,
-      reBuyLimit,
     }),
     headers: {
       authorization: localStorage["token"],

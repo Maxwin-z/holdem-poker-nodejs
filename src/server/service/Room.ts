@@ -45,7 +45,6 @@ function delayTry(fn: FnType, delay: number): ReturnType<typeof setTimeout> {
 export class Game {
   roomid: RoomID = "";
   smallBlind: number = 0;
-  reBuyLimit: number = 1;
   bigBlindUser: Token = "";
   cards: Card[] = [];
   boardCards: Card[] = [];
@@ -71,13 +70,11 @@ export class Game {
   constructor(
     roomid: RoomID,
     token: Token,
-    smallBlind: number,
-    reBuyLimit: number
+    smallBlind: number
   ) {
     this.roomid = roomid;
     this.bigBlindUser = token;
     this.smallBlind = smallBlind;
-    this.reBuyLimit = reBuyLimit;
   }
 
   start() {
@@ -725,11 +722,10 @@ class Room {
   isGaming: boolean = false;
   smallBlind: number = 0;
   buyIn: number = 0;
-  reBuyLimit: number = 1;
-  game: Game = new Game("", "", 0, 1);
+  game: Game = new Game("", "", 0);
   chipsRecords: ChipsRecord[] = [];
 
-  constructor(id: string, sb: number, buyIn: number, reBuyLimit: number = 1) {
+  constructor(id: string, sb: number, buyIn: number) {
     if (sb === 0 || buyIn === 0) {
       throw `small blind(${sb}) and buy in(${buyIn})] should not be 0`;
     }
@@ -737,7 +733,6 @@ class Room {
     this.id = id;
     this.smallBlind = sb;
     this.buyIn = buyIn;
-    this.reBuyLimit = Math.max(1, reBuyLimit);
     this.isGaming = false;
   }
 
@@ -762,8 +757,7 @@ class Room {
     this.game = new Game(
       this.id,
       readyUsers.sort((_) => Math.random() - 0.5)[0],
-      this.smallBlind,
-      this.reBuyLimit
+      this.smallBlind
     );
     this.game.start();
     return true;
@@ -878,21 +872,6 @@ class Room {
     }
     this.game.removeUser(token);
     userMap[token].leaveRoom();
-  }
-
-  reBuy(token: Token) {
-    const user = userMap[token];
-    // console.log("rebuy", user);
-    if (user.stack > this.reBuyLimit * this.smallBlind * 2) {
-      throw "cannot rebuy now";
-    }
-    user.stack += this.buyIn;
-    this.chipsRecords.forEach((cr) => {
-      if (cr.id == user.chipsRecordID) {
-        cr.buyIn += this.buyIn;
-        cr.chips += this.buyIn;
-      }
-    });
   }
 }
 

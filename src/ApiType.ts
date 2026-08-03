@@ -25,7 +25,6 @@ export interface SimpleGame {
   raiseBetDiff: number; // valid rasize count
   preBet: number;
   bb: number;
-  reBuyLimit: number;
   isSettling: boolean;
   nextGameTime: number;
   userCount: number;
@@ -96,7 +95,6 @@ export enum ActionType {
   BET = "BET",
   FOLD = "FOLD",
   OVERTIME = "OVERTIME",
-  REBUY = "REBUY",
   LEAVE = "LEAVE",
   SHOW_HANDS = "SHOW_HANDS",
   WATCH = "WATCH",
