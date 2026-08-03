@@ -61,6 +61,8 @@ export interface SimpleUser {
 export interface SimpleRoom {
   roomid: RoomID;
   isGaming: boolean;
+  minBuyIn: number;
+  maxBuyIn: number;
   users: SimpleUser[];
 }
 
@@ -68,6 +70,7 @@ export interface SimpleSelf {
   id: string;
   hands: Card[];
   handsType: string;
+  nextBuyIn: number | null;
 }
 
 export interface SimpleUserHands extends SimpleSelf { }
@@ -97,6 +100,7 @@ export enum ActionType {
   LEAVE = "LEAVE",
   SHOW_HANDS = "SHOW_HANDS",
   WATCH = "WATCH",
+  SET_NEXT_BUY_IN = "SET_NEXT_BUY_IN",
   SET_SETTLE_TIMES = "SET_SETTLE_TIMES",
   SEND_MESSAGE = "SEND_MESSAGE",
 }

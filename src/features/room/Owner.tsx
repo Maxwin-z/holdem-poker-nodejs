@@ -18,6 +18,7 @@ import { Poker } from "./Poker";
 import { BigBlind, Dealer, SmallBlind } from "./Symbol";
 import { selectGame, selectRoom, selectSelf } from "./roomSlice";
 import { calculateOvertimeCost } from "../../shared/overtime";
+import { BuyInSettingButton } from "./BuyInSetting";
 const hintsound = require("../../assets/hint.wav");
 const dealcardsound = require("../../assets/dealcard.wav");
 
@@ -73,6 +74,9 @@ export function Owner() {
 
   const chips2call = Math.min(stack, preBet - bet);
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
+  const showSelfHands = Boolean(
+    self?.isReady || (self?.isInCurrentGame && !isSettling)
+  );
   const actionText =
     self && !self.isReady
       ? "休息"
@@ -129,7 +133,7 @@ export function Owner() {
   const showRaiseControls =
     isActing && canRaise && !onlyRaiseAllIn && !shouldAllIn;
   const canStartGame = Boolean(self?.isRoomOwner && !room?.isGaming);
-  const canReady = Boolean(!self?.isSpectator && !self?.isReady);
+  const canReady = Boolean(self && !self.isSpectator && !self.isReady);
   const canRebuy =
     stack + bet < reBuyLimit * bb &&
     Boolean(
@@ -178,14 +182,14 @@ export function Owner() {
 
         <div className="live-owner-cards">
           <Poker
-            card={self?.hands[0] || null}
+            card={showSelfHands ? self?.hands[0] || null : null}
             index={0}
-            showHand={isSettling && !selfAsUser?.hands[0]}
+            showHand={showSelfHands && isSettling && !selfAsUser?.hands[0]}
           />
           <Poker
-            card={self?.hands[1] || null}
+            card={showSelfHands ? self?.hands[1] || null : null}
             index={1}
-            showHand={isSettling && !selfAsUser?.hands[1]}
+            showHand={showSelfHands && isSettling && !selfAsUser?.hands[1]}
           />
         </div>
 
@@ -489,14 +493,20 @@ export function Owner() {
             {canReady || canStartGame || canRebuy ? (
               <div className="live-action-idle__actions">
                 {canReady ? (
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<CheckOutlined />}
-                    onClick={ws_userReady}
-                  >
-                    {room?.isGaming ? "准备下一手" : "准备加入"}
-                  </Button>
+                  <>
+                    <Button
+                      type="primary"
+                      size="large"
+                      icon={<CheckOutlined />}
+                      onClick={ws_userReady}
+                    >
+                      {room?.isGaming ? "准备下一手" : "准备加入"}
+                    </Button>
+                    <BuyInSettingButton
+                      className="live-action-idle__secondary"
+                      size="large"
+                    />
+                  </>
                 ) : null}
                 {canStartGame ? (
                   <Button

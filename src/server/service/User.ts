@@ -28,6 +28,7 @@ class User {
   needAction: boolean = false; // act each round
   actionName: string = "";
   stack: number = 0;
+  nextBuyIn: number | null = null;
   bets: number[] = [0, 0, 0, 0];
   totalBets: number = 0; // sum(bets)
   hands: Card[] = [];
@@ -65,9 +66,16 @@ class User {
   getWebsockets() {
     return this.wss;
   }
+  clearHand() {
+    this.hands = [];
+    this.handsType = "";
+    this.maxCards = [];
+    this.shouldShowHand = false;
+  }
   setRoom(roomid: RoomID) {
     this.roomid = roomid;
     this.stack = roomMap[roomid].buyIn;
+    this.nextBuyIn = null;
     this.bets = [0, 0, 0, 0];
     this.hands = [];
 
@@ -94,6 +102,7 @@ class User {
     this.shouldShowHand = false;
     this.isInCurrentGame = false;
     this.isWinner = false;
+    this.nextBuyIn = null;
     this.maxCards = [];
   }
   setReady(ready: boolean) {

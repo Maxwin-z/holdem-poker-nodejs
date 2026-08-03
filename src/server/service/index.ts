@@ -136,7 +136,25 @@ export function userReady(token: Token) {
   if (!user.roomid) {
     throw "not in any room";
   }
+  if (user.isSpectator) {
+    throw "观战玩家不能准备";
+  }
+  const room = roomMap[user.roomid];
+  if (
+    user.nextBuyIn !== null &&
+    (!user.isInCurrentGame || room.game.isSettling)
+  ) {
+    room.applyNextBuyIn(token);
+  }
   user.setReady(true);
+}
+
+export function userSetNextBuyIn(token: Token, chips: number) {
+  const user = userMap[token];
+  if (!user || !user.roomid || !isInRoom(token, user.roomid)) {
+    throw "invalid room";
+  }
+  roomMap[user.roomid].setNextBuyIn(token, chips);
 }
 
 function isInRoom(token: Token, roomid: RoomID): boolean {
@@ -174,7 +192,12 @@ export function userReBuy(token: Token) {
 }
 
 export function userHangup(token: Token) {
-  userMap[token].isReady = false;
+  const user = userMap[token];
+  user.isReady = false;
+  const room = roomMap[user.roomid];
+  if (!user.isInCurrentGame || room?.game.isSettling) {
+    user.clearHand();
+  }
 }
 
 export function userOverTime(token: Token) {

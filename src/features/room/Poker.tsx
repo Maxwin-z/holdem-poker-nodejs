@@ -1,6 +1,5 @@
 import { Button } from "antd";
 import QueueAnim from "rc-queue-anim";
-import { useEffect } from "react";
 import { Card as PokerCard } from "../../ApiType";
 import { ws_userShowHands } from "../../app/websocket";
 
@@ -13,8 +12,6 @@ export function Poker({
   index?: number;
   showHand?: boolean;
 }) {
-  const suitClass = card ? `poker-card--${card.suit}` : "";
-  const empty = !card ? "empty" : "";
   function num2s(n: number) {
     switch (n) {
       case 14:
@@ -43,32 +40,39 @@ export function Poker({
     }
     return "";
   }
-  useEffect(() => {}, [card]);
-  const rank = num2s(card?.num || 0);
-  const suit = suit2s(card?.suit || "");
+
+  if (!card) {
+    return (
+      <div className="poker-card empty" aria-label="空牌位">
+        <div className="full" />
+      </div>
+    );
+  }
+
+  const suitClass = `poker-card--${card.suit}`;
+  const rank = num2s(card.num);
+  const suit = suit2s(card.suit);
 
   return (
     <div
-      className={`poker-card ${suitClass} ${empty}`}
-      aria-label={card ? `${rank}${suit}` : "空牌位"}
+      className={`poker-card ${suitClass}`}
+      aria-label={`${rank}${suit}`}
     >
       <QueueAnim delay={0} type="bottom" className="full">
-        {card ? (
-          <div key="a" className="full content">
-            <span className="poker-card__corner" aria-hidden="true">
-              <strong>{rank}</strong>
-              <i>{suit}</i>
-            </span>
-            <span className="poker-card__hero-suit" aria-hidden="true">
-              {suit}
-            </span>
-            {showHand ? (
-              <Button type="primary" onClick={() => ws_userShowHands(index)}>
-                亮牌
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+        <div key="a" className="full content">
+          <span className="poker-card__corner" aria-hidden="true">
+            <strong>{rank}</strong>
+            <i>{suit}</i>
+          </span>
+          <span className="poker-card__hero-suit" aria-hidden="true">
+            {suit}
+          </span>
+          {showHand ? (
+            <Button type="primary" onClick={() => ws_userShowHands(index)}>
+              亮牌
+            </Button>
+          ) : null}
+        </div>
       </QueueAnim>
     </div>
   );

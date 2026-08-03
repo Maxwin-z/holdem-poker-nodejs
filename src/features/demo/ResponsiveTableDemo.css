@@ -504,19 +504,66 @@
 }
 
 .demo-seat.is-active .demo-seat__profile {
-  border-color: rgba(44, 212, 156, 0.72);
-  background: rgba(8, 35, 27, 0.96);
+  border-color: rgba(232, 190, 104, 0.9);
+  background:
+    linear-gradient(135deg, rgba(65, 48, 21, 0.98), rgba(17, 29, 24, 0.98));
   box-shadow:
-    0 0 0 2px rgba(44, 212, 156, 0.1),
-    0 8px 28px rgba(0, 0, 0, 0.32);
+    0 0 0 2px rgba(232, 190, 104, 0.18),
+    0 0 30px rgba(232, 190, 104, 0.32),
+    0 8px 28px rgba(0, 0, 0, 0.36);
+  animation: demo-opponent-turn-enter 720ms ease-out;
+}
+
+.demo-seat.is-active .demo-seat__profile::before {
+  position: absolute;
+  z-index: -1;
+  inset: -7px;
+  border: 2px solid rgba(232, 190, 104, 0.54);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  animation: demo-opponent-turn-pulse 1.8s ease-in-out infinite;
 }
 
 .demo-seat.is-active .demo-seat__meta {
-  background: rgba(7, 35, 26, 0.94);
+  border: 1px solid rgba(232, 190, 104, 0.25);
+  border-top: 0;
+  background: rgba(48, 36, 17, 0.96);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.34);
 }
 
 .demo-seat.is-active .demo-seat__meta .is-thinking {
+  color: var(--demo-gold);
   font-weight: 800;
+}
+
+@keyframes demo-opponent-turn-enter {
+  0% {
+    box-shadow:
+      0 0 0 5px rgba(232, 190, 104, 0.24),
+      0 0 52px rgba(232, 190, 104, 0.56),
+      0 8px 28px rgba(0, 0, 0, 0.36);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(232, 190, 104, 0.18),
+      0 0 30px rgba(232, 190, 104, 0.32),
+      0 8px 28px rgba(0, 0, 0, 0.36);
+  }
+}
+
+@keyframes demo-opponent-turn-pulse {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.045);
+  }
 }
 
 .demo-seat__cards {
@@ -1842,6 +1889,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .demo-seat.is-active .demo-seat__profile,
+  .demo-seat.is-active .demo-seat__profile::before {
+    animation: none;
+  }
+
   .demo-action-panel.is-hero-turn {
     animation: none;
   }

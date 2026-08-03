@@ -80,6 +80,7 @@ export class Game {
   }
 
   start() {
+    roomMap[this.roomid].applyReadyNextBuyIns();
     if (!this.initUsers()) return;
     this.cards = randomHands(52);
     this.cardIndex = 0;
@@ -118,7 +119,8 @@ export class Game {
     for (let i = 0; i < tokens.length - 1; ++i) {
       const bbToken = tokens[(currentBBIndex + i + 1) % tokens.length];
       const user = userMap[bbToken];
-      if (user.isReady && user.stack >= this.smallBlind * 2) {
+      const nextStack = user.nextBuyIn ?? user.stack;
+      if (user.isReady && nextStack >= this.smallBlind * 2) {
         this.bigBlindUser = bbToken;
         this.start();
         return;
@@ -137,16 +139,13 @@ export class Game {
       user.isAllIn = false;
       user.isFolded = false;
       user.needAction = false;
-      user.shouldShowHand = false;
       user.isInCurrentGame = false;
       user.isWinner = false;
       user.positon = "";
-      user.hands = [];
-      user.handsType = "";
+      user.clearHand();
       user.actionName = "";
       user.bets = [0, 0, 0, 0];
       user.totalBets = 0;
-      user.maxCards = [];
       user.profits = 0;
       user.settleTimes = 0;
     });
@@ -410,7 +409,7 @@ export class Game {
           : ""
         }${profits >= 0 ? "win💰" : "lose"} ${profits}`
       );
-      if (user.stack < this.smallBlind * 2) {
+      if (user.stack < this.smallBlind * 2 && user.nextBuyIn === null) {
         user.isReady = false;
       }
       crs.find((cr) => cr.id === user.chipsRecordID)!.chips = user.stack;
@@ -449,6 +448,12 @@ export class Game {
     }
 
     // next game
+    roomMap[this.roomid].users.forEach((t) => {
+      const user = userMap[t];
+      if (!user.isReady) {
+        user.clearHand();
+      }
+    });
     this.isSettling = true;
     const delay = 6000; // after 6s, start next game
     this.nextGameTime = Date.now() + delay;
@@ -755,6 +760,59 @@ class Room {
     this.isGaming = false;
     console.log("GAME PAUSE");
     publish2all(this.id);
+  }
+
+  getBuyInBounds(): { min: number; max: number } {
+    const maxStack = this.users.reduce(
+      (max, token) => Math.max(max, userMap[token].leftStack()),
+      this.buyIn
+    );
+    return { min: this.buyIn, max: maxStack };
+  }
+
+  setNextBuyIn(token: Token, chips: number) {
+    const user = userMap[token];
+    if (!user || user.roomid !== this.id) {
+      throw "invalid room";
+    }
+    if (user.isReady || user.isSpectator) {
+      throw "只有休息中的玩家可以设置下一手带入";
+    }
+    if (!Number.isFinite(chips) || !Number.isInteger(chips)) {
+      throw "带入筹码必须是整数";
+    }
+
+    const { min, max } = this.getBuyInBounds();
+    if (chips < min || chips > max) {
+      throw `带入筹码必须在${min}到${max}之间`;
+    }
+    user.nextBuyIn = chips;
+  }
+
+  applyNextBuyIn(token: Token) {
+    const user = userMap[token];
+    const target = user.nextBuyIn;
+    if (target === null) return;
+
+    const chipsRecord = this.chipsRecords.find(
+      (record) => record.id === user.chipsRecordID
+    );
+    if (!chipsRecord) {
+      throw "chips record not found";
+    }
+
+    chipsRecord.buyIn += target - chipsRecord.chips;
+    chipsRecord.chips = target;
+    user.stack = target;
+    user.nextBuyIn = null;
+  }
+
+  applyReadyNextBuyIns() {
+    this.users.forEach((token) => {
+      if (userMap[token].isReady && userMap[token].nextBuyIn !== null) {
+        this.applyNextBuyIn(token);
+      }
+    });
   }
 
   addUser(token: Token): boolean {

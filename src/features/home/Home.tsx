@@ -8,7 +8,10 @@ import {
 } from "./homeSlice";
 import { Room } from "../room/Room";
 import { CreateRoom } from "../createroom/CreateRoom";
-import { connect2server } from "../../app/websocket";
+import {
+  connect2server,
+  disconnectFromServer,
+} from "../../app/websocket";
 import { joinRoomAsync } from "../createroom/createRoomSlice";
 import {
   getInvitedRoomID,
@@ -50,6 +53,8 @@ export function Home() {
     if (roomid) {
       dispatch(connect2server(roomid));
       console.log("got room", roomid);
+
+      return () => disconnectFromServer(roomid);
     }
   }, [dispatch, roomid]);
 

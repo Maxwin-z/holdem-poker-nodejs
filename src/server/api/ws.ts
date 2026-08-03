@@ -18,6 +18,7 @@ import {
   userShowHands,
   userWatch,
   userSendMessage,
+  userSetNextBuyIn,
 } from "../service";
 import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
@@ -181,6 +182,9 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.WATCH:
       userWatch(token, data.watch);
       break;
+    case ActionType.SET_NEXT_BUY_IN:
+      userSetNextBuyIn(token, data.chips);
+      break;
     case ActionType.SHOW_HANDS:
       userShowHands(token, data.index);
       break;
@@ -201,9 +205,12 @@ function sum(arr: number[]): number {
 }
 
 function getSimpleRoom(room: Room): SimpleRoom {
+  const buyInBounds = room.getBuyInBounds();
   return {
     roomid: room.id,
     isGaming: room.isGaming,
+    minBuyIn: buyInBounds.min,
+    maxBuyIn: buyInBounds.max,
     users: room.users.map((t) => getSimpleUser(t)),
   };
 }
@@ -295,6 +302,7 @@ function getSimpleSelf(token: Token): SimpleSelf {
     id: user.chipsRecordID,
     hands: user.hands,
     handsType: user.handsType,
+    nextBuyIn: user.nextBuyIn,
   };
 }
 
@@ -327,10 +335,18 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
       });
       break;
     case ActionType.READY:
+      send2all(room.id, {
+        room: simpleRoom,
+        chips: getSimpleChipsRecords(room),
+      });
+      break;
     case ActionType.HANGUP:
       send2all(room.id, {
         user: simpleUser,
       });
+      break;
+    case ActionType.SET_NEXT_BUY_IN:
+      send2user(token, {});
       break;
     case ActionType.LEAVE:
       send2all(room.id, {

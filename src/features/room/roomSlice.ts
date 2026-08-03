@@ -31,6 +31,18 @@ export const roomSlice = createSlice({
     },
     setGame(state, action: PayloadAction<SimpleGame>) {
       state.game = action.payload;
+      const selfAsUser = state.room?.users.find(
+        (user) => user.id === state.self?.id
+      );
+      if (
+        state.self &&
+        selfAsUser &&
+        !selfAsUser.isReady &&
+        (action.payload.isSettling || !selfAsUser.isInCurrentGame)
+      ) {
+        state.self.hands = [];
+        state.self.handsType = "";
+      }
     },
     setSelf(state, action: PayloadAction<SimpleSelf>) {
       state.self = action.payload;

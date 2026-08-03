@@ -4,8 +4,10 @@ import {
   INITIAL_ACTION_TIME_SECONDS,
   URGENT_ACTION_TIME_SECONDS,
 } from "../../shared/actionTimer";
-
-const countdownSound = require("../../assets/countdown-tick-tock.wav");
+import {
+  playCountdownAudio,
+  stopCountdownAudio,
+} from "./countdownAudio";
 
 export function CountDown({
   time,
@@ -21,7 +23,7 @@ export function CountDown({
   playUrgentSound?: boolean;
 }) {
   const [count, setCount] = useState(Math.max(0, time * 10));
-  const countdownSoundRef = useRef<HTMLAudioElement>(null);
+  const countdownAudioOwner = useRef<object>({});
   const seconds = Math.max(0, Math.ceil(count / 10));
   const shouldPlayUrgentSound =
     playUrgentSound &&
@@ -43,29 +45,18 @@ export function CountDown({
   }, [count]);
 
   useEffect(() => {
-    const audio = countdownSoundRef.current;
-    if (!audio) return;
-
     if (shouldPlayUrgentSound) {
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      if (playPromise) {
-        playPromise.catch(() => {});
-      }
+      playCountdownAudio(countdownAudioOwner.current);
       return;
     }
 
-    audio.pause();
-    audio.currentTime = 0;
+    stopCountdownAudio(countdownAudioOwner.current);
   }, [shouldPlayUrgentSound]);
 
   useEffect(() => {
-    const audio = countdownSoundRef.current;
+    const owner = countdownAudioOwner.current;
     return () => {
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
+      stopCountdownAudio(owner);
     };
   }, []);
 
@@ -73,15 +64,6 @@ export function CountDown({
     0,
     Math.min(100, total > 0 ? (10 * count) / total : 0)
   );
-  const audio = playUrgentSound ? (
-    <audio
-      ref={countdownSoundRef}
-      src={countdownSound}
-      preload="auto"
-      aria-hidden="true"
-    />
-  ) : null;
-
   if (variant === "ring") {
     const strokeColor = seconds <= 5 ? "#ee7167" : "#2fd39b";
     return (
@@ -91,7 +73,6 @@ export function CountDown({
         }`}
         aria-label={`剩余 ${seconds} 秒`}
       >
-        {audio}
         <Progress
           type="circle"
           percent={percent}
@@ -106,10 +87,5 @@ export function CountDown({
     );
   }
 
-  return (
-    <>
-      {audio}
-      <Progress percent={percent} size="small" showInfo={false} />
-    </>
-  );
+  return <Progress percent={percent} size="small" showInfo={false} />;
 }

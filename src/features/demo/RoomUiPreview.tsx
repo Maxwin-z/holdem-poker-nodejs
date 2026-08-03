@@ -179,6 +179,8 @@ export function RoomUiPreview() {
     const room: SimpleRoom = {
       roomid: "8K21",
       isGaming: !isOwnerWaiting,
+      minBuyIn: 4000,
+      maxBuyIn: 186400,
       users,
     };
     const game: SimpleGame = {
@@ -202,6 +204,7 @@ export function RoomUiPreview() {
         { num: 10, suit: "c" },
       ],
       handsType: "两对 · A 和 10",
+      nextBuyIn: null,
     };
 
     dispatch(setRoom(room));

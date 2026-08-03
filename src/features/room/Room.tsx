@@ -46,6 +46,7 @@ import GameHistory from "../gamehistory/GameHistory";
 import { Spectators } from "./Spectators";
 import "./RoomResponsive.css";
 import { createRoomInviteText } from "./roomInvite";
+import { BuyInSettingButton } from "./BuyInSetting";
 
 const seatNames = [
   // Keep the rotated player list moving continuously around the table.
@@ -225,19 +226,29 @@ export function Room({
                   <span>暂时挂起</span>
                 </div>
               ) : (
-                <div className="live-mobile-menu-item">
-                  <Tooltip title="准备">
-                    <Button
-                      className="live-room-icon-button is-primary"
-                      icon={<CheckOutlined />}
-                      onClick={() => {
-                        setShowMobileMenu(false);
-                        ws_userReady();
-                      }}
+                <>
+                  <div className="live-mobile-menu-item">
+                    <Tooltip title="准备">
+                      <Button
+                        className="live-room-icon-button is-primary"
+                        icon={<CheckOutlined />}
+                        onClick={() => {
+                          setShowMobileMenu(false);
+                          ws_userReady();
+                        }}
+                      />
+                    </Tooltip>
+                    <span>准备游戏</span>
+                  </div>
+                  <div className="live-mobile-menu-item">
+                    <BuyInSettingButton
+                      className="live-room-icon-button"
+                      compact
+                      onOpen={() => setShowMobileMenu(false)}
                     />
-                  </Tooltip>
-                  <span>准备游戏</span>
-                </div>
+                    <span>设置带入</span>
+                  </div>
+                </>
               )
             ) : null}
             {!self?.isReady ? (
