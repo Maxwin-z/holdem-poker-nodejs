@@ -1,5 +1,6 @@
 import User, { Token } from "./User";
 import Room, { RoomID } from "./Room";
+import { OVERTIME_ACTION_TIME_SECONDS } from "../../shared/actionTimer";
 import {
   PokerWebSocket,
   publish2all,
@@ -184,7 +185,7 @@ export function userOverTime(token: Token) {
   const roomid = user.roomid;
   const game = roomMap[roomid].game;
   const cost = game.buyOverTimeCard(token);
-  game.setActingUser(token, 60000);
+  game.setActingUser(token, OVERTIME_ACTION_TIME_SECONDS * 1000);
   return cost;
 }
 

@@ -91,9 +91,14 @@ export function User({ id, seat }: { id: string; seat: string }) {
           {isActing ? (
             <div className="live-seat__countdown">
               <CountDown
-                time={Math.floor((actionEndTime - Date.now()) / 1000)}
+                time={Math.max(
+                  0,
+                  Math.ceil((actionEndTime - Date.now()) / 1000)
+                )}
+                total={user.actionTimeLimit}
                 now={Date.now()}
                 variant="ring"
+                playUrgentSound
               />
             </div>
           ) : null}

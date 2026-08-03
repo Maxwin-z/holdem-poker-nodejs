@@ -16,6 +16,7 @@ import { logGame } from "../tests/utils";
 import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
 import { calculateOvertimeCost } from "../../shared/overtime";
+import { INITIAL_ACTION_TIME_SECONDS } from "../../shared/actionTimer";
 
 export type RoomID = string;
 export enum GameRound {
@@ -616,10 +617,11 @@ export class Game {
     }
     publish2all(this.roomid);
   }
-  setActingUser(token: Token, delay = 30000) {
+  setActingUser(token: Token, delay = INITIAL_ACTION_TIME_SECONDS * 1000) {
     const user = userMap[token];
     user.isActing = true;
-    user.actionEndTime = Date.now() + delay; // 30 s
+    user.actionEndTime = Date.now() + delay;
+    user.actionTimeLimit = Math.ceil(delay / 1000);
     console.log("setActingUser", user.name);
     clearTimeout(this.actingUserTimer);
     this.actingUserTimer = delayTry(() => {

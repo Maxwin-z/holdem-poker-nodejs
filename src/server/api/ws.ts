@@ -276,6 +276,7 @@ function getSimpleUser(token: Token): SimpleUser {
     isInCurrentGame: user.isInCurrentGame,
     isSpectator: user.isSpectator,
     actionEndTime: user.actionEndTime,
+    actionTimeLimit: user.actionTimeLimit,
     actionName: user.actionName,
     hands: user.shouldShowHand ? user.hands : [null, null],
     maxCards: user.shouldShowHand ? user.maxCards : [],

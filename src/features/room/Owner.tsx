@@ -217,9 +217,11 @@ export function Owner() {
                   }}
                 >
                   <CountDown
-                    time={Math.floor(leftTime / 1000)}
+                    time={Math.max(0, Math.ceil(leftTime / 1000))}
+                    total={self?.actionTimeLimit}
                     now={now}
                     variant="ring"
+                    playUrgentSound
                   />
                 </button>
               </Tooltip>

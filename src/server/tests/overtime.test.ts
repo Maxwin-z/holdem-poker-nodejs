@@ -37,6 +37,19 @@ function createOvertimeGame() {
 describe("Overtime", () => {
   beforeEach(clean);
 
+  it("starts each action with 20 seconds", () => {
+    const { game, tokens } = createOvertimeGame();
+    const startedAt = Date.now();
+
+    game.setActingUser(tokens[0]);
+    const configuredAt = Date.now();
+
+    assert.equal(userMap[tokens[0]].actionTimeLimit, 20);
+    assert.isAtLeast(userMap[tokens[0]].actionEndTime, startedAt + 20000);
+    assert.isAtMost(userMap[tokens[0]].actionEndTime, configuredAt + 20000);
+    clearTimeout(game.actingUserTimer);
+  });
+
   it("rounds a fractional per-player cost up to a whole chip", () => {
     assert.equal(
       calculateOvertimeCost({
@@ -107,7 +120,7 @@ describe("Overtime", () => {
     assert.equal(error, "当前不是你的行动时间");
   });
 
-  it("extends the acting timer only after a successful purchase", () => {
+  it("resets the acting timer to 30 seconds after a successful purchase", () => {
     const { game, tokens } = createOvertimeGame();
     const buyer = userMap[tokens[0]];
     buyer.isActing = true;
@@ -115,9 +128,12 @@ describe("Overtime", () => {
     const startedAt = Date.now();
 
     const cost = userOverTime(buyer.token);
+    const configuredAt = Date.now();
 
     assert.equal(cost, 2);
-    assert.isAtLeast(buyer.actionEndTime, startedAt + 59000);
+    assert.equal(buyer.actionTimeLimit, 30);
+    assert.isAtLeast(buyer.actionEndTime, startedAt + 30000);
+    assert.isAtMost(buyer.actionEndTime, configuredAt + 30000);
     clearTimeout(game.actingUserTimer);
   });
 

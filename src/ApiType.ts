@@ -46,6 +46,7 @@ export interface SimpleUser {
   isInCurrentGame: boolean;
   isSpectator: boolean;
   actionEndTime: number;
+  actionTimeLimit: number;
   actionName: string;
   hands: (Card | null)[];
   handsType: string;

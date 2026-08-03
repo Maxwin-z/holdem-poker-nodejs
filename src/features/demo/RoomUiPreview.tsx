@@ -64,6 +64,7 @@ function makeUser(
     isInCurrentGame: true,
     isSpectator: false,
     actionEndTime: Date.now() + 18000,
+    actionTimeLimit: 20,
     actionName: "",
     hands: [null, null],
     handsType: "",

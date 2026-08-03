@@ -20,6 +20,7 @@ class User {
   isReady: boolean = false; // in room and ready for game. hang up or disconnection will change it to false
   isActing: boolean = false; // in game, can action now
   actionEndTime: number = new Date().getTime();
+  actionTimeLimit: number = 20; // seconds available for the current action
   isFolded: boolean = false; // in game, already fold
   isAllIn: boolean = false;
   isWinner: boolean = false;
