@@ -699,6 +699,38 @@ describe("next hand buy in", () => {
     clearTimeout(room.game.actingUserTimer);
   });
 
+  it("uses the minimum buy in when a busted player readies without choosing a target", () => {
+    const { room, owner, resting } = createBuyInRoom();
+    setLedgerStack(room, owner, 400);
+    setLedgerStack(room, resting, 0);
+    const record = getChipsRecoud(room, resting.token);
+
+    userReady(resting.token);
+
+    assert.equal(resting.isReady, true);
+    assert.equal(resting.stack, room.buyIn);
+    assert.equal(resting.nextBuyIn, null);
+    assert.equal(record.chips, room.buyIn);
+    assert.equal(record.buyIn, 400);
+
+    startGame(owner.token);
+    assert.include(room.game.sortedUsers, resting.token);
+    clearTimeout(room.game.actingUserTimer);
+  });
+
+  it("keeps a non-zero short stack when readying without choosing a target", () => {
+    const { room, resting } = createBuyInRoom();
+    setLedgerStack(room, resting, 50);
+    const record = getChipsRecoud(room, resting.token);
+
+    userReady(resting.token);
+
+    assert.equal(resting.stack, 50);
+    assert.equal(resting.nextBuyIn, null);
+    assert.equal(record.chips, 50);
+    assert.equal(record.buyIn, 200);
+  });
+
   it("supports lowering the next-hand stack while keeping ledger profit unchanged", () => {
     const { room, owner, resting, leader } = createBuyInRoom();
     setLedgerStack(room, owner, 100);

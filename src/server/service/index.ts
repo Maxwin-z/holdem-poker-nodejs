@@ -139,6 +139,9 @@ export function userReady(token: Token) {
     throw "观战玩家不能准备";
   }
   const room = roomMap[user.roomid];
+  if (!user.isReady && user.nextBuyIn === null && user.stack === 0) {
+    user.nextBuyIn = room.buyIn;
+  }
   if (
     user.nextBuyIn !== null &&
     (!user.isInCurrentGame || room.game.isSettling)
