@@ -6,6 +6,7 @@ import {
 } from "../../shared/actionTimer";
 import {
   playCountdownAudio,
+  preloadCountdownAudio,
   stopCountdownAudio,
 } from "./countdownAudio";
 
@@ -33,6 +34,12 @@ export function CountDown({
   useEffect(() => {
     setCount(Math.max(0, time * 10));
   }, [time, now, total]);
+
+  useEffect(() => {
+    if (playUrgentSound) {
+      preloadCountdownAudio();
+    }
+  }, [playUrgentSound]);
 
   useEffect(() => {
     if (count <= 0) return;

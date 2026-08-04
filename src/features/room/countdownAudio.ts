@@ -1,4 +1,4 @@
-const countdownSound = require("../../assets/countdown-tick-tock.wav");
+const countdownSound = require("../../assets/countdown-tick-tock.m4a");
 
 type CountdownLockManager = {
   request(
@@ -12,6 +12,7 @@ let countdownAudio: HTMLAudioElement | null = null;
 let countdownAudioOwner: object | null = null;
 let countdownAudioLockRelease: (() => void) | null = null;
 let countdownAudioRequest = 0;
+let countdownAudioPreloaded = false;
 
 function getCountdownAudio() {
   if (!countdownAudio && typeof Audio !== "undefined") {
@@ -21,13 +22,36 @@ function getCountdownAudio() {
   return countdownAudio;
 }
 
-function startCountdownAudio(audio: HTMLAudioElement) {
+export function preloadCountdownAudio() {
+  const audio = getCountdownAudio();
+  if (!audio || countdownAudioPreloaded) return;
+
+  countdownAudioPreloaded = true;
+  try {
+    audio.load();
+  } catch (ignore) {}
+}
+
+async function startCountdownAudio(audio: HTMLAudioElement) {
   try {
     const playPromise = audio.play();
     if (playPromise) {
-      playPromise.catch(() => {});
+      await playPromise;
     }
-  } catch (ignore) {}
+    return true;
+  } catch (ignore) {
+    return false;
+  }
+}
+
+function canUseLocalAudio(owner: object, request: number) {
+  const isVisible =
+    typeof document === "undefined" || document.visibilityState === "visible";
+  return (
+    isVisible &&
+    countdownAudioOwner === owner &&
+    countdownAudioRequest === request
+  );
 }
 
 export function playCountdownAudio(owner: object) {
@@ -57,20 +81,34 @@ export function playCountdownAudio(owner: object) {
     return;
   }
 
+  const playWithoutLockIfVisible = () => {
+    if (canUseLocalAudio(owner, request)) {
+      startCountdownAudio(audio);
+    }
+  };
+
   lockManager
     .request(
       "holdem-poker-countdown-audio",
       { ifAvailable: true },
       async (lock) => {
+        if (!lock) {
+          playWithoutLockIfVisible();
+          return;
+        }
+
         if (
-          !lock ||
           countdownAudioOwner !== owner ||
           countdownAudioRequest !== request
         ) {
           return;
         }
 
-        startCountdownAudio(audio);
+        const didStart = await startCountdownAudio(audio);
+        if (!didStart) {
+          return;
+        }
+
         let releaseLock = () => {};
         await new Promise<void>((resolve) => {
           releaseLock = resolve;
@@ -81,7 +119,7 @@ export function playCountdownAudio(owner: object) {
         }
       }
     )
-    .catch(() => {});
+    .catch(playWithoutLockIfVisible);
 }
 
 export function stopCountdownAudio(owner: object) {
