@@ -3,9 +3,23 @@ import { ActionType } from "../ApiType";
 import {
   connect2server,
   disconnectFromServer,
+  getWebSocketURL,
   ws_runItOut,
   ws_setNextBuyIn,
 } from "./websocket";
+
+describe("websocket URL", () => {
+  it("uses the current LAN hostname with the backend development port", () => {
+    expect(
+      getWebSocketURL({
+        hostname: "192.168.1.105",
+        host: "192.168.1.105:3000",
+        port: "3000",
+        protocol: "http:",
+      })
+    ).toBe("ws://192.168.1.105:8086/ws");
+  });
+});
 
 jest.mock("antd", () => ({
   Button: "button",

@@ -105,6 +105,7 @@ test("shows the run-it-out action to a folded hand participant during settlement
   const { getByText } = render(<Owner />);
 
   fireEvent.click(getByText("发发看"));
+  fireEvent.keyDown(document, { key: "S" });
 
-  expect(ws_runItOut).toHaveBeenCalledTimes(1);
+  expect(ws_runItOut).toHaveBeenCalledTimes(2);
 });

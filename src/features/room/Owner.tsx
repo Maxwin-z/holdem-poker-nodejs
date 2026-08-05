@@ -31,6 +31,7 @@ function formatChips(value: number) {
 export function Owner() {
   const hintSoundRef = useRef<HTMLAudioElement>(null);
   const dealCardSoundRef = useRef<HTMLAudioElement>(null);
+  const raiseInputRef = useRef<HTMLInputElement>(null);
 
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
@@ -90,9 +91,56 @@ export function Owner() {
     availableStack: stack,
   });
 
-  const [raise, setRaise] = useState(0);
+  const [raiseInput, setRaiseInput] = useState("");
   const [now, setNow] = useState(0);
   const [autoCheck, setAutoCheck] = useState(false);
+  const [showAllInConfirm, setShowAllInConfirm] = useState(false);
+  const [showFoldConfirm, setShowFoldConfirm] = useState(false);
+
+  const raise = Number(raiseInput);
+  const hasValidRaise =
+    raiseInput !== "" &&
+    Number.isFinite(raise) &&
+    Number.isInteger(raise) &&
+    raise >= minRaise;
+
+  const setRaiseAmount = (amount: number) => {
+    setRaiseInput(String(amount));
+  };
+
+  const focusRaiseInput = () => {
+    window.setTimeout(() => raiseInputRef.current?.focus(), 0);
+  };
+
+  const handleRaise = () => {
+    if (!isActing || !canRaise) return;
+
+    if (onlyRaiseAllIn) {
+      ws_userBet(stack + bet);
+      return;
+    }
+
+    if (!hasValidRaise) {
+      focusRaiseInput();
+      return;
+    }
+
+    if (raise > stack) {
+      setShowAllInConfirm(true);
+      return;
+    }
+
+    ws_userBet(raise + bet);
+  };
+
+  const handleFold = () => {
+    if (!isActing) return;
+    if (canCheck) {
+      setShowFoldConfirm(true);
+      return;
+    }
+    ws_userFold();
+  };
 
   useEffect(() => {
     if (hintSoundRef.current && isActing) {
@@ -112,9 +160,16 @@ export function Owner() {
   }, [isActing]);
 
   useEffect(() => {
-    setRaise(0);
+    setRaiseInput("");
     setAutoCheck(false);
   }, [game?.boardCards.length, game?.isSettling]);
+
+  useEffect(() => {
+    if (!isActing) {
+      setShowAllInConfirm(false);
+      setShowFoldConfirm(false);
+    }
+  }, [isActing]);
 
   useEffect(() => {
     if (dealCardSoundRef.current && room?.isGaming) {
@@ -169,8 +224,105 @@ export function Owner() {
     : "操作区会在需要行动时自动更新";
   const sliderValue = Math.min(
     maxRaise,
-    Math.max(minRaise, raise || minRaise)
+    Math.max(minRaise, hasValidRaise ? raise : minRaise)
   );
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        showAllInConfirm ||
+        showFoldConfirm
+      ) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const isRaiseInput = target === raiseInputRef.current;
+      const isEditable = Boolean(
+        target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable)
+      );
+      const key = event.key.toLowerCase();
+
+      // Inside the chip input, regular typing remains native; R is the one
+      // explicit submit shortcut requested for that field.
+      if (isRaiseInput) {
+        if (key === "r" && hasValidRaise) {
+          event.preventDefault();
+          handleRaise();
+        }
+        return;
+      }
+
+      // Never turn chat, buy-in, or other editable-field keystrokes into game
+      // actions. This also keeps IME composition isolated from shortcuts.
+      if (isEditable || event.isComposing) return;
+
+      if (/^[0-9]$/.test(event.key) && showRaiseControls) {
+        event.preventDefault();
+        setRaiseInput(event.key);
+        raiseInputRef.current?.focus();
+        return;
+      }
+
+      switch (key) {
+        case "i":
+          if (isWaiting) {
+            event.preventDefault();
+            setAutoCheck((enabled) => !enabled);
+          }
+          break;
+        case "k":
+          if (isActing && canCheck) {
+            event.preventDefault();
+            ws_userBet(bet);
+          }
+          break;
+        case "c":
+          if (isActing && preBet > bet) {
+            event.preventDefault();
+            ws_userBet(chips2call + bet);
+          }
+          break;
+        case "f":
+          if (isActing) {
+            event.preventDefault();
+            handleFold();
+          }
+          break;
+        case "r":
+          if (isActing && canRaise && !shouldAllIn) {
+            event.preventDefault();
+            handleRaise();
+          }
+          break;
+        case "m":
+          if (isActing && overtimeCost > 0) {
+            event.preventDefault();
+            ws_overtime();
+            setNow((value) => value + 1);
+          }
+          break;
+        case "s":
+          if (canRunItOut) {
+            event.preventDefault();
+            ws_runItOut();
+          }
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
+  });
 
   return (
     <div className="live-owner-dock">
@@ -219,7 +371,7 @@ export function Owner() {
                 <Tooltip
                   title={
                     overtimeCost > 0
-                      ? `点击加时，需支付其他玩家各 ${formatChips(
+                      ? `快捷键 M · 点击加时，需支付其他玩家各 ${formatChips(
                           overtimeCost
                         )} 筹码`
                       : "剩余筹码不足，无法购买加时"
@@ -229,6 +381,7 @@ export function Owner() {
                     type="button"
                     className="live-owner-avatar-timer"
                     aria-label="行动倒计时与加时"
+                    aria-keyshortcuts="M"
                     disabled={overtimeCost <= 0}
                     onClick={() => {
                       ws_overtime();
@@ -279,19 +432,20 @@ export function Owner() {
                     min={minRaise}
                     max={maxRaise}
                     value={sliderValue}
-                    onChange={(event) => setRaise(Number(event.target.value))}
+                    onChange={(event) =>
+                      setRaiseAmount(Number(event.target.value))
+                    }
                     aria-label="加注筹码"
                   />
                   <label>
                     <span>¥</span>
                     <input
+                      ref={raiseInputRef}
                       type="number"
-                      min={minRaise}
-                      max={maxRaise}
-                      value={raise}
-                      onChange={(event) =>
-                        setRaise(Number(event.target.value))
-                      }
+                      inputMode="numeric"
+                      step={1}
+                      value={raiseInput}
+                      onChange={(event) => setRaiseInput(event.target.value)}
                       aria-label="加注金额"
                     />
                   </label>
@@ -300,22 +454,31 @@ export function Owner() {
                 <div className="live-raise-presets">
                   {useBB ? (
                     <>
-                      <button type="button" onClick={() => setRaise(bb * 2)}>
+                      <button
+                        type="button"
+                        onClick={() => setRaiseAmount(bb * 2)}
+                      >
                         <span>2BB</span>
                         <b>{formatChips(bb * 2)}</b>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setRaise(Math.floor(bb * 2.5))}
+                        onClick={() => setRaiseAmount(Math.floor(bb * 2.5))}
                       >
                         <span>2.5BB</span>
                         <b>{formatChips(Math.floor(bb * 2.5))}</b>
                       </button>
-                      <button type="button" onClick={() => setRaise(bb * 3)}>
+                      <button
+                        type="button"
+                        onClick={() => setRaiseAmount(bb * 3)}
+                      >
                         <span>3BB</span>
                         <b>{formatChips(bb * 3)}</b>
                       </button>
-                      <button type="button" onClick={() => setRaise(bb * 4)}>
+                      <button
+                        type="button"
+                        onClick={() => setRaiseAmount(bb * 4)}
+                      >
                         <span>4BB</span>
                         <b>{formatChips(bb * 4)}</b>
                       </button>
@@ -325,7 +488,7 @@ export function Owner() {
                       {has1_4 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil(pots / 4))}
+                          onClick={() => setRaiseAmount(Math.ceil(pots / 4))}
                         >
                           <span>¼ 池</span>
                           <b>{formatChips(Math.ceil(pots / 4))}</b>
@@ -334,7 +497,7 @@ export function Owner() {
                       {has1_3 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil(pots / 3))}
+                          onClick={() => setRaiseAmount(Math.ceil(pots / 3))}
                         >
                           <span>⅓ 池</span>
                           <b>{formatChips(Math.ceil(pots / 3))}</b>
@@ -343,7 +506,7 @@ export function Owner() {
                       {has1_2 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil(pots / 2))}
+                          onClick={() => setRaiseAmount(Math.ceil(pots / 2))}
                         >
                           <span>½ 池</span>
                           <b>{formatChips(Math.ceil(pots / 2))}</b>
@@ -352,7 +515,9 @@ export function Owner() {
                       {has2_3 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil((pots * 2) / 3))}
+                          onClick={() =>
+                            setRaiseAmount(Math.ceil((pots * 2) / 3))
+                          }
                         >
                           <span>⅔ 池</span>
                           <b>{formatChips(Math.ceil((pots * 2) / 3))}</b>
@@ -361,7 +526,9 @@ export function Owner() {
                       {has3_4 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil((pots * 3) / 4))}
+                          onClick={() =>
+                            setRaiseAmount(Math.ceil((pots * 3) / 4))
+                          }
                         >
                           <span>¾ 池</span>
                           <b>{formatChips(Math.ceil((pots * 3) / 4))}</b>
@@ -370,7 +537,7 @@ export function Owner() {
                       {has1_1 ? (
                         <button
                           type="button"
-                          onClick={() => setRaise(Math.ceil(pots))}
+                          onClick={() => setRaiseAmount(Math.ceil(pots))}
                         >
                           <span>底池</span>
                           <b>{formatChips(Math.ceil(pots))}</b>
@@ -386,59 +553,65 @@ export function Owner() {
               <button
                 type="button"
                 className="is-fold"
-                onClick={ws_userFold}
+                aria-keyshortcuts="F"
+                onClick={handleFold}
               >
                 <strong>弃牌</strong>
-                <span>FOLD</span>
+                <span>F · FOLD</span>
               </button>
               {canCheck ? (
                 <button
                   type="button"
                   className="is-call"
+                  aria-keyshortcuts="K"
                   onClick={() => ws_userBet(bet)}
                 >
                   <strong>过牌</strong>
-                  <span>CHECK</span>
+                  <span>K · CHECK</span>
                 </button>
               ) : null}
               {canCall ? (
                 <button
                   type="button"
                   className="is-call"
+                  aria-keyshortcuts="C"
                   onClick={() => ws_userBet(chips2call + bet)}
                 >
                   <strong>跟注 {formatChips(chips2call)}</strong>
-                  <span>CALL</span>
+                  <span>C · CALL</span>
                 </button>
               ) : null}
               {shouldAllIn ? (
                 <button
                   type="button"
                   className="is-raise"
+                  aria-keyshortcuts="C"
                   onClick={() => ws_userBet(chips2call + bet)}
                 >
                   <strong>All-in {formatChips(chips2call)}</strong>
-                  <span>ALL IN</span>
+                  <span>C · ALL IN</span>
                 </button>
               ) : canRaise ? (
                 onlyRaiseAllIn ? (
                   <button
                     type="button"
                     className="is-raise"
+                    aria-keyshortcuts="R"
                     onClick={() => ws_userBet(minRaise + bet)}
                   >
                     <strong>All-in {formatChips(minRaise)}</strong>
-                    <span>ALL IN</span>
+                    <span>R · ALL IN</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     className="is-raise"
-                    disabled={raise < minRaise}
-                    onClick={() => ws_userBet(raise + bet)}
+                    aria-keyshortcuts="R"
+                    disabled={!hasValidRaise}
+                    onClick={handleRaise}
                   >
                     <strong>加注 {formatChips(raise)}</strong>
-                    <span>RAISE</span>
+                    <span>R · RAISE</span>
                   </button>
                 )
               ) : null}
@@ -472,6 +645,7 @@ export function Owner() {
                 <Switch
                   checked={autoCheck}
                   onChange={(checked) => setAutoCheck(checked)}
+                  aria-keyshortcuts="I"
                 />
                 <span
                   role="button"
@@ -484,7 +658,7 @@ export function Owner() {
                   }}
                 >
                   <strong>自动过牌 / 弃牌</strong>
-                  <small>CHECK / FOLD</small>
+                  <small>I · CHECK / FOLD</small>
                 </span>
               </div>
             </div>
@@ -503,9 +677,11 @@ export function Owner() {
                     type="primary"
                     size="large"
                     icon={<EyeOutlined />}
+                    aria-keyshortcuts="S"
                     onClick={ws_runItOut}
                   >
-                    发发看
+                    <span>发发看</span>
+                    <kbd aria-hidden="true">S</kbd>
                   </Button>
                 ) : null}
                 {canReady ? (
@@ -539,6 +715,83 @@ export function Owner() {
           </div>
         )}
       </section>
+
+      {showAllInConfirm ? (
+        <div className="live-action-confirm-backdrop">
+          <div
+            className="live-action-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="live-all-in-confirm-title"
+          >
+            <small>ALL-IN</small>
+            <strong id="live-all-in-confirm-title">输入金额超过当前 Stack</strong>
+            <p>
+              当前最多可投入 {formatChips(stack)} 筹码，是否改为 All-in？
+            </p>
+            <div>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setShowAllInConfirm(false);
+                  focusRaiseInput();
+                }}
+              >
+                取消，返回修改
+              </button>
+              <button
+                type="button"
+                className="is-primary"
+                onClick={() => {
+                  setShowAllInConfirm(false);
+                  ws_userBet(stack + bet);
+                }}
+              >
+                确认 All-in
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showFoldConfirm ? (
+        <div className="live-action-confirm-backdrop">
+          <div
+            className="live-action-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="live-fold-confirm-title"
+          >
+            <small>CHECK AVAILABLE</small>
+            <strong id="live-fold-confirm-title">当前可以免费过牌</strong>
+            <p>你仍然要弃牌，还是改为过牌？</p>
+            <div>
+              <button
+                type="button"
+                className="is-danger"
+                onClick={() => {
+                  setShowFoldConfirm(false);
+                  ws_userFold();
+                }}
+              >
+                坚持弃牌
+              </button>
+              <button
+                type="button"
+                className="is-primary"
+                autoFocus
+                onClick={() => {
+                  setShowFoldConfirm(false);
+                  ws_userBet(bet);
+                }}
+              >
+                过牌
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

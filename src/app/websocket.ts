@@ -23,16 +23,24 @@ let reconnectAttempts = 0;
 let hideReconnectMessage: (() => void) | undefined;
 let lifecycleListenersInstalled = false;
 
+export function getWebSocketURL(
+  location: Pick<Location, "host" | "hostname" | "port" | "protocol"> =
+    window.location,
+  configuredURL = process.env.REACT_APP_WS_URL
+) {
+  if (configuredURL) return configuredURL;
+
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const isReactDevServer =
+    process.env.NODE_ENV !== "production" && location.port !== "8086";
+
+  return isReactDevServer
+    ? `${protocol}//${location.hostname}:8086/ws`
+    : `${protocol}//${location.host}/ws`;
+}
+
 function getConnectionDetails() {
-  const isLocalReactDevServer =
-    window.location.hostname === "localhost" &&
-    window.location.port !== "8086";
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const url =
-    process.env.REACT_APP_WS_URL ||
-    (isLocalReactDevServer
-      ? `ws://${window.location.hostname}:8086/ws`
-      : `${protocol}//${window.location.host}/ws`);
+  const url = getWebSocketURL();
 
   return { url, token: localStorage["token"] };
 }

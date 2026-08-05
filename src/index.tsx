@@ -6,6 +6,18 @@ import { store } from './app/store';
 import { Provider } from 'react-redux';
 import * as serviceWorker from './serviceWorker';
 
+// Keep browser-managed undo/redo (including iOS shake-to-undo) from changing
+// controlled game inputs behind React's state. Native iOS owns the shake alert
+// itself, but cancelling beforeinput prevents the requested edit from applying.
+document.addEventListener('beforeinput', (event) => {
+  const inputEvent = event as InputEvent;
+  if (
+    inputEvent.inputType === 'historyUndo' ||
+    inputEvent.inputType === 'historyRedo'
+  ) {
+    event.preventDefault();
+  }
+}, true);
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
@@ -21,4 +33,3 @@ root.render(
 // unregister() to register() below. Note this comes with some pitfalls.
 // Learn more about service workers: https://bit.ly/CRA-PWA
 serviceWorker.unregister();
-

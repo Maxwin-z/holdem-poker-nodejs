@@ -17,7 +17,7 @@ import {
   MessageOutlined,
   TrophyOutlined,
 } from "@ant-design/icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { User } from "./User";
 import { Owner } from "./Owner";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -66,6 +66,20 @@ type RoomPreviewDetails = {
   chipsRecords?: SimpleChipsRecord[];
 };
 
+function isStandaloneOrFullscreen() {
+  const iosNavigator = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+  const displayModeMatches =
+    typeof window.matchMedia === "function" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches);
+
+  return Boolean(
+    iosNavigator.standalone || document.fullscreenElement || displayModeMatches
+  );
+}
+
 export function Room({
   previewDetails,
 }: {
@@ -76,6 +90,9 @@ export function Room({
   const [showDetails, setShowDetails] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"chat" | "chips">("chat");
+  const [hasBottomSafeGap, setHasBottomSafeGap] = useState(
+    isStandaloneOrFullscreen
+  );
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
   const room = useAppSelector(selectRoom);
@@ -91,6 +108,23 @@ export function Room({
   const boardCards = [...cards, null, null, null, null, null].splice(0, 5);
   const onlineCount =
     room?.users.filter((user) => !user.isOffline).length || 0;
+
+  useEffect(() => {
+    const standaloneQuery = window.matchMedia?.("(display-mode: standalone)");
+    const fullscreenQuery = window.matchMedia?.("(display-mode: fullscreen)");
+    const queries = [standaloneQuery, fullscreenQuery].filter(
+      Boolean
+    ) as MediaQueryList[];
+    const update = () => setHasBottomSafeGap(isStandaloneOrFullscreen());
+
+    document.addEventListener("fullscreenchange", update);
+    queries.forEach((query) => query.addEventListener?.("change", update));
+
+    return () => {
+      document.removeEventListener("fullscreenchange", update);
+      queries.forEach((query) => query.removeEventListener?.("change", update));
+    };
+  }, []);
 
   function setSettleTimes(times: number) {
     ws_settleTimes(times);
@@ -112,7 +146,11 @@ export function Room({
   }
 
   return (
-    <div className="live-room-shell">
+    <div
+      className={`live-room-shell ${
+        hasBottomSafeGap ? "has-bottom-safe-gap" : ""
+      }`}
+    >
       <header className="live-room-topbar">
         <div className="live-room-brand">
           <span className="live-room-brand__mark">♠</span>
