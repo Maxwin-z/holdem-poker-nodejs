@@ -446,6 +446,16 @@ export function Owner() {
                       step={1}
                       value={raiseInput}
                       onChange={(event) => setRaiseInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" &&
+                          !event.nativeEvent.isComposing &&
+                          hasValidRaise
+                        ) {
+                          event.preventDefault();
+                          handleRaise();
+                        }
+                      }}
                       aria-label="加注金额"
                     />
                   </label>

@@ -147,6 +147,17 @@ test("chip input starts empty and accepts a number without restoring zero", () =
   expect(input.value).toBe("12");
 });
 
+test("Enter submits a valid amount from the chip input", () => {
+  const { getByLabelText } = render(<Owner />);
+  const input = getByLabelText("加注金额") as HTMLInputElement;
+
+  fireEvent.change(input, { target: { value: "30" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+
+  expect(ws_userBet).toHaveBeenCalledTimes(1);
+  expect(ws_userBet).toHaveBeenCalledWith(40);
+});
+
 test("an amount over stack asks before converting the action to all-in", () => {
   const { getByLabelText, getByText } = render(<Owner />);
 

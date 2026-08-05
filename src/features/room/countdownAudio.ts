@@ -13,6 +13,9 @@ let countdownAudioOwner: object | null = null;
 let countdownAudioLockRelease: (() => void) | null = null;
 let countdownAudioRequest = 0;
 let countdownAudioPreloaded = false;
+let countdownAudioUnlockInstalled = false;
+let countdownAudioUnlocked = false;
+let countdownAudioUnlocking = false;
 
 function getCountdownAudio() {
   if (!countdownAudio && typeof Audio !== "undefined") {
@@ -30,6 +33,88 @@ export function preloadCountdownAudio() {
   try {
     audio.load();
   } catch (ignore) {}
+}
+
+export function installCountdownAudioUnlock() {
+  if (
+    countdownAudioUnlockInstalled ||
+    typeof document === "undefined"
+  ) {
+    return;
+  }
+
+  const audio = getCountdownAudio();
+  if (!audio) return;
+
+  countdownAudioUnlockInstalled = true;
+  preloadCountdownAudio();
+
+  const events = ["pointerup", "touchend", "click", "keydown"] as const;
+  const removeListeners = () => {
+    events.forEach((eventName) => {
+      document.removeEventListener(eventName, unlock, true);
+    });
+  };
+  const finishUnlock = () => {
+    countdownAudioUnlocked = true;
+    countdownAudioUnlocking = false;
+    removeListeners();
+  };
+  const unlock = () => {
+    if (countdownAudioUnlocked) {
+      removeListeners();
+      return;
+    }
+    if (countdownAudioUnlocking) return;
+
+    countdownAudioUnlocking = true;
+
+    // If the urgent countdown already started, retry it directly inside the
+    // user gesture. Otherwise silently prime this exact media element so a
+    // later timer-driven play is accepted by mobile Safari/Chrome.
+    if (countdownAudioOwner) {
+      startCountdownAudio(audio).then((didStart) => {
+        if (didStart) {
+          finishUnlock();
+        } else {
+          countdownAudioUnlocking = false;
+        }
+      });
+      return;
+    }
+
+    const wasMuted = audio.muted;
+    audio.muted = true;
+    audio.currentTime = 0;
+
+    let playPromise: Promise<void> | undefined;
+    try {
+      playPromise = audio.play();
+    } catch (ignore) {
+      audio.muted = wasMuted;
+      countdownAudioUnlocking = false;
+      return;
+    }
+
+    const onUnlocked = () => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = wasMuted;
+      finishUnlock();
+    };
+    if (playPromise) {
+      playPromise.then(onUnlocked).catch(() => {
+        audio.muted = wasMuted;
+        countdownAudioUnlocking = false;
+      });
+    } else {
+      onUnlocked();
+    }
+  };
+
+  events.forEach((eventName) => {
+    document.addEventListener(eventName, unlock, true);
+  });
 }
 
 async function startCountdownAudio(audio: HTMLAudioElement) {

@@ -1,4 +1,5 @@
 import {
+  installCountdownAudioUnlock,
   playCountdownAudio,
   preloadCountdownAudio,
   stopCountdownAudio,
@@ -16,6 +17,7 @@ test("uses one audio player across consecutive countdown owners", async () => {
   const load = jest.fn();
   const audio = {
     currentTime: 0,
+    muted: false,
     load,
     pause,
     play,
@@ -40,6 +42,14 @@ test("uses one audio player across consecutive countdown owners", async () => {
   const firstOwner = {};
   const secondOwner = {};
 
+  installCountdownAudioUnlock();
+  document.dispatchEvent(new Event("pointerup"));
+  await Promise.resolve();
+
+  expect(audio.muted).toBe(false);
+  expect(audio.currentTime).toBe(0);
+  expect(play).toHaveBeenCalledTimes(1);
+
   preloadCountdownAudio();
   preloadCountdownAudio();
   playCountdownAudio(firstOwner);
@@ -47,14 +57,14 @@ test("uses one audio player across consecutive countdown owners", async () => {
 
   expect(AudioMock).toHaveBeenCalledTimes(1);
   expect(load).toHaveBeenCalledTimes(1);
-  expect(play).toHaveBeenCalledTimes(2);
-  expect(pause).toHaveBeenCalledTimes(2);
+  expect(play).toHaveBeenCalledTimes(3);
+  expect(pause).toHaveBeenCalledTimes(3);
 
   stopCountdownAudio(firstOwner);
-  expect(pause).toHaveBeenCalledTimes(2);
+  expect(pause).toHaveBeenCalledTimes(3);
 
   stopCountdownAudio(secondOwner);
-  expect(pause).toHaveBeenCalledTimes(3);
+  expect(pause).toHaveBeenCalledTimes(4);
   expect(audio.currentTime).toBe(0);
 
   const blockedOwner = {};
@@ -74,7 +84,7 @@ test("uses one audio player across consecutive countdown owners", async () => {
   playCountdownAudio(blockedOwner);
   await Promise.resolve();
 
-  expect(play).toHaveBeenCalledTimes(3);
+  expect(play).toHaveBeenCalledTimes(4);
   stopCountdownAudio(blockedOwner);
 
   const rejectedOwner = {};
@@ -89,7 +99,7 @@ test("uses one audio player across consecutive countdown owners", async () => {
   await Promise.resolve();
   await Promise.resolve();
 
-  expect(play).toHaveBeenCalledTimes(4);
+  expect(play).toHaveBeenCalledTimes(5);
   stopCountdownAudio(rejectedOwner);
 
   Object.defineProperty(document, "visibilityState", {
@@ -113,6 +123,6 @@ test("uses one audio player across consecutive countdown owners", async () => {
   playCountdownAudio(hiddenOwner);
   await Promise.resolve();
 
-  expect(play).toHaveBeenCalledTimes(4);
+  expect(play).toHaveBeenCalledTimes(5);
   stopCountdownAudio(hiddenOwner);
 });
