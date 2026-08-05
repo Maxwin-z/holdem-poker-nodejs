@@ -16,7 +16,10 @@ import { logGame } from "../tests/utils";
 import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
 import { calculateOvertimeCost } from "../../shared/overtime";
-import { INITIAL_ACTION_TIME_SECONDS } from "../../shared/actionTimer";
+import {
+  DISCONNECTED_ACTION_GRACE_SECONDS,
+  INITIAL_ACTION_TIME_SECONDS,
+} from "../../shared/actionTimer";
 
 export type RoomID = string;
 export enum GameRound {
@@ -642,12 +645,46 @@ export class Game {
     }
     publish2all(this.roomid);
   }
-  setActingUser(token: Token, delay = INITIAL_ACTION_TIME_SECONDS * 1000) {
+  setActingUser(token: Token, requestedDelay?: number) {
     const user = userMap[token];
+    let delay = requestedDelay ?? INITIAL_ACTION_TIME_SECONDS * 1000;
+    if (
+      requestedDelay === undefined &&
+      user.isOffline &&
+      !user.hasUsedOfflineActionGrace
+    ) {
+      delay =
+        (INITIAL_ACTION_TIME_SECONDS + DISCONNECTED_ACTION_GRACE_SECONDS) *
+        1000;
+      user.hasUsedOfflineActionGrace = true;
+    }
+
+    user.actionStartTime = Date.now();
     user.isActing = true;
-    user.actionEndTime = Date.now() + delay;
+    user.actionEndTime = user.actionStartTime + delay;
     user.actionTimeLimit = Math.ceil(delay / 1000);
     console.log("setActingUser", user.name);
+    this.scheduleActionTimeout(token, delay);
+  }
+  handleUserDisconnected(token: Token) {
+    const user = userMap[token];
+    if (!user?.isActing || user.hasUsedOfflineActionGrace) {
+      return;
+    }
+
+    user.hasUsedOfflineActionGrace = true;
+    const actionTimeLimit =
+      INITIAL_ACTION_TIME_SECONDS + DISCONNECTED_ACTION_GRACE_SECONDS;
+    const extendedEndTime = user.actionStartTime + actionTimeLimit * 1000;
+    if (extendedEndTime <= user.actionEndTime) {
+      return;
+    }
+
+    user.actionEndTime = extendedEndTime;
+    user.actionTimeLimit = actionTimeLimit;
+    this.scheduleActionTimeout(token, Math.max(0, extendedEndTime - Date.now()));
+  }
+  private scheduleActionTimeout(token: Token, delay: number) {
     clearTimeout(this.actingUserTimer);
     this.actingUserTimer = delayTry(() => {
       this.fold(token); // auto fold

@@ -17,7 +17,11 @@ import {
   userRunItOut,
   userSetNextBuyIn,
 } from "../service";
-import { handlePokerWebSocketMessage } from "../api/ws";
+import {
+  detachPokerWebSocket,
+  handlePokerWebSocketMessage,
+  PokerWebSocket,
+} from "../api/ws";
 import Room, { Game, GameRound } from "../service/Room";
 import User, { Token } from "../service/User";
 
@@ -173,6 +177,98 @@ describe("Game Test", () => {
       const [room, game, users] = testCase_sb199_bb200_sbFold();
       assert.equal(room.isGaming, false);
     });
+  });
+});
+
+describe("offline action timer", () => {
+  beforeEach(clean);
+
+  function createSocket(): PokerWebSocket {
+    return {
+      send() {},
+      close() {},
+    };
+  }
+
+  it("gives an already-offline player 50 seconds", () => {
+    const [, game, users] = createGameWithUsers(2);
+    const user = users[0];
+    clearTimeout(game.actingUserTimer);
+    user.isOffline = true;
+
+    game.setActingUser(user.token);
+
+    assert.equal(user.actionTimeLimit, 50);
+    assert.equal(user.actionEndTime - user.actionStartTime, 50000);
+    assert.isTrue(user.hasUsedOfflineActionGrace);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("does not deal an offline player into a later hand", () => {
+    const [, game, users] = createGameWithUsers(3);
+    const offlineUser = users[0];
+    clearTimeout(game.actingUserTimer);
+    offlineUser.isOffline = true;
+
+    game.start();
+
+    assert.notInclude(game.sortedUsers, offlineUser.token);
+    assert.lengthOf(game.sortedUsers, 2);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("extends an active turn to 50 seconds only after the last socket disconnects", () => {
+    const [, game] = createGameWithUsers(2);
+    const actingUser = userMap[
+      game.sortedUsers.find((token) => userMap[token].isActing)!
+    ];
+    const firstSocket = createSocket();
+    const secondSocket = createSocket();
+    actingUser.addWebsocket(firstSocket);
+    actingUser.addWebsocket(secondSocket);
+    game.setActingUser(actingUser.token);
+
+    detachPokerWebSocket(firstSocket, actingUser.token);
+
+    assert.isFalse(actingUser.isOffline);
+    assert.equal(actingUser.actionTimeLimit, 20);
+    assert.isFalse(actingUser.hasUsedOfflineActionGrace);
+
+    detachPokerWebSocket(secondSocket, actingUser.token);
+
+    assert.isTrue(actingUser.isOffline);
+    assert.equal(actingUser.actionTimeLimit, 50);
+    assert.equal(
+      actingUser.actionEndTime - actingUser.actionStartTime,
+      50000
+    );
+    assert.isTrue(actingUser.hasUsedOfflineActionGrace);
+
+    actingUser.addWebsocket(firstSocket);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("resets the one-time grace after reconnecting", () => {
+    const [, game] = createGameWithUsers(2);
+    const actingUser = userMap[
+      game.sortedUsers.find((token) => userMap[token].isActing)!
+    ];
+    const socket = createSocket();
+    actingUser.addWebsocket(socket);
+    game.setActingUser(actingUser.token);
+    detachPokerWebSocket(socket, actingUser.token);
+
+    actingUser.addWebsocket(socket);
+    assert.isFalse(actingUser.hasUsedOfflineActionGrace);
+
+    game.setActingUser(actingUser.token);
+    assert.equal(actingUser.actionTimeLimit, 20);
+    detachPokerWebSocket(socket, actingUser.token);
+    assert.equal(actingUser.actionTimeLimit, 50);
+    assert.isTrue(actingUser.hasUsedOfflineActionGrace);
+
+    actingUser.addWebsocket(socket);
+    clearTimeout(game.actingUserTimer);
   });
 });
 

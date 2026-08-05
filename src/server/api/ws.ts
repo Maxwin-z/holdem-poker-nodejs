@@ -110,8 +110,11 @@ export function detachPokerWebSocket(websocket: PokerWebSocket, token: Token) {
   console.log("client closed");
   const user = userMap[token];
   if (user) {
-    user.removeWebSocket(websocket);
+    const becameOffline = user.removeWebSocket(websocket);
     if (user.roomid) {
+      if (becameOffline) {
+        roomMap[user.roomid]?.game.handleUserDisconnected(token);
+      }
       publish2all(user.roomid);
     }
   }

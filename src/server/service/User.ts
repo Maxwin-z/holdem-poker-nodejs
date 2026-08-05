@@ -19,8 +19,10 @@ class User {
   isInCurrentGame: boolean = false;
   isReady: boolean = false; // in room and ready for game. hang up or disconnection will change it to false
   isActing: boolean = false; // in game, can action now
+  actionStartTime: number = new Date().getTime();
   actionEndTime: number = new Date().getTime();
   actionTimeLimit: number = 20; // seconds available for the current action
+  hasUsedOfflineActionGrace: boolean = false;
   isFolded: boolean = false; // in game, already fold
   isAllIn: boolean = false;
   isWinner: boolean = false;
@@ -48,20 +50,27 @@ class User {
     return this.stack - this.bets.reduce((a, b) => a + b, 0);
   }
   addWebsocket(ws: PokerWebSocket) {
+    const isReconnecting = this.isOffline;
     clearTimeout(this.autoLeaveTimer);
     this.isOffline = false;
+    if (isReconnecting) {
+      this.hasUsedOfflineActionGrace = false;
+    }
     this.wss.push(ws);
+    return isReconnecting;
   }
   removeWebSocket(ws: PokerWebSocket) {
     this.wss = this.wss.filter((_) => _ != ws);
-    if (this.wss.length == 0) {
+    if (this.wss.length == 0 && !this.isOffline) {
       this.isOffline = true;
       this.autoLeaveTimer = setTimeout(() => {
         try {
           userLeaveRoom(this.token);
         } catch (e) {}
       }, 180000); // auto leave after 3 mins
+      return true;
     }
+    return false;
   }
   getWebsockets() {
     return this.wss;
