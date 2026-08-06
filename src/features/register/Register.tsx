@@ -46,7 +46,7 @@ export function Register({ inviteRoomID = "" }: { inviteRoomID?: string }) {
         <div className="lobby-login__features">
           <span>
             <i />
-            九人实时牌桌
+            十人实时牌桌
           </span>
           <span>
             <i />

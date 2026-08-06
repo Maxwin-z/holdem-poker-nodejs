@@ -326,12 +326,17 @@
 }
 
 .live-seat--top-left {
-  grid-column: 3 / 5;
+  grid-column: 2 / 4;
+  grid-row: 1;
+}
+
+.live-seat--top-center {
+  grid-column: 4 / 6;
   grid-row: 1;
 }
 
 .live-seat--top-right {
-  grid-column: 5 / 7;
+  grid-column: 6 / 8;
   grid-row: 1;
 }
 
@@ -490,6 +495,7 @@
 }
 
 .live-seat--top-left .live-winner-tip,
+.live-seat--top-center .live-winner-tip,
 .live-seat--top-right .live-winner-tip {
   top: calc(100% + 7px);
   bottom: auto;
@@ -508,6 +514,7 @@
 }
 
 .live-seat--top-left .live-winner-tip::after,
+.live-seat--top-center .live-winner-tip::after,
 .live-seat--top-right .live-winner-tip::after {
   top: -5px;
   bottom: auto;
@@ -658,6 +665,7 @@
 }
 
 .live-seat--top-left .live-seat__position,
+.live-seat--top-center .live-seat__position,
 .live-seat--top-right .live-seat__position {
   top: calc(100% + 3px);
   left: 50%;

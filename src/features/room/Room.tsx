@@ -55,6 +55,7 @@ const seatNames = [
   "middle-left",
   "upper-left",
   "top-left",
+  "top-center",
   "top-right",
   "upper-right",
   "middle-right",
@@ -166,7 +167,7 @@ export function Room({
           />
           <div>
             <strong>River Club</strong>
-            <span>九人桌 · 房间 {roomid || "—"}</span>
+            <span>十人桌 · 房间 {roomid || "—"}</span>
           </div>
         </div>
 
@@ -397,7 +398,7 @@ export function Room({
               </span>
             </div>
 
-            {users.slice(0, 8).map((id, index) => (
+            {users.slice(0, 9).map((id, index) => (
               <User
                 id={`${id}`}
                 seat={seatNames[index]}

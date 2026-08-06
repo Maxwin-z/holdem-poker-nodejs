@@ -38,6 +38,7 @@ const previewChipsRecords: SimpleChipsRecord[] = [
   { id: "sora", name: "Sora", chips: 186400, buyIn: 120000 },
   { id: "maxwin", name: "Maxwin", chips: 124860, buyIn: 100000 },
   { id: "momo", name: "Momo", chips: 128450, buyIn: 140000 },
+  { id: "jax", name: "Jax", chips: 36780, buyIn: 40000 },
   { id: "nana", name: "Nana", chips: 72210, buyIn: 80000 },
   { id: "owen", name: "Owen", chips: 50820, buyIn: 60000 },
   { id: "ivy", name: "Ivy", chips: 9340, buyIn: 10000 },
@@ -113,6 +114,9 @@ export function RoomUiPreview() {
             ]
           : [],
         profits: isShowdown ? 1280 : 0,
+      }),
+      makeUser("jax", "Jax", 36780, {
+        actionName: "等待",
       }),
       makeUser("leo", "Leo", 1940, {
         position: "SB",
@@ -194,7 +198,7 @@ export function RoomUiPreview() {
       bb: 40,
       isSettling: isSelectingRunTimes || isShowdown,
       nextGameTime: Date.now() + 10000,
-      userCount: 9,
+      userCount: 10,
     };
     const self: SimpleSelf = {
       id: "maxwin",
