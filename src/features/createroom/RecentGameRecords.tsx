@@ -1,11 +1,17 @@
-import { ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
+import {
+  ClockCircleOutlined,
+  DownloadOutlined,
+  HistoryOutlined,
+} from "@ant-design/icons";
+import { Button } from "antd";
 import { SimpleChipsRecord } from "../../ApiType";
+import {
+  buildRecentGamesCsv,
+  RecentGameEntry,
+  sortRecordsByGroupedProfit,
+} from "./recentGameSort";
 
-export type RecentGameEntry = {
-  roomid: string;
-  date: number;
-  records: SimpleChipsRecord[];
-};
+export type { RecentGameEntry } from "./recentGameSort";
 
 function formatChips(value: number) {
   return value.toLocaleString("en-US");
@@ -48,6 +54,24 @@ export function RecentGameRecords({
 
   recentGames.sort((first, second) => second.date - first.date);
 
+  const exportCsv = () => {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const filename =
+      `最近牌局-${now.getFullYear()}${pad(now.getMonth() + 1)}` +
+      `${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.csv`;
+    const csv = buildRecentGamesCsv(recentGames);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="lobby-recent">
       <div className="lobby-recent__heading">
@@ -55,7 +79,19 @@ export function RecentGameRecords({
           <span className="lobby-eyebrow">RECENT SESSIONS</span>
           <h2>最近牌局</h2>
         </div>
-        <HistoryOutlined />
+        <div className="lobby-recent__actions">
+          {recentGames.length > 0 && (
+            <Button
+              className="lobby-recent__export"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={exportCsv}
+            >
+              导出 CSV
+            </Button>
+          )}
+          <HistoryOutlined />
+        </div>
       </div>
 
       {recentGames.length ? (
@@ -93,7 +129,7 @@ export function RecentGameRecords({
                     <span>买入</span>
                     <span>盈亏</span>
                   </div>
-                  {game.records.map((record) => {
+                  {sortRecordsByGroupedProfit(game.records).map((record) => {
                     const profit = record.chips - record.buyIn;
                     return (
                       <div

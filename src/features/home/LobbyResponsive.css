@@ -691,6 +691,39 @@
   font-size: 20px;
 }
 
+.lobby-recent__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lobby-recent__actions > .anticon {
+  color: #58746a;
+  font-size: 20px;
+}
+
+.lobby-shell .lobby-recent__export.ant-btn {
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid rgba(231, 188, 99, 0.28);
+  border-radius: 9px;
+  color: #f0d69e;
+  background: rgba(231, 188, 99, 0.07);
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.lobby-shell .lobby-recent__export.ant-btn:hover,
+.lobby-shell .lobby-recent__export.ant-btn:focus {
+  color: #1b180e;
+  border-color: var(--lobby-gold);
+  background: var(--lobby-gold);
+}
+
 .lobby-recent__list {
   display: grid;
   gap: 10px;
