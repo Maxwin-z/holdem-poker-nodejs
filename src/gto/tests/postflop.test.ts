@@ -168,6 +168,49 @@ describe("postflop advice", () => {
     assert.strictEqual(advice.actionDistribution.bet, 90);
   });
 
+  it("exposes the bet size when a 50/50 check-bet mix recommends check", () => {
+    const advice = getPostflopAdvice(
+      sit({
+        heroCards: [c(11, "c"), c(9, "d")],
+        board: [c(8, "d"), c(10, "s"), c(2, "s")],
+        pot: 14,
+        heroRemaining: 133,
+        effectiveStackBB: 69.5,
+        heroInPosition: false,
+        isPreflopAggressor: true,
+      })
+    );
+    assert.strictEqual(advice.recommended, "check");
+    assert.strictEqual(advice.actionDistribution.check, 50);
+    assert.strictEqual(advice.actionDistribution.bet, 50);
+    assert.strictEqual(advice.recommendedSizeChips, 11);
+    assert.strictEqual(advice.recommendedSizeBB, 5.5);
+  });
+
+  it("keeps the bet-branch size when a check-first mix still bets sometimes", () => {
+    const advice = getPostflopAdvice(
+      sit({
+        heroCards: [c(7, "c"), c(2, "d")],
+        board: [c(14, "s"), c(8, "h"), c(3, "d")],
+        pot: 14,
+        heroRemaining: 133,
+        effectiveStackBB: 69.5,
+        heroInPosition: false,
+        isPreflopAggressor: true,
+      })
+    );
+    assert.strictEqual(advice.recommended, "check");
+    assert.ok(
+      advice.actionDistribution.bet > 0,
+      `expected a bet branch, got ${JSON.stringify(advice.actionDistribution)}`
+    );
+    assert.ok(
+      advice.recommendedSizeChips !== undefined &&
+        advice.recommendedSizeChips > 0,
+      "bet-branch size should be exposed for display"
+    );
+  });
+
   it("folds junk facing a big multiway bet with bad equity", () => {
     const advice = getPostflopAdvice(
       sit({

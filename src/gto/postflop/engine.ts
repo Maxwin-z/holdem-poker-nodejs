@@ -169,7 +169,15 @@ export function decidePostflop(sit: PostflopSituation): PostflopDecision {
     decision.action === "allin"
       ? "allin"
       : argmaxAction(decision.mixedStrategy, facingBet);
-  return { ...decision, action: finalAction };
+  const result = { ...decision, action: finalAction };
+  // The recommended action may be a check/call/fold while the mixed strategy
+  // still contains a bet/raise branch. Carry that branch's (legalized) size
+  // so advice cards can render both lines, e.g. "过牌 50% / 下注 11 筹码 50%".
+  if (result.amount === undefined && result.mixedStrategy.bets.length > 0) {
+    const branchAmount = result.mixedStrategy.bets[0].amount;
+    if (Number.isFinite(branchAmount)) result.amount = branchAmount;
+  }
+  return result;
 }
 
 function argmaxAction(

@@ -51,10 +51,14 @@ export default function PostflopAdviceCard({
       value: dist[key],
     }))
     .sort((a, b) => b.value - a.value);
-  const sizeText =
-    advice.recommendedSizeChips != null
-      ? ` ${advice.recommendedSizeChips} 筹码`
-      : "";
+  const lines = rows.map((row) => ({
+    ...row,
+    size:
+      (row.key === "bet" || row.key === "raise" || row.key === "allin") &&
+      advice.recommendedSizeChips != null
+        ? advice.recommendedSizeChips
+        : undefined,
+  }));
 
   if (!expanded) {
     return (
@@ -66,8 +70,8 @@ export default function PostflopAdviceCard({
         <span className="gto-advice-card__badge">GTO</span>
         <span className="gto-advice-card__summary">
           {STREET_LABEL[advice.street]} ·{" "}
-          {hero ? `你拿 ${hero.hand}` : ""} · {recMeta.label}
-          {sizeText}
+          {hero ? `你拿 ${hero.hand}` : ""} · {recMeta.label}{" "}
+          {dist[advice.recommended]}%
         </span>
         <span className="gto-advice-card__toggle">
           {stale ? "已过行动阶段 ▸" : "▸"}
@@ -112,13 +116,18 @@ export default function PostflopAdviceCard({
       </div>
 
       <div className="gto-advice-card__main">
-        <span
-          className="gto-advice-card__action"
-          style={{ color: recMeta.color }}
-        >
-          {recMeta.label}
-          {sizeText}
-        </span>
+        <div className="gto-advice-card__actions">
+          {lines.map((line) => (
+            <span
+              key={line.key}
+              className="gto-advice-card__action"
+              style={{ color: line.color }}
+            >
+              {line.label}
+              {line.size !== undefined ? ` ${line.size} 筹码` : ""} {line.value}%
+            </span>
+          ))}
+        </div>
         {hero && (
           <span className="gto-advice-card__hero">
             你拿 {hero.hand}：{hero.message}
