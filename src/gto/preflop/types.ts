@@ -57,7 +57,10 @@ export interface PreflopSituation {
   heroPosition: ChartPosition;
   /** Optional display label (e.g. "UTG+1" for 9-max). Defaults to heroPosition. */
   heroPositionLabel?: string;
-  /** Effective stack in big blinds (min of involved stacks). */
+  /**
+   * 决策深度（bb）：单挑 = 双方较小筹码（有效筹码）；多人局 = 英雄自身筹码
+   * （短码对手只限制其自身可投入的注量，不拉低开池/加注尺寸）。
+   */
   effectiveStackBB: number;
   scenario: PreflopScenario;
   /** Raiser position (required for vs-open / vs-3bet / vs-4bet). */

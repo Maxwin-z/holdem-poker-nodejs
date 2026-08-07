@@ -12,6 +12,7 @@ function makeInput(opts: {
   seats: Seat[];
   bets: Record<string, number>;
   stack?: number;
+  stacks?: Record<string, number>;
   acting: string;
   heroCards?: CardInput[];
   lastRaiser?: string;
@@ -24,7 +25,7 @@ function makeInput(opts: {
   for (const seat of opts.seats) {
     players[seat] = {
       bet: opts.bets[seat] || 0,
-      stack,
+      stack: (opts.stacks && opts.stacks[seat]) ?? stack,
       isFolded: false,
       hands:
         seat === opts.acting && opts.heroCards
@@ -131,6 +132,64 @@ describe("preflop advice from game state", () => {
     assert.strictEqual(advice!.heroPosition, "MP");
     assert.strictEqual(advice!.villainPosition, "UTG");
     assert.strictEqual(advice!.scenario, "vs-open");
+  });
+
+  it("多人局：英雄深码而他人短码时，按英雄自身筹码正常开池（不改为全下）", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2 },
+        stacks: { SB: 215, BB: 3, CO: 215, MP: 215, UTG: 215, BTN: 215 },
+        acting: "CO",
+        heroCards: [
+          { num: 8, suit: "c" },
+          { num: 8, suit: "h" },
+        ],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.stackBB, 107.5);
+    assert.strictEqual(advice!.recommended, "raise");
+    assert.strictEqual(advice!.hero!.action, "raise");
+    assert.strictEqual(advice!.hero!.sizeBB, 3);
+    assert.ok(!advice!.notes.some((n) => n.includes("短码")));
+  });
+
+  it("多人局：英雄自己是最短筹码时，仍按自身筹码全下", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2 },
+        stacks: { SB: 215, BB: 215, CO: 3, MP: 215, UTG: 215, BTN: 215 },
+        acting: "CO",
+        heroCards: [
+          { num: 8, suit: "c" },
+          { num: 8, suit: "h" },
+        ],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.stackBB, 1.5);
+    assert.strictEqual(advice!.hero!.action, "allin");
+    assert.strictEqual(advice!.hero!.sizeBB, 1.5);
+  });
+
+  it("单挑：对手短码时，仍按双方较小筹码作为决策深度", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["BTN", "BB"],
+        bets: { BTN: 1, BB: 2 },
+        stacks: { BTN: 215, BB: 3 },
+        acting: "BTN",
+        heroCards: [
+          { num: 8, suit: "c" },
+          { num: 8, suit: "h" },
+        ],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.stackBB, 1.5);
+    assert.strictEqual(advice!.hero!.action, "allin");
   });
 
   it("6-max: 游戏 CO 开池 -> 游戏 UTG 面对（映射为 CO vs UTG，走通用兜底）", () => {

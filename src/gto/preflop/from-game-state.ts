@@ -95,7 +95,13 @@ export function buildPreflopAdvice(
 
   const inHand = sortedUsers.filter((t) => !players[t].isFolded);
   if (inHand.length < 2) return null;
-  const effectiveStackBB = Math.min(...inHand.map((t) => players[t].stack)) / bbChips;
+  // 决策深度（bb）：单挑时取双方较小筹码（即有效筹码）；多人局中，短码玩家
+  // 只限制他自己能投入的注量，开池/加注尺寸和短码判断应以英雄自身筹码为准
+  // （若英雄自己就是最短筹码，则两者相等，行为不变）。
+  const effectiveStackBB =
+    inHand.length === 2
+      ? Math.min(...inHand.map((t) => players[t].stack)) / bbChips
+      : hero.stack / bbChips;
 
   const bets = sortedUsers.map((t) => players[t].bet);
   const maxBet = Math.max(...bets);
