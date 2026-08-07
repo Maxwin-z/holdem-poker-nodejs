@@ -13,7 +13,11 @@
   - `vs-open`：面对开池加注（跟注 / 3bet / 弃牌）
   - `vs-3bet`：自己的加注被 3bet（跟注 / 4bet / 5bet 全下）
   - `vs-4bet`：盲注位用图表，其他位置用 5bet 全下/弃牌简化规则
-- 位置：6-max 图表（UTG/MP/CO/BTN/SB/BB）映射到 2-9 人桌
+- 位置：6-max 图表（UTG/MP/CO/BTN/SB/BB）按“行动顺序”映射到 2-10 人桌。
+  本牌局翻前从 CO 开始行动（CO → MP → UTG → BTN → SB → BB），与标准
+  6-max 相反，因此座位不能按“距按钮距离”直接取图表键：第 1 个行动者
+  映射为 UTG、第 2 个映射为 MP……展示标签仍用牌局自己的座位名
+  （`chartPositionByActionOrder` 负责此映射）
 - 筹码：100bb 深码基准；≤20bb 自动切换 push/fold 全下/弃牌模型
 - 校准：`looseness` 支持 `tight` / `standard` / `loose`（默认 `standard`）
 - 多路修正：有 limper / cold call 时边缘手牌自动收紧，尺寸 +1bb/人
@@ -23,6 +27,8 @@
 - 主图表：GreenCharts2024（Greenline Poker），经 MIT 许可的 poker-charts
   项目转载，见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
 - MP vs UTG、CO vs MP 两个缺失位置对：本地编写的标准近似表
+- 其余未覆盖的位置对（如 CO 面对 UTG 开池、BTN 面对 MP 的 3bet）：
+  本地编写的通用近似表（3bet-or-fold / 4bet-跟注），并注明“近似映射”
 - ≤20bb push/fold：本地编写的近似 Nash 表（非精确解）
 
 ## 使用
@@ -33,9 +39,12 @@ import { getPreflopAdvice, positionForDistance } from "./index";
 // 9 人桌，座位 3（=CO），庄家在座位 0
 const seat = positionForDistance(9, 3); // { label: "CO", chart: "CO" }
 
+// 牌局内取图表键用行动顺序映射：9 人桌第 0 个行动者（游戏 CO）对应 UTG
+const chartKey = chartPositionByActionOrder(9, 0); // "UTG"
+
 const advice = getPreflopAdvice({
   playerCount: 9,
-  heroPosition: seat.chart,
+  heroPosition: chartKey,
   heroPositionLabel: seat.label,
   effectiveStackBB: 100,
   scenario: "vs-open",

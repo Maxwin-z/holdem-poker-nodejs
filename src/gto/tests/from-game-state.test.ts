@@ -100,19 +100,86 @@ describe("preflop advice from game state", () => {
     assert.strictEqual(advice!.hero!.sizeBB, 10);
   });
 
-  it("CO with a limper: isolation raise 5bb", () => {
+  it("6-max: 第 1 行动者（游戏 CO）按 UTG 图表处理（3bb RFI）", () => {
     const advice = buildPreflopAdvice(
       makeInput({
         seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
-        bets: { SB: 1, BB: 2, UTG: 2 },
+        bets: { SB: 1, BB: 2 },
         acting: "CO",
-        heroCards: [
-          { num: 14, suit: "s" },
-          { num: 5, suit: "s" },
-        ],
+        heroCards: [AH, KH],
       })
     );
     assert.ok(advice);
+    assert.strictEqual(advice!.heroPosition, "UTG");
+    assert.strictEqual(advice!.heroPositionLabel, "CO");
+    assert.strictEqual(advice!.scenario, "unopened");
+    assert.strictEqual(advice!.hero!.action, "raise");
+    assert.strictEqual(advice!.hero!.sizeBB, 3);
+  });
+
+  it("6-max: 游戏 CO 开池 -> MP 面对（映射为 MP vs UTG，不再抛异常）", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2, CO: 6 },
+        acting: "MP",
+        lastRaiser: "CO",
+        heroCards: [TD, TS],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.heroPosition, "MP");
+    assert.strictEqual(advice!.villainPosition, "UTG");
+    assert.strictEqual(advice!.scenario, "vs-open");
+  });
+
+  it("6-max: 游戏 CO 开池 -> 游戏 UTG 面对（映射为 CO vs UTG，走通用兜底）", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2, CO: 6 },
+        acting: "UTG",
+        lastRaiser: "CO",
+        heroCards: SEVEN_TWO,
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.heroPosition, "CO");
+    assert.strictEqual(advice!.villainPosition, "UTG");
+    assert.strictEqual(advice!.scenario, "vs-open");
+    assert.strictEqual(advice!.hero!.action, "fold");
+    assert.ok(
+      advice!.notes.some((n) => n.includes("通用"))
+    );
+  });
+
+  it("6-max: 游戏 UTG（第 3 行动者）开池按 CO 图表（2.5bb RFI）", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2 },
+        acting: "UTG",
+        heroCards: [AH, KH],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.heroPosition, "CO");
+    assert.strictEqual(advice!.heroPositionLabel, "UTG");
+    assert.strictEqual(advice!.scenario, "unopened");
+    assert.strictEqual(advice!.hero!.sizeBB, 2.5);
+  });
+
+  it("iso: 游戏 CO 平跟后，游戏 MP 隔离加注（MP 图表）", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
+        bets: { SB: 1, BB: 2, CO: 2 },
+        acting: "MP",
+        heroCards: [AH, KH],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.heroPosition, "MP");
     assert.strictEqual(advice!.scenario, "iso");
     assert.strictEqual(advice!.hero!.action, "raise");
     assert.strictEqual(advice!.hero!.sizeBB, 5);

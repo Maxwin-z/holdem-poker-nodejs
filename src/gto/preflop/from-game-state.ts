@@ -7,7 +7,10 @@
  */
 
 import { getPreflopAdvice } from "./advice";
-import { positionForDistance } from "./positions";
+import {
+  chartPositionByActionOrder,
+  positionForDistance,
+} from "./positions";
 import type { ChartPosition, PreflopAdvice, PreflopSituation } from "./types";
 
 export interface GamePlayerState {
@@ -44,17 +47,33 @@ function rankChar(num: number): string {
   return String(num);
 }
 
+/**
+ * 翻前行动顺序序号：0 = 第一个行动者。
+ * 本牌局从 sortedUsers[2] 开始行动（CO），然后是 3..n-1（直到 BTN），
+ * 最后回到 sortedUsers[0]（SB）、sortedUsers[1]（BB）。
+ */
+function actorIndexOf(sortedUsers: string[], token: string): number {
+  const n = sortedUsers.length;
+  const idx = sortedUsers.indexOf(token);
+  if (idx < 0) return -1;
+  return idx >= 2 ? idx - 2 : n - 2 + idx;
+}
+
 function chartPositionAt(
   sortedUsers: string[],
-  players: Record<string, GamePlayerState>,
-  buttonIndex: number,
   count: number,
   token: string
 ): { chart: ChartPosition; label: string } {
   const n = sortedUsers.length;
-  const dist = (sortedUsers.indexOf(token) - buttonIndex + n) % n;
-  // 10-player tables map onto 9 positions; clamp the extra early seat.
-  return positionForDistance(count, Math.min(dist, count - 1));
+  const idx = sortedUsers.indexOf(token);
+  const buttonIndex = n > 2 ? n - 1 : 0;
+  const dist = (idx - buttonIndex + n) % n;
+  // 展示标签沿用牌局自己的座位名（CO/MP/UTG...），图表键按行动顺序映射。
+  const seat = positionForDistance(count, Math.min(dist, count - 1));
+  return {
+    chart: chartPositionByActionOrder(n, actorIndexOf(sortedUsers, token)),
+    label: seat.label,
+  };
 }
 
 /**
@@ -72,8 +91,7 @@ export function buildPreflopAdvice(
   if (!hero || hero.hands.length !== 2) return null;
 
   const count = Math.min(Math.max(n, 2), 9);
-  const buttonIndex = n > 2 ? n - 1 : 0;
-  const seat = chartPositionAt(sortedUsers, players, buttonIndex, count, actingToken);
+  const seat = chartPositionAt(sortedUsers, count, actingToken);
 
   const inHand = sortedUsers.filter((t) => !players[t].isFolded);
   if (inHand.length < 2) return null;
@@ -124,8 +142,6 @@ export function buildPreflopAdvice(
     if (heroBet >= maxBet || !lastRaiser) return null;
     const villainSeat = chartPositionAt(
       sortedUsers,
-      players,
-      buttonIndex,
       count,
       lastRaiser
     );

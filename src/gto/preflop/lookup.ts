@@ -5,7 +5,12 @@
  */
 
 import { charts as greenline } from "./data/greenline";
-import { CO_VS_OPEN_MP, MP_VS_OPEN_UTG } from "./data/fallback";
+import {
+  CO_VS_OPEN_MP,
+  GENERIC_VS_3BET,
+  GENERIC_VS_OPEN,
+  MP_VS_OPEN_UTG,
+} from "./data/fallback";
 import { HAND_ORDER, comboCount, handScore, normalizeHandKey } from "./hand";
 import type {
   Chart,
@@ -83,9 +88,6 @@ export function resolveChart(
     }
     case "vs-open": {
       if (!villain) throw new Error("面对加注（vs-open）需要提供 villainPosition");
-      if (hero === "UTG") {
-        throw new Error("UTG 不可能面对翻前加注");
-      }
       const key = `${hero}-vs-open-${villain}`;
       const chart = get(key);
       if (chart) return { chart, source: "GreenCharts2024 vs-open", ruleBased: false };
@@ -105,13 +107,23 @@ export function resolveChart(
           ruleBased: false,
         };
       }
-      throw new Error(`不支持的翻前位置对：${hero} vs ${villain} 的开池加注`);
+      return {
+        chart: GENERIC_VS_OPEN,
+        source: "generic fallback",
+        fallbackNote: "该位置对不在 6-max 参考表中，按通用 3bet-or-fold 参考范围近似",
+        ruleBased: false,
+      };
     }
     case "vs-3bet": {
       if (!villain) throw new Error("面对 3bet 需要提供 villainPosition");
       const chart = get(`${hero}-vs-3bet-${villain}`);
       if (chart) return { chart, source: "GreenCharts2024 vs-3bet", ruleBased: false };
-      throw new Error(`不支持的翻前位置对：${hero} 面对 ${villain} 的 3bet`);
+      return {
+        chart: GENERIC_VS_3BET,
+        source: "generic fallback",
+        fallbackNote: "该位置对不在 6-max 参考表中，按通用 4bet/跟注参考范围近似",
+        ruleBased: false,
+      };
     }
     case "vs-4bet": {
       if (!villain) throw new Error("面对 4bet 需要提供 villainPosition");

@@ -76,6 +76,51 @@ export function positionForDistance(
   return { label, chart: LABEL_TO_CHART[label], headsUpButton: false };
 }
 
+/**
+ * 把牌局里的“行动顺序序号”映射成 6-max 图表位置。
+ *
+ * 本牌局的行牌顺序与标准 6-max 相反：翻前从 CO 开始，依次
+ * CO -> MP -> UTG -> BTN -> SB -> BB（即 sortedUsers[2] 开始行动）。
+ * 而 GreenCharts2024 图表按键（UTG/MP/CO/BTN/SB/BB）按标准顺序定义：
+ * 第 1 个行动者是 UTG、第 2 个是 MP……因此同一个座位不能拿“距按钮
+ * 距离”当图表键，要按它在行动顺序里的序号取标准位置，才能命中图表。
+ *
+ * 对 2-10 人桌都适用（10 人桌按 9 人标签，多出的早位并到 UTG）。
+ *
+ * @param playerCount 实际玩家数（2-10）
+ * @param actorIndex  翻前行动顺序序号：0 = 第一个行动者，依此类推
+ */
+export function chartPositionByActionOrder(
+  playerCount: number,
+  actorIndex: number
+): ChartPosition {
+  const n = Math.floor(playerCount);
+  if (!Number.isFinite(playerCount) || n < 2 || n > 10) {
+    throw new Error(`玩家数量必须是 2-10 之间的数字，收到 ${playerCount}`);
+  }
+  const count = Math.min(Math.max(n, 2), 9);
+  if (n === 2) {
+    // 单挑：按钮位即小盲，图表键为 SB。
+    return actorIndex <= 0 ? "SB" : "BB";
+  }
+  // 实际玩家数的距离标签（10 人桌按 9 人标签，超出部分钳到 UTG）。
+  const labels: PositionLabel[] = [];
+  for (let d = 0; d < n; d++) {
+    labels.push(positionForDistance(count, Math.min(d, count - 1)).label);
+  }
+  // 标准行动顺序 = 早位（距离 >= 3）按距离逆序，然后 BTN/SB/BB。
+  const sequence: ChartPosition[] = [
+    ...labels
+      .slice(3)
+      .reverse()
+      .map((label) => LABEL_TO_CHART[label]),
+    LABEL_TO_CHART[labels[0]],
+    LABEL_TO_CHART[labels[1]],
+    LABEL_TO_CHART[labels[2]],
+  ];
+  return sequence[Math.min(actorIndex, sequence.length - 1)];
+}
+
 /** All positions for a game, indexed by distance from the button. */
 export function positionsForGame(playerCount: number): SeatPosition[] {
   const count = normalizePlayerCount(playerCount);

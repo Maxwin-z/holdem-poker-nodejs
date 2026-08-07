@@ -2,6 +2,7 @@ import * as assert from "assert";
 import {
   applyCalibration,
   applyMultiwayTightening,
+  chartPositionByActionOrder,
   chartCombos,
   comboCount,
   distanceFromButton,
@@ -57,6 +58,46 @@ describe("preflop GTO engine", () => {
     assert.strictEqual(positionForDistance(5, 3).label, "CO");
     assert.strictEqual(positionForDistance(5, 4).label, "UTG");
     assert.strictEqual(positionsForGame(4).map((p) => p.label).join(","), "BTN,SB,BB,CO");
+  });
+
+  it("maps 2-10 handed games onto 6-max chart keys by action order", () => {
+    const expected: Record<number, string[]> = {
+      2: ["SB", "BB"],
+      3: ["BTN", "SB", "BB"],
+      4: ["CO", "BTN", "SB", "BB"],
+      5: ["UTG", "CO", "BTN", "SB", "BB"],
+      6: ["UTG", "MP", "CO", "BTN", "SB", "BB"],
+      7: ["UTG", "MP", "MP", "CO", "BTN", "SB", "BB"],
+      8: ["UTG", "MP", "MP", "MP", "CO", "BTN", "SB", "BB"],
+      9: ["UTG", "UTG", "MP", "MP", "MP", "CO", "BTN", "SB", "BB"],
+      10: ["UTG", "UTG", "UTG", "MP", "MP", "MP", "CO", "BTN", "SB", "BB"],
+    };
+    for (const [nStr, keys] of Object.entries(expected)) {
+      const n = Number(nStr);
+      const actual = Array.from({ length: n }, (_, i) =>
+        chartPositionByActionOrder(n, i)
+      );
+      assert.deepStrictEqual(actual, keys, `${n}-handed action order`);
+    }
+  });
+
+  it("resolveChart falls back instead of throwing for uncovered position pairs", () => {
+    const coVsUtg = resolveChart("vs-open", "CO", "UTG");
+    assert.ok(coVsUtg.chart);
+    assert.strictEqual(coVsUtg.source, "generic fallback");
+    assert.ok(coVsUtg.fallbackNote?.includes("通用"));
+
+    const mpVsCo = resolveChart("vs-open", "MP", "CO");
+    assert.ok(mpVsCo.chart);
+    assert.strictEqual(mpVsCo.source, "generic fallback");
+
+    const utgVsCo = resolveChart("vs-open", "UTG", "CO");
+    assert.ok(utgVsCo.chart);
+    assert.strictEqual(utgVsCo.source, "generic fallback");
+
+    const btnVsMp3bet = resolveChart("vs-3bet", "BTN", "MP");
+    assert.ok(btnVsMp3bet.chart);
+    assert.strictEqual(btnVsMp3bet.source, "generic fallback");
   });
 
   it("computes distance from the button", () => {
