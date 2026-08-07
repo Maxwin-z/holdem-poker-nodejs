@@ -7,6 +7,7 @@ import type {
 } from "../../gto/preflop/types";
 import PreflopRangeGrid from "./PreflopRangeGrid";
 import PostflopAdviceCard from "./PostflopAdviceCard";
+import GtoTips from "./GtoTips";
 
 const ACTION_META: Record<
   PreflopAction,
@@ -21,28 +22,50 @@ const ACTION_META: Record<
 export default function GtoAdviceCard({
   entry,
   stale,
+  globalCollapsed,
 }: {
   entry: GtoLogEntry;
   stale?: boolean;
+  globalCollapsed?: boolean;
 }) {
   if (entry.data.kind === "postflop") {
-    return <PostflopAdviceCard entry={entry} stale={stale} />;
+    return (
+      <PostflopAdviceCard
+        entry={entry}
+        stale={stale}
+        globalCollapsed={globalCollapsed}
+      />
+    );
   }
-  return <PreflopGtoAdviceCard entry={entry} stale={stale} />;
+  return (
+    <PreflopGtoAdviceCard
+      entry={entry}
+      stale={stale}
+      globalCollapsed={globalCollapsed}
+    />
+  );
 }
 
 function PreflopGtoAdviceCard({
   entry,
   stale,
+  globalCollapsed,
 }: {
   entry: GtoLogEntry;
   stale?: boolean;
+  globalCollapsed?: boolean;
 }) {
   const advice = entry.data as PreflopAdvice;
-  const [expanded, setExpanded] = useState(!stale);
+  const [expanded, setExpanded] = useState(!stale && !globalCollapsed);
   useEffect(() => {
     if (stale) setExpanded(false);
   }, [stale]);
+  // 仅响应全局眼睛切换：重新按全局设置决定展开状态，stale 卡片保持折叠。
+  useEffect(() => {
+    if (stale) return;
+    setExpanded(!globalCollapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalCollapsed]);
 
   const rfiTabs: ChartPosition[] = ["UTG", "MP", "CO", "BTN", "SB"];
   const heroChart = advice.heroPosition;
@@ -85,13 +108,7 @@ function PreflopGtoAdviceCard({
         role="button"
       >
         <span className="gto-advice-card__badge">GTO</span>
-        <span className="gto-advice-card__summary">
-          {advice.heroPositionLabel} · {hero ? `你拿 ${hero.hand}` : ""} ·{" "}
-          {recMeta.label}
-          {advice.recommendedSizeBB != null
-            ? ` ${advice.recommendedSizeBB}bb`
-            : ""}
-        </span>
+        <span className="gto-advice-card__summary">翻前</span>
         <span className="gto-advice-card__toggle">
           {stale ? "已过行动阶段 ▸" : "▸"}
         </span>
@@ -100,7 +117,7 @@ function PreflopGtoAdviceCard({
   }
 
   return (
-    <div className="gto-advice-card">
+    <div className="gto-advice-card" style={{ borderColor: recMeta.color }}>
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
         <strong>翻前建议</strong>
@@ -154,16 +171,6 @@ function PreflopGtoAdviceCard({
           </div>
         ))}
       </div>
-      <div className="gto-advice-card__hint">
-        频率条是<strong>整个参考范围</strong>的组合加权占比；对你手里的{" "}
-        {hero ? hero.hand : "手牌"}，图表建议{" "}
-        <strong>
-          {recMeta.label}
-          {sizeText}
-        </strong>
-        {hero ? `（手牌频率 ${hero.frequency}%）` : ""}。
-      </div>
-
       <div className="gto-advice-card__range">
         <div className="gto-advice-card__mode">
           <button
@@ -209,35 +216,37 @@ function PreflopGtoAdviceCard({
         )}
       </div>
 
-      {((advice.limitations && advice.limitations.length > 0) ||
-        (advice.adjustments && advice.adjustments.length > 0)) && (
+      {advice.adjustments && advice.adjustments.length > 0 && (
         <div className="gto-advice-card__insight">
-          {advice.limitations && advice.limitations.length > 0 && (
-            <div className="gto-advice-card__insight-group">
-              <div className="gto-advice-card__insight-title">
-                近似 / 简化说明
-              </div>
-              {advice.limitations.map((note, i) => (
-                <small key={`lim-${i}`}>· {note}</small>
-              ))}
+          <div className="gto-advice-card__insight-group">
+            <div className="gto-advice-card__insight-title">
+              实际情况偏移建议
             </div>
-          )}
-          {advice.adjustments && advice.adjustments.length > 0 && (
-            <div className="gto-advice-card__insight-group">
-              <div className="gto-advice-card__insight-title">
-                实际情况偏移建议
-              </div>
-              {advice.adjustments.map((note, i) => (
-                <small key={`adj-${i}`}>· {note}</small>
-              ))}
-            </div>
-          )}
+            {advice.adjustments.map((note, i) => (
+              <small key={`adj-${i}`}>· {note}</small>
+            ))}
+          </div>
         </div>
       )}
 
       <div className="gto-advice-card__foot">
         <small>参考范围：{advice.dataSource}</small>
       </div>
+
+      <GtoTips
+        hint={
+          <>
+            频率条是<strong>整个参考范围</strong>的组合加权占比；对你手里的{" "}
+            {hero ? hero.hand : "手牌"}，图表建议{" "}
+            <strong>
+              {recMeta.label}
+              {sizeText}
+            </strong>
+            {hero ? `（手牌频率 ${hero.frequency}%）` : ""}。
+          </>
+        }
+        limitations={advice.limitations}
+      />
     </div>
   );
 }

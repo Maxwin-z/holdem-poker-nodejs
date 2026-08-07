@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type {
   PostflopAction,
 } from "../../gto/postflop/types";
+import GtoTips from "./GtoTips";
 
 const ACTION_META: Record<
   PostflopAction,
@@ -29,14 +30,22 @@ function cardColor(suit: string): string {
 export default function PostflopAdviceCard({
   entry,
   stale,
+  globalCollapsed,
 }: {
   entry: GtoLogEntry;
   stale?: boolean;
+  globalCollapsed?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(!stale);
+  const [expanded, setExpanded] = useState(!stale && !globalCollapsed);
   useEffect(() => {
     if (stale) setExpanded(false);
   }, [stale]);
+  // 仅响应全局眼睛切换：重新按全局设置决定展开状态，stale 卡片保持折叠。
+  useEffect(() => {
+    if (stale) return;
+    setExpanded(!globalCollapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalCollapsed]);
 
   const advice = entry.data;
   if (advice.kind !== "postflop") return null;
@@ -69,9 +78,7 @@ export default function PostflopAdviceCard({
       >
         <span className="gto-advice-card__badge">GTO</span>
         <span className="gto-advice-card__summary">
-          {STREET_LABEL[advice.street]} ·{" "}
-          {hero ? `你拿 ${hero.hand}` : ""} · {recMeta.label}{" "}
-          {dist[advice.recommended]}%
+          {STREET_LABEL[advice.street]}
         </span>
         <span className="gto-advice-card__toggle">
           {stale ? "已过行动阶段 ▸" : "▸"}
@@ -81,7 +88,7 @@ export default function PostflopAdviceCard({
   }
 
   return (
-    <div className="gto-advice-card">
+    <div className="gto-advice-card" style={{ borderColor: recMeta.color }}>
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
         <strong>{STREET_LABEL[advice.street]}建议</strong>
@@ -154,6 +161,14 @@ export default function PostflopAdviceCard({
         </span>
       </div>
 
+      {advice.notes.length > 0 && (
+        <div className="postflop-advice__notes">
+          {advice.notes.map((note, i) => (
+            <small key={i}>· {note}</small>
+          ))}
+        </div>
+      )}
+
       <div className="gto-advice-card__bars-title">
         行动频率分布（GTO 混合策略）
       </div>
@@ -174,48 +189,33 @@ export default function PostflopAdviceCard({
           </div>
         ))}
       </div>
-      <div className="gto-advice-card__hint">
-        频率条是该局面<strong>GTO 混合策略</strong>的占比；推荐动作为其中
-        频率最高的一项，可参考分布做混合。
-      </div>
 
-      {advice.notes.length > 0 && (
-        <div className="postflop-advice__notes">
-          {advice.notes.map((note, i) => (
-            <small key={i}>· {note}</small>
-          ))}
-        </div>
-      )}
-
-      {((advice.limitations && advice.limitations.length > 0) ||
-        (advice.adjustments && advice.adjustments.length > 0)) && (
+      {advice.adjustments && advice.adjustments.length > 0 && (
         <div className="gto-advice-card__insight">
-          {advice.limitations && advice.limitations.length > 0 && (
-            <div className="gto-advice-card__insight-group">
-              <div className="gto-advice-card__insight-title">
-                近似 / 简化说明
-              </div>
-              {advice.limitations.map((note, i) => (
-                <small key={`lim-${i}`}>· {note}</small>
-              ))}
+          <div className="gto-advice-card__insight-group">
+            <div className="gto-advice-card__insight-title">
+              实际情况偏移建议
             </div>
-          )}
-          {advice.adjustments && advice.adjustments.length > 0 && (
-            <div className="gto-advice-card__insight-group">
-              <div className="gto-advice-card__insight-title">
-                实际情况偏移建议
-              </div>
-              {advice.adjustments.map((note, i) => (
-                <small key={`adj-${i}`}>· {note}</small>
-              ))}
-            </div>
-          )}
+            {advice.adjustments.map((note, i) => (
+              <small key={`adj-${i}`}>· {note}</small>
+            ))}
+          </div>
         </div>
       )}
 
       <div className="gto-advice-card__foot">
         <small>参考范围：{advice.dataSource}</small>
       </div>
+
+      <GtoTips
+        hint={
+          <>
+            频率条是该局面<strong>GTO 混合策略</strong>的占比；推荐动作为其中
+            频率最高的一项，可参考分布做混合。
+          </>
+        }
+        limitations={advice.limitations}
+      />
     </div>
   );
 }

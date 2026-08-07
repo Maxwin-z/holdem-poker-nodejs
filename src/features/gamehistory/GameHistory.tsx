@@ -9,10 +9,27 @@ import {
   useState,
 } from "react";
 import { ws_sendMessage } from "../../app/websocket";
-import { SendOutlined } from "@ant-design/icons";
+import {
+  EyeInvisibleOutlined,
+  EyeOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
 import GtoAdviceCard from "./GtoAdviceCard";
 import type { GameLogEntry } from "../../ApiType";
 import { selectGame } from "../room/roomSlice";
+
+const GTO_COLLAPSED_KEY = "gtoAdviceCollapsed";
+
+function loadGtoCollapsed(): boolean {
+  // 默认折叠；用户切换后保存在本地。
+  try {
+    const stored = localStorage[GTO_COLLAPSED_KEY];
+    if (stored == null) return true;
+    return stored === "1";
+  } catch {
+    return true;
+  }
+}
 
 export function card2html(cards: Card[]): string {
   return cards
@@ -68,6 +85,7 @@ export default function GameHistory({
   previewLogs?: GameLogEntry[];
 }) {
   const [message, setMessage] = useState("");
+  const [gtoCollapsed, setGtoCollapsed] = useState<boolean>(loadGtoCollapsed);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveLogs = useAppSelector(selectGameHistory);
   const game = useAppSelector(selectGame);
@@ -107,6 +125,18 @@ export default function GameHistory({
     }
   };
 
+  const toggleGtoCollapsed = () => {
+    setGtoCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage[GTO_COLLAPSED_KEY] = next ? "1" : "0";
+      } catch {
+        // 隐私模式等场景下写入失败时忽略，仅本次会话生效。
+      }
+      return next;
+    });
+  };
+
   // Auto-grow the input as content wraps to new lines.
   useEffect(() => {
     const el = textareaRef.current;
@@ -144,7 +174,18 @@ export default function GameHistory({
           <small>TABLE FEED</small>
           <strong>牌局与聊天</strong>
         </div>
-        <span>{logs.length}</span>
+        <div className="live-detail-panel__heading-actions">
+          <button
+            type="button"
+            className={`gto-eye-toggle ${gtoCollapsed ? "" : "is-active"}`}
+            aria-label={gtoCollapsed ? "展开 GTO 建议" : "折叠 GTO 建议"}
+            title={gtoCollapsed ? "展开 GTO 建议" : "折叠 GTO 建议"}
+            onClick={toggleGtoCollapsed}
+          >
+            {gtoCollapsed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+          </button>
+          <span>{logs.length}</span>
+        </div>
       </header>
 
       <div
@@ -167,6 +208,7 @@ export default function GameHistory({
               <GtoAdviceCard
                 entry={log}
                 stale={isGtoStale(log)}
+                globalCollapsed={gtoCollapsed}
                 key={`${index}-${log.type}-${log.text}-${log.handSeq}`}
               />
             )

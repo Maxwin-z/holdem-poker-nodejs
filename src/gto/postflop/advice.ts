@@ -201,31 +201,11 @@ export function getPostflopAdvice(
         )
       : HAND_CATEGORY.HIGH_CARD;
 
+  // notes 只保留与每一手牌直接相关的信息；模型近似等通用说明走 limitations。
   const notes: string[] = [];
-  if (input.activeVillainCount === 1) {
-    notes.push(
-      "单挑局面：蒸馏神经网络策略（≈84% 求解器一致性）+ 范围启发式兜底"
-    );
-  } else {
-    notes.push(
-      `多人底池：范围感知启发式（对手继续范围 ${
-        decision.equityRangeCombos ?? "?"
-      } 个组合）`
-    );
-  }
   const texture = analyzeBoard(input.board).texture;
   notes.push(`牌面：${BOARD_TEXTURE_CN[texture]}`);
   notes.push(`手牌类别：${HAND_CATEGORY_CN[heroCat]}`);
-  if (decision.equityVsRange !== undefined) {
-    notes.push(
-      `对继续范围权益 ${pct(decision.equityVsRange)}${
-        decision.equityRangeCombos !== undefined
-          ? `（${decision.equityRangeCombos} 组合）`
-          : ""
-      }`
-    );
-  }
-  notes.push("参考范围为近似 GTO，非精确均衡；多人局为启发式修正");
 
   const handKey = handGroupName(input.heroCards[0], input.heroCards[1]);
   const hero: PostflopHeroAdvice = {

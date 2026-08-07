@@ -398,7 +398,6 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     .sort((a, b) => b.frequency - a.frequency);
 
   const potBB = round1(potBBFor(scenario, input));
-  notes.push("参考范围为 100bb 深码基准图表映射，非精确 Nash；多人局为近似修正");
 
   return {
     kind: "preflop",

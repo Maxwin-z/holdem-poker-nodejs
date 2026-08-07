@@ -2376,6 +2376,37 @@
   white-space: nowrap;
 }
 
+.live-detail-panel__heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gto-eye-toggle {
+  width: 28px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--live-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--live-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.gto-eye-toggle:hover {
+  color: var(--live-green);
+  border-color: rgba(47, 211, 155, 0.45);
+}
+
+.gto-eye-toggle.is-active {
+  color: var(--live-green);
+  border-color: rgba(47, 211, 155, 0.45);
+}
+
 .live-chat-log {
   min-height: 0;
   display: flex;
@@ -3890,8 +3921,9 @@
 .gto-advice-card--collapsed .gto-advice-card__summary {
   flex: 1;
   min-width: 0;
-  color: #a9c3b8;
+  color: var(--live-text);
   font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3995,6 +4027,40 @@
 .gto-advice-card__hint strong {
   color: #cfe7dc;
   font-weight: 600;
+}
+
+.gto-advice-card__tips {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.gto-advice-card__tips-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6c857c;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.gto-advice-card__tips-toggle:hover {
+  color: var(--live-green);
+}
+
+.gto-advice-card__tips-arrow {
+  font-size: 10px;
+}
+
+.gto-advice-card__tips-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .range-grid {
