@@ -1,8 +1,9 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../../app/store";
+import type { GameLogEntry } from "../../ApiType";
 
 export interface GameHistory {
-  logs: string[];
+  logs: GameLogEntry[];
 }
 
 const initialState: GameHistory = {
@@ -13,7 +14,7 @@ export const gameHistory = createSlice({
   name: "gamehistory",
   initialState,
   reducers: {
-    addLogs(state, action: PayloadAction<string[]>) {
+    addLogs(state, action: PayloadAction<GameLogEntry[]>) {
       state.logs = [...state.logs, ...action.payload];
     },
   },

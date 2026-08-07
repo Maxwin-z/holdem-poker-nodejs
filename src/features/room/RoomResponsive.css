@@ -2415,68 +2415,97 @@
   letter-spacing: 0.035em;
 }
 
+/* System feed lines are flat (no bubble) and alternate a subtle
+   background per hand, so hand boundaries read without heavy boxes. */
+.live-chat-log__item.is-system {
+  border-color: transparent;
+  background: transparent;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.live-chat-log__item.is-system:not(.is-hand-alt) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.live-chat-log__item.is-system.is-hand-alt {
+  background: rgba(255, 255, 255, 0.055);
+}
+
 .live-chat-composer {
   min-width: 0;
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  align-items: center;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.live-chat-composer textarea {
-  width: 100%;
+.live-chat-input {
   min-width: 0;
-  height: 48px;
-  min-height: 48px;
-  max-height: 96px;
-  padding: 9px 112px 9px 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
   border: 1px solid var(--live-line);
   border-radius: 13px;
-  outline: none;
-  resize: none;
-  color: var(--live-text);
   background: rgba(255, 255, 255, 0.045);
-  font-size: 12px;
-  line-height: 28px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.live-chat-composer textarea::placeholder {
-  color: #71877f;
-}
-
-.live-chat-composer textarea:focus {
+.live-chat-input:focus-within {
   border-color: rgba(47, 211, 155, 0.58);
   box-shadow: 0 0 0 3px rgba(47, 211, 155, 0.08);
 }
 
-.live-chat-composer > span {
-  position: absolute;
-  right: 58px;
-  color: #698078;
-  font-size: 8px;
-  pointer-events: none;
+.live-chat-input textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 22px;
+  max-height: 96px;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  color: var(--live-text);
+  background: transparent;
+  font-size: 12px;
+  line-height: 22px;
+  overflow-wrap: break-word;
 }
 
-.live-chat-composer button {
-  width: 40px;
-  height: 40px;
+.live-chat-input textarea::placeholder {
+  color: #71877f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-chat-input button {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 1px solid var(--live-green);
-  border-radius: 12px;
+  border-radius: 10px;
   color: #062017;
   background: var(--live-green);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
 }
 
-.live-chat-composer button:disabled {
+.live-chat-input button:disabled {
   color: #778c84;
   border-color: var(--live-line);
   background: rgba(255, 255, 255, 0.04);
   cursor: not-allowed;
+}
+
+.live-chat-composer__hint {
+  align-self: flex-end;
+  padding-right: 4px;
+  color: #698078;
+  font-size: 8px;
 }
 
 .live-chip-summary {
@@ -3579,4 +3608,466 @@
   .live-room-popconfirm button {
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============ GTO advice card (chat feed) ============ */
+.gto-advice-card {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(47, 211, 155, 0.35);
+  border-radius: 12px;
+  background: rgba(47, 211, 155, 0.07);
+  color: var(--live-text);
+}
+
+.gto-advice-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gto-advice-card__badge {
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #062017;
+  background: var(--live-green);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.gto-advice-card__head strong {
+  font-size: 13px;
+}
+
+.gto-advice-card__head small {
+  color: #71877f;
+  font-size: 11px;
+}
+
+.gto-advice-card__main {
+  margin-top: 8px;
+}
+
+.gto-advice-card__action {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.gto-advice-card__hero {
+  display: block;
+  margin-top: 4px;
+  color: #a9c3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gto-advice-card__hero-freq {
+  margin-left: 6px;
+  color: var(--live-green);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.gto-advice-card__bars-title {
+  margin-top: 8px;
+  color: #71877f;
+  font-size: 10px;
+}
+
+.gto-advice-card__bars {
+  margin-top: 8px;
+  display: grid;
+  gap: 5px;
+}
+
+.gto-advice-card__bar-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.gto-advice-card__bar {
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.gto-advice-card__bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.gto-advice-card__bar-row em {
+  color: #8fa39b;
+  font-size: 11px;
+  font-style: normal;
+  text-align: right;
+}
+
+.gto-advice-card__foot {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.gto-advice-card__foot small {
+  color: #6c857c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* ============ 翻后 GTO 建议卡片 ============ */
+.postflop-advice__board {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.postflop-advice__board-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 38px;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.postflop-advice__equity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  color: #71877f;
+  font-size: 11px;
+}
+
+.postflop-advice__equity strong {
+  color: var(--live-green);
+}
+
+.postflop-advice__notes {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+  color: #71877f;
+}
+
+.postflop-advice__notes small {
+  color: #71877f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.gto-advice-card__insight {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(47, 211, 155, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.gto-advice-card__insight-group {
+  display: grid;
+  gap: 2px;
+}
+
+.gto-advice-card__insight-title {
+  color: var(--live-green);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.gto-advice-card__insight-group small {
+  color: #71877f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* ============ 牌局日志美化 ============ */
+.log-player {
+  color: var(--live-text);
+  font-weight: 700;
+}
+
+.log-pos {
+  display: inline-block;
+  margin: 0 4px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(47, 211, 155, 0.14);
+  color: var(--live-green);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.log-act {
+  font-weight: 700;
+}
+
+.log-act--fold {
+  color: #ff7b80;
+}
+
+.log-act--call {
+  color: #5b9dff;
+}
+
+.log-act--raise,
+.log-act--bet {
+  color: #3ddc84;
+}
+
+.log-act--allin {
+  color: #c084fc;
+}
+
+.log-act--check {
+  color: #8fa39b;
+}
+
+.log-round-title {
+  color: #ffd166;
+  font-weight: 800;
+}
+
+.log-profit--win {
+  color: #3ddc84;
+  font-weight: 700;
+}
+
+.log-profit--lose {
+  color: #ff7b80;
+  font-weight: 700;
+}
+
+.log-banner {
+  margin: 8px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.log-banner--start {
+  color: #3ddc84;
+}
+
+.log-banner--end {
+  color: #ffb3b6;
+}
+
+/* ============ GTO 卡片折叠态 ============ */
+.gto-advice-card--collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.gto-advice-card--collapsed .gto-advice-card__summary {
+  flex: 1;
+  min-width: 0;
+  color: #a9c3b8;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gto-advice-card__toggle {
+  color: #6c857c;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.gto-advice-card__collapse {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8fa39b;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.gto-advice-card__collapse:hover {
+  color: var(--live-green);
+}
+
+.gto-advice-card__range {
+  margin-top: 10px;
+}
+
+.gto-advice-card__mode {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gto-advice-card__mode button {
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8fa39b;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.gto-advice-card__mode button.is-active {
+  background: rgba(47, 211, 155, 0.2);
+  color: var(--live-green);
+  font-weight: 700;
+}
+
+.gto-advice-card__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.gto-advice-card__tab {
+  padding: 2px 6px;
+  border: 1px solid rgba(47, 211, 155, 0.4);
+  border-radius: 8px;
+  background: transparent;
+  color: #8fa39b;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.gto-advice-card__tab.is-active {
+  border-color: var(--live-green);
+  color: var(--live-green);
+  background: rgba(47, 211, 155, 0.18);
+}
+
+.gto-advice-card__tab.is-current {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.gto-advice-card__grid-title {
+  margin: 6px 0;
+  color: #71877f;
+  font-size: 10px;
+}
+
+.gto-advice-card__hint {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #8fa39b;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.gto-advice-card__hint strong {
+  color: #cfe7dc;
+  font-weight: 600;
+}
+
+.range-grid {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  container-type: inline-size;
+}
+
+.range-grid__row {
+  display: grid;
+  grid-template-columns: 14px repeat(13, minmax(0, 1fr));
+  gap: 2px;
+  align-items: center;
+}
+
+.range-grid__row--header {
+  margin-bottom: 2px;
+}
+
+.range-grid__rank {
+  color: #71877f;
+  font-size: 8px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.range-grid__cell {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 7px;
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.range-grid__cell.is-hero {
+  outline: 1.5px solid #ffd700;
+  outline-offset: -1px;
+  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.35);
+}
+
+@supports (container-type: inline-size) {
+  .range-grid__cell {
+    font-size: clamp(5px, 1.9cqw, 7.5px);
+  }
+}
+
+.range-grid__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.range-grid__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #8fa39b;
+  font-size: 9px;
+}
+
+.range-grid__legend-item i {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  border-radius: 2px;
+}
+
+.range-grid__legend-item .is-hero-dot {
+  width: auto;
+  height: auto;
+  background: transparent;
+  border: 1px solid #ffd700;
+  border-radius: 2px;
 }

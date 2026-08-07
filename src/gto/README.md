@@ -1,0 +1,175 @@
+# 翻前 GTO 指导引擎（一期）
+
+预计算的翻前策略引擎：输入局面，输出建议动作、加注尺度、行动频率分布和
+参考范围。运行时不求解，全部数据打包在代码里，毫秒级返回，可直接在浏览器
+或 Node 服务端使用。
+
+## 覆盖范围
+
+- 玩家数：2-9 人局（10 人按 9 人处理）
+- 场景：
+  - `unopened`：无人进池，开池加注（RFI）
+  - `iso`：面对平跟，隔离加注
+  - `vs-open`：面对开池加注（跟注 / 3bet / 弃牌）
+  - `vs-3bet`：自己的加注被 3bet（跟注 / 4bet / 5bet 全下）
+  - `vs-4bet`：盲注位用图表，其他位置用 5bet 全下/弃牌简化规则
+- 位置：6-max 图表（UTG/MP/CO/BTN/SB/BB）映射到 2-9 人桌
+- 筹码：100bb 深码基准；≤20bb 自动切换 push/fold 全下/弃牌模型
+- 校准：`looseness` 支持 `tight` / `standard` / `loose`（默认 `standard`）
+- 多路修正：有 limper / cold call 时边缘手牌自动收紧，尺寸 +1bb/人
+
+## 数据来源
+
+- 主图表：GreenCharts2024（Greenline Poker），经 MIT 许可的 poker-charts
+  项目转载，见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
+- MP vs UTG、CO vs MP 两个缺失位置对：本地编写的标准近似表
+- ≤20bb push/fold：本地编写的近似 Nash 表（非精确解）
+
+## 使用
+
+```ts
+import { getPreflopAdvice, positionForDistance } from "./index";
+
+// 9 人桌，座位 3（=CO），庄家在座位 0
+const seat = positionForDistance(9, 3); // { label: "CO", chart: "CO" }
+
+const advice = getPreflopAdvice({
+  playerCount: 9,
+  heroPosition: seat.chart,
+  heroPositionLabel: seat.label,
+  effectiveStackBB: 100,
+  scenario: "vs-open",
+  villainPosition: "UTG",
+  openSizeBB: 3,
+  heroHand: "AhKh", // 可选；也可以只给类别 "AKs"
+  bigBlindChips: 2, // 可选，输出筹码数
+});
+
+advice.recommended;       // "raise"
+advice.recommendedSizeBB; // 10.5
+advice.hero.message;      // "建议加注到 10.5bb"
+advice.actionDistribution; // 范围整体各动作占比（按组合数加权）
+advice.ranges;             // 各动作对应的参考手牌列表
+```
+
+## 服务端 API
+
+`POST /api/gto/preflop`（服务端已有路由），请求体即
+`PreflopSituation`，返回 `PreflopAdvice`。
+
+```json
+{
+  "playerCount": 9,
+  "heroPosition": "BTN",
+  "effectiveStackBB": 100,
+  "scenario": "vs-open",
+  "villainPosition": "UTG",
+  "openSizeBB": 3,
+  "heroHand": "AKs"
+}
+```
+
+## 聊天窗口集成（游戏内展示）
+
+游戏内已接入：每次翻前轮到玩家行动时，服务端自动计算该手牌的 GTO 建议，
+以结构化日志（`type: "gto"`）只推送给当前行动玩家（保护手牌隐私），
+聊天窗口渲染为建议卡片（推荐动作 + 尺度 + 行动频率条）。聊天输入框的
+`GTO` 按钮可手动重新请求。
+
+服务端入口：`Game.publishGtoAdvice(token)`（`src/server/service/Room.ts`），
+局面构建见 `from-game-state.ts`。
+
+每次翻前建议（自动或手动触发）都会以 JSON 行追加写入
+`logs/gto-advice.jsonl`（房间、玩家、手牌、位置、筹码、场景、推荐动作、
+尺度、行动频率分布等），供离线分析使用。
+
+# 翻后 GTO 指导引擎（二期：flop / turn / river）
+
+翻后引擎移植自 [gto-poker-overlay](https://github.com/hellomate2/gto-poker-overlay)
+（MIT），运行时不求解，毫秒级返回，可直接在浏览器或 Node 服务端使用。
+
+## 覆盖范围
+
+- 街道：flop / turn / river（公共牌 ≥3 张）
+- 单挑局面（heads-up）：蒸馏神经网络策略（≈84% 求解器一致性），
+  配合“先行动方下注/过牌”策略（lead/c-bet policy）、面对下注时的
+  底池赔率硬底线（anti-punt）和同花面防护
+- 多人底池 / 兜底：范围感知启发式——把对手继续范围（继续范围模型
+  `range.ts`）显式枚举出来，用英雄对该范围的权益做决策，避免
+  “两对在四张同花面价值下注”这类被压制的典型失误
+- 合理性闸门（soundness gate）：任何路径的决策都过一遍“跟注价格 /
+  筹码承诺”检查，只做更保守的修正（弃牌/过牌）
+- 尺寸：按牌面纹理（干燥 1/3、湿润 2/3、河牌极化）+ 手牌强度给出
+  下注额；加注到约 2.5 倍当前下注，超出剩余筹码自动转为全下
+
+## 使用
+
+```ts
+import { getPostflopAdvice } from "./index";
+
+const advice = getPostflopAdvice({
+  street: "flop",
+  heroCards: [cardToId({ num: 14, suit: "h" }), cardToId({ num: 13, suit: "h" })],
+  board: [cardToId({ num: 9, suit: "d" }), ...],
+  pot: 120,
+  currentBet: 0,
+  heroBet: 0,
+  toCall: 0,
+  heroRemaining: 980,
+  bigBlind: 2,
+  effectiveStackBB: 100,
+  activeVillainCount: 1,
+  heroInPosition: true,
+  isPreflopAggressor: true,
+  preflopHasRaise: true,
+  threeBetPot: false,
+  streetBetCount: 0,
+  facedRaiseThisStreet: false,
+});
+
+advice.recommended;      // "bet" / "check" / "call" / "fold" / "raise" / "allin"
+advice.recommendedSizeChips; // 下注额或加注到总额（筹码）
+advice.actionDistribution;   // 行动频率分布（GTO 混合策略）
+advice.equityVsRange;        // 对继续范围权益（0-1）
+```
+
+## 服务端 API
+
+`POST /api/gto/postflop`，请求体即 `PostflopSituation`，返回
+`PostflopAdvice`（字段与上面示例一致）。
+
+## 游戏内展示
+
+游戏内已接入：flop / turn / river 每次轮到玩家行动时，服务端自动计算
+GTO 建议，以结构化日志（`type: "gto"`）只推送给当前行动玩家，
+聊天窗口渲染为翻后建议卡片（公共牌、推荐动作 + 尺寸、行动频率条、
+对继续范围权益、牌面纹理、推理说明），并展示两个附加区块：
+“近似/简化说明”（当前局面哪些部分不是精确均衡）和“实际情况偏移建议”
+（相对 GTO 基线的实战调整方向，如多人收紧、短码全下化、对手类型偏移等）。
+翻前卡片同样展示。聊天输入框的 `GTO` 按钮可手动重新请求。翻后建议同样
+写入 `logs/gto-advice.jsonl`（含街道、公共牌、权益等字段）。
+
+## 已知限制（诚实说明）
+
+- 蒸馏网络按单挑场景训练；多人底池走范围启发式，是“实用近似”而非
+  精确多人均衡。
+- 继续范围模型是启发式组合枚举，不是完整对手范围；为控制服务端延迟，
+  组合数上限 160（等间隔抽样）。
+- 翻后建议未考虑对手剥削性偏差，接近“GTO 基线”而非针对某对手的最优。
+- 商用发布前请核对模型训练数据（PokerBench）与算法（phevaluator）的
+  原始许可，见 THIRD_PARTY_NOTICES.md。
+
+## 测试
+
+```bash
+npm run test:gto
+```
+
+## 已知限制（诚实说明）
+
+- 图表是 100bb 深码 6-max 基准，其他筹码深度通过尺寸/全下规则近似，
+  没有按深度重新求解。
+- 多人底池是单挑图表的收紧修正，不是多人局精确均衡。
+- 短码 push/fold 表是近似值，不是精确 Nash；精确求解放到三期。
+- 4bet 位置（非盲注位）用的是 5bet 全下/弃牌简化规则。
+- 商用发布前请核对图表原始版权（见 THIRD_PARTY_NOTICES.md）。

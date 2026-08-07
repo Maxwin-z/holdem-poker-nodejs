@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import "colors";
+import * as fs from "fs";
+import * as path from "path";
 import { Token } from "./User";
 
 import { roomMap, userMap } from ".";
@@ -15,6 +17,16 @@ import {
 import { logGame } from "../tests/utils";
 import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
+import { buildPreflopAdvice } from "../../gto/preflop/from-game-state";
+import { positionForDistance } from "../../gto/preflop/positions";
+import { buildPostflopAdvice } from "../../gto/postflop/from-game-state";
+import type { GamePlayerState } from "../../gto/preflop/from-game-state";
+import type { PreflopAdvice } from "../../gto/preflop/types";
+import type {
+  PostflopActionRecord,
+  PostflopGamePlayerState,
+} from "../../gto/postflop/from-game-state";
+import type { PostflopAdvice } from "../../gto/postflop/types";
 import { calculateOvertimeCost } from "../../shared/overtime";
 import {
   DISCONNECTED_ACTION_GRACE_SECONDS,
@@ -61,6 +73,10 @@ export class Game {
   raiseUser: string = "";
   raiseBet: number = 0; // bet of the raise
   raiseBetDiff: number = 0; //  valid rasize count
+  raiseCount: number = 0; // raises this round (preflop scenario classification)
+  /** Per-street action log (fold/check/call/bet/raise/allin), used by the
+   *  postflop GTO engine to reconstruct betting context. */
+  actionHistory: PostflopActionRecord[] = [];
 
   multiSettleStart: boolean = false;
   multiSettleRound: GameRound = GameRound.PreFlop;
@@ -69,6 +85,7 @@ export class Game {
   multiSettleIndex: number = 0;
   multiSettleUsers: Token[] = [];
   multiSettleTimer = setTimeout(() => { }, 0);
+  handSeq: number = 0;
 
   runItOutBoardCardsByUser: { [token: string]: Card[] } = {};
 
@@ -92,6 +109,8 @@ export class Game {
     this.round = GameRound.PreFlop;
     this.roundLeader = "";
     this.raiseUser = "";
+    this.raiseCount = 0;
+    this.actionHistory = [];
 
     this.multiSettleStart = false;
     this.multiSettleRound = GameRound.PreFlop;
@@ -110,7 +129,10 @@ export class Game {
     console.log(new Array(10).fill("==").join(""));
     console.log("START:", this.sortedUsers);
     console.log(prettify(this.cards));
-    publishLog2all(this.roomid, ["====游戏开始===="]);
+    this.handSeq += 1;
+    publishLog2all(this.roomid, [
+      `<div class="log-banner log-banner--start">🂠 第 ${this.handSeq} 手开始</div>`,
+    ]);
 
     this.dealCards2User();
     this.doPreBet();
@@ -245,6 +267,9 @@ export class Game {
         this.raiseBetDiff = chips - this.raiseBet;
         this.raiseBet = chips;
       }
+      // Count accepted bets above the current max (valid raises and short
+      // all-ins) as a raise for preflop scenario classification.
+      this.raiseCount += 1;
       // user raise, other users need react
       this.sortedUsers
         .filter((t) => !userMap[t].isAllIn && !userMap[t].isFolded)
@@ -260,26 +285,43 @@ export class Game {
       chips
     );
 
-    let log = `${user.name} `;
+    const pos = this.positionLabelOf(token);
+    let log = `<strong class="log-player">${user.name}</strong><span class="log-pos">${pos}</span> `;
     const delta = chips - user.bets[this.round];
+    const actionType =
+      chips === availableStack && chips > preBets
+        ? "allin"
+        : delta === 0
+        ? "check"
+        : chips > preBets
+        ? preBets === 0
+          ? "bet"
+          : "raise"
+        : "call";
+    this.actionHistory.push({
+      round: this.round,
+      type: actionType,
+      token,
+      amount: chips,
+    });
     if (chips == availableStack) {
-      log += `AllIn $${chips}`;
+      log += `<span class="log-act log-act--allin">全下</span> ${chips}`;
       user.actionName = "AllIn";
     } else {
       if (delta == 0) {
-        log += `Check`;
+        log += `<span class="log-act log-act--check">过牌</span>`;
         user.actionName = "Check";
       } else {
         if (chips > preBets) {
           if (preBets == 0) {
-            log += `Bet $${chips}`;
+            log += `<span class="log-act log-act--bet">下注</span> ${chips}`;
             user.actionName = "Bet";
           } else {
-            log += `Raise to $${chips}`;
+            log += `<span class="log-act log-act--raise">加注到</span> ${chips}`;
             user.actionName = "Raise";
           }
         } else {
-          log += `Call $${chips}`;
+          log += `<span class="log-act log-act--call">跟注</span> ${chips}`;
           user.actionName = "Call";
         }
       }
@@ -303,9 +345,13 @@ export class Game {
       throw "not your action now";
     }
     console.log(`USER Fold: ${user.name}`.green, prettify(user.hands));
-    publishLog2all(this.roomid, [`${user.name} Fold`]);
+    const pos = this.positionLabelOf(token);
+    publishLog2all(this.roomid, [
+      `<strong class="log-player">${user.name}</strong><span class="log-pos">${pos}</span> <span class="log-act log-act--fold">弃牌</span>`,
+    ]);
     user.isFolded = true;
     user.actionName = "Fold";
+    this.actionHistory.push({ round: this.round, type: "fold", token });
     this.setActed(token);
     if (!this.decreaseActiveUserToSettle()) {
       this.nextActUser(token);
@@ -405,14 +451,16 @@ export class Game {
         (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
 
       logs.push(
-        `${user.name} ${user.shouldShowHand
+        `<strong class="log-player">${user.name}</strong> ${user.shouldShowHand
           ? `【${user.hands
             .map((c) => `${c.num}${c.suit}`)
             .join("")}】${p.maxCards
               ?.map((c) => `${c.num}${c.suit}`)
               .join("")} ${user.handsType} `
           : ""
-        }${profits >= 0 ? "win💰" : "lose"} ${profits}`
+        }<span class="log-profit log-profit--${
+          profits >= 0 ? "win" : "lose"
+        }">${profits >= 0 ? "+" : ""}${profits}</span>`
       );
       if (user.stack < this.smallBlind * 2 && user.nextBuyIn === null) {
         user.isReady = false;
@@ -451,6 +499,10 @@ export class Game {
       }, 3000);
       return;
     }
+
+    publishLog2all(this.roomid, [
+      `<div class="log-banner log-banner--end">💰 第 ${this.handSeq} 手结束</div>`,
+    ]);
 
     // next game
     roomMap[this.roomid].users.forEach((t) => {
@@ -598,6 +650,7 @@ export class Game {
     this.raiseUser = "";
     this.raiseBet = 0;
     this.raiseBetDiff = this.smallBlind * 2;
+    this.raiseCount = 0;
     const r = this.round;
     const roundName =
       r === GameRound.PreFlop
@@ -610,7 +663,17 @@ export class Game {
               ? "River"
               : "Invalid";
 
-    let log = `${roundName}: `;
+    const roundLabel =
+      r === GameRound.PreFlop
+        ? "翻前"
+        : r === GameRound.Flop
+          ? "翻牌"
+          : r === GameRound.Turn
+            ? "转牌"
+            : r === GameRound.River
+              ? "河牌"
+              : roundName;
+    let log = `<span class="log-round-title">${roundLabel}</span> `;
     // deal cards
     this.cardIndex += 1; // skip one
     if (this.round === GameRound.Flop) {
@@ -665,6 +728,151 @@ export class Game {
     user.actionTimeLimit = Math.ceil(delay / 1000);
     console.log("setActingUser", user.name);
     this.scheduleActionTimeout(token, delay);
+    this.publishGtoAdvice(token);
+  }
+
+  /**
+   * Compute GTO guidance for the acting player (preflop charts or the
+   * postflop engine) and push it only to that player's chat feed (hole cards
+   * must stay private). Returns whether advice was sent.
+   */
+  publishGtoAdvice(token: Token): boolean {
+    if (this.isSettling) return false;
+    try {
+      const players: Record<
+        string,
+        GamePlayerState & PostflopGamePlayerState
+      > = {};
+      for (const t of this.sortedUsers) {
+        const u = userMap[t];
+        players[t] = {
+          bet: u.bets[this.round],
+          totalBets: u.totalBets,
+          stack: u.stack,
+          isFolded: u.isFolded,
+          isAllIn: u.isAllIn,
+          hands: u.hands,
+        };
+      }
+      let advice: PreflopAdvice | PostflopAdvice | null = null;
+      if (this.round === GameRound.PreFlop) {
+        const lastRaiserToken = this.raiseUser
+          ? this.sortedUsers.find(
+              (t) => userMap[t].chipsRecordID === this.raiseUser
+            )
+          : undefined;
+        advice = buildPreflopAdvice({
+          sortedUsers: this.sortedUsers,
+          players,
+          bbChips: this.smallBlind * 2,
+          actingToken: token,
+          lastRaiserToken,
+          raiseCount: this.raiseCount,
+        });
+      } else {
+        advice = buildPostflopAdvice({
+          round: this.round,
+          sortedUsers: this.sortedUsers,
+          players,
+          boardCards: this.boardCards,
+          bbChips: this.smallBlind * 2,
+          actingToken: token,
+          actionHistory: this.actionHistory,
+          heroPositionLabel: this.positionLabelOf(token),
+        });
+      }
+      if (!advice) return false;
+      send2user(token, {
+        logs: [
+          {
+            type: "gto",
+            text: advice.hero?.message || "GTO 建议",
+            data: advice,
+            actingId: userMap[token].chipsRecordID,
+            handSeq: this.handSeq,
+          },
+        ],
+      });
+      console.log(
+        "[GTO]",
+        userMap[token].name,
+        advice.heroHandKey || "-",
+        advice.kind === "preflop" ? advice.scenario : advice.street,
+        advice.heroPositionLabel,
+        "=>",
+        advice.recommended,
+        advice.recommendedSizeBB ?? advice.recommendedSizeChips ?? "-"
+      );
+      this.writeGtoLog(advice, token);
+      return true;
+    } catch (e) {
+      console.warn("publishGtoAdvice failed:", e);
+      return false;
+    }
+  }
+
+  /**
+   * Persist every GTO suggestion to logs/gto-advice.jsonl for offline
+   * analysis. Compact record: no range grids, only decision-relevant fields.
+   */
+  private writeGtoLog(advice: PreflopAdvice | PostflopAdvice, token: Token) {
+    try {
+      const dir = path.join(process.cwd(), "logs");
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const user = userMap[token];
+      const common = {
+        ts: new Date().toISOString(),
+        roomid: this.roomid,
+        player: user.name,
+        hand: advice.heroHandKey,
+        position: advice.heroPositionLabel,
+        recommended: advice.recommended,
+        sizeBB: advice.recommendedSizeBB,
+        sizeChips: advice.recommendedSizeChips,
+        distribution: advice.actionDistribution,
+        notes: advice.notes,
+      };
+      const record = {
+        ...common,
+        ...(advice.kind === "preflop"
+          ? {
+              stage: "preflop",
+              stackBB: advice.stackBB,
+              potBB: advice.potBB,
+              scenario: advice.scenario,
+              villainPosition: advice.villainPosition,
+            }
+          : {
+              stage: advice.street,
+              board: advice.board.join(" "),
+              stackBB: advice.effectiveStackBB,
+              potBB: advice.potBB,
+              equityVsRandom: advice.equityVsRandom,
+              equityVsRange: advice.equityVsRange,
+              equityRangeCombos: advice.equityRangeCombos,
+            }),
+      };
+      fs.appendFileSync(
+        path.join(dir, "gto-advice.jsonl"),
+        JSON.stringify(record) + "\n"
+      );
+    } catch (e) {
+      console.warn("writeGtoLog failed:", e);
+    }
+  }
+
+  /** Real seat label for a player in this hand (SB/BB/CO/BTN/...). */
+  private positionLabelOf(token: Token): string {
+    const n = this.sortedUsers.length;
+    if (n < 2) return "";
+    const idx = this.sortedUsers.indexOf(token);
+    if (idx < 0) return "";
+    const count = Math.min(Math.max(n, 2), 9);
+    const buttonIndex = n > 2 ? n - 1 : 0;
+    const dist = Math.min((idx - buttonIndex + n) % n, count - 1);
+    return positionForDistance(count, dist).label;
   }
   handleUserDisconnected(token: Token) {
     const user = userMap[token];

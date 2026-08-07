@@ -379,3 +379,7 @@ export function ws_sendMessage(message: string) {
     message,
   });
 }
+
+export function ws_requestGtoAdvice() {
+  send2server({ action: ActionType.GTO_ADVICE });
+}

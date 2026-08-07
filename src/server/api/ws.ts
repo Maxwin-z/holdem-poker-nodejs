@@ -19,6 +19,7 @@ import {
   userWatch,
   userSendMessage,
   userSetNextBuyIn,
+  userRequestGtoAdvice,
 } from "../service";
 import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
@@ -197,6 +198,9 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.SEND_MESSAGE:
       userSendMessage(token, data.message);
       break;
+    case ActionType.GTO_ADVICE:
+      userRequestGtoAdvice(token);
+      break;
   }
   if (data.action !== ActionType.LEAVE) {
     publish(token, data, ws);
@@ -238,13 +242,14 @@ function getSimpleGame(game: Game): SimpleGame {
       acting: "",
       preBet: 0,
       bb: 0,
-      isSettling: false,
-      nextGameTime: 0,
-      raiseUser: "",
-      raiseBet: 0,
-      raiseBetDiff: 0,
-      userCount: 0,
-    };
+    isSettling: false,
+    nextGameTime: 0,
+    raiseUser: "",
+    raiseBet: 0,
+    raiseBetDiff: 0,
+    userCount: 0,
+    handSeq: 0,
+  };
   }
   const actingUser =
     game.sortedUsers.filter((t) => userMap[t].isActing)[0] || null;
@@ -263,6 +268,7 @@ function getSimpleGame(game: Game): SimpleGame {
     raiseBet: game.raiseBet,
     raiseBetDiff: game.raiseBetDiff,
     userCount: game.sortedUsers.length,
+    handSeq: game.handSeq,
   };
 }
 

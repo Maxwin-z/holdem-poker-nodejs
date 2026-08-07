@@ -1,3 +1,6 @@
+import type { PreflopAdvice } from "./gto/preflop/types";
+import type { PostflopAdvice } from "./gto/postflop/types";
+
 export interface ApiRspSuccess {
   code: 0;
   data: any;
@@ -25,6 +28,7 @@ export interface SimpleGame {
   raiseBetDiff: number; // valid rasize count
   preBet: number;
   bb: number;
+  handSeq: number;
   isSettling: boolean;
   nextGameTime: number;
   userCount: number;
@@ -103,4 +107,18 @@ export enum ActionType {
   SET_SETTLE_TIMES = "SET_SETTLE_TIMES",
   RUN_IT_OUT = "RUN_IT_OUT",
   SEND_MESSAGE = "SEND_MESSAGE",
+  GTO_ADVICE = "GTO_ADVICE",
 }
+
+/** Structured GTO guidance entry displayed in the chat feed. */
+export interface GtoLogEntry {
+  type: "gto";
+  text: string;
+  data: PreflopAdvice | PostflopAdvice;
+  /** The acting player's chips-record id at the time of the advice. */
+  actingId: string;
+  /** Hand sequence number, used to auto-collapse stale advice cards. */
+  handSeq: number;
+}
+
+export type GameLogEntry = string | GtoLogEntry;

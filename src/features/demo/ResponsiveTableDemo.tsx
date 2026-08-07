@@ -204,6 +204,7 @@ function buildPreview(demoState: DemoState) {
     raiseBetDiff: 160,
     preBet: 240,
     bb: 40,
+    handSeq: 0,
     isSettling: isShowdown,
     nextGameTime: Date.now() + 10000,
     userCount: 10,

@@ -328,3 +328,17 @@ export function userSendMessage(token: Token, message: string) {
       .replace(/ /g, "&nbsp;")
     }`]);
 }
+
+export function userRequestGtoAdvice(token: Token) {
+  const user = userMap[token];
+  const room = roomMap[user.roomid];
+  if (!room) throw "不在房间中";
+  const game = room.game;
+  if (!game) throw "游戏未开始";
+  const sent = game.publishGtoAdvice(token);
+  if (!sent) {
+    send2user(token, {
+      logs: ["现在不是行动轮次，暂时无法给出 GTO 建议"],
+    });
+  }
+}

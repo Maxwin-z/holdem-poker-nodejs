@@ -52,6 +52,7 @@
     "test:autoplay": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay.test.ts",
     "test:autoplay-single": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay-single.ts",
     "test:overtime": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/overtime.test.ts",
+    "test:gto": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/gto/tests/*.test.ts",
     "watch-server": "nodemon --watch './src/server/***/*.ts' -e ts,tsx --exec 'ts-node' ./src/server/app-server.ts"
   },
   "eslintConfig": {

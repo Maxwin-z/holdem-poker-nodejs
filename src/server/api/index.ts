@@ -3,6 +3,8 @@ import * as jwt from "jsonwebtoken";
 import { secret } from "../config";
 import { createRoom, roomMap, userEnterRoom, userMap } from "../service";
 import User from "../service/User";
+import { getPreflopAdvice } from "../../gto/preflop/advice";
+import { getPostflopAdvice } from "../../gto/postflop/advice";
 
 const router = new Router();
 export default router;
@@ -71,4 +73,14 @@ router.post("/joinroom", (ctx) => {
   const { roomid } = ctx.request.body;
   userEnterRoom(token, roomid);
   ctx.data = roomid;
+});
+
+router.post("/gto/preflop", (ctx) => {
+  const body = (ctx.request.body || {}) as Record<string, unknown>;
+  ctx.data = getPreflopAdvice(body as any);
+});
+
+router.post("/gto/postflop", (ctx) => {
+  const body = (ctx.request.body || {}) as Record<string, unknown>;
+  ctx.data = getPostflopAdvice(body as any);
 });
