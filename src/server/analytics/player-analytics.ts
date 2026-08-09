@@ -10,7 +10,7 @@ import type {
   RateMetric,
 } from "../../shared/playerAnalytics";
 
-type SqliteDatabase = {
+export type AnalyticsSqliteDatabase = {
   exec(sql: string): void;
   prepare(sql: string): {
     run(...params: any[]): any;
@@ -52,14 +52,18 @@ function defaultDatabasePath() {
 }
 
 export class PlayerAnalyticsStore {
-  private db: SqliteDatabase;
+  private db: AnalyticsSqliteDatabase;
 
-  constructor(filename = defaultDatabasePath()) {
-    const sqlite = require("node:sqlite") as {
-      DatabaseSync: new (filename: string) => SqliteDatabase;
-    };
-    this.db = new sqlite.DatabaseSync(filename);
-    this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  constructor(source: string | AnalyticsSqliteDatabase = defaultDatabasePath()) {
+    if (typeof source === "string") {
+      const sqlite = require("node:sqlite") as {
+        DatabaseSync: new (filename: string) => AnalyticsSqliteDatabase;
+      };
+      this.db = new sqlite.DatabaseSync(source);
+      this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+    } else {
+      this.db = source;
+    }
     this.migrate();
   }
 
@@ -400,6 +404,10 @@ function buildInsights(core: PlayerAnalyticsReport["core"], hands: number): Anal
 }
 
 let singleton: PlayerAnalyticsStore | undefined;
+
+export function setPlayerAnalyticsStore(store: PlayerAnalyticsStore) {
+  singleton = store;
+}
 
 export function getPlayerAnalyticsStore(): PlayerAnalyticsStore {
   if (!singleton) singleton = new PlayerAnalyticsStore();

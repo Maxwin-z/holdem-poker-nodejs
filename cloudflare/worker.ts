@@ -12,6 +12,12 @@ import {
   userMap,
 } from "../src/server/service";
 import User from "../src/server/service/User";
+import {
+  PlayerAnalyticsStore,
+  setPlayerAnalyticsStore,
+} from "../src/server/analytics/player-analytics";
+import type { AnalyticsSqliteDatabase } from "../src/server/analytics/player-analytics";
+import type { AnalyticsWindow } from "../src/shared/playerAnalytics";
 
 interface Env {
   ASSETS: Fetcher;
@@ -32,7 +38,37 @@ const API_PATHS = new Set([
   "/currentroom",
   "/createroom",
   "/joinroom",
+  "/api/me/stats",
 ]);
+
+type DurableSqlCursor = {
+  toArray(): Record<string, unknown>[];
+};
+
+type DurableSqlStorage = {
+  exec(query: string, ...bindings: any[]): DurableSqlCursor;
+};
+
+function analyticsDatabase(sql: DurableSqlStorage): AnalyticsSqliteDatabase {
+  return {
+    exec(query: string) {
+      sql.exec(query).toArray();
+    },
+    prepare(query: string) {
+      return {
+        run(...params: any[]) {
+          sql.exec(query, ...params).toArray();
+        },
+        get(...params: any[]) {
+          return sql.exec(query, ...params).toArray()[0];
+        },
+        all(...params: any[]) {
+          return sql.exec(query, ...params).toArray();
+        },
+      };
+    },
+  };
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -93,10 +129,17 @@ function ensureUser(token: string, name: string): User {
 }
 
 export class PokerServer {
+  private readonly analytics: PlayerAnalyticsStore;
+
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env
-  ) {}
+  ) {
+    this.analytics = new PlayerAnalyticsStore(
+      analyticsDatabase(state.storage.sql as unknown as DurableSqlStorage)
+    );
+    setPlayerAnalyticsStore(this.analytics);
+  }
 
   async fetch(request: Request): Promise<Response> {
     try {
@@ -114,6 +157,8 @@ export class PokerServer {
           return this.register(request);
         case "GET /currentroom":
           return this.currentRoom(request);
+        case "GET /api/me/stats":
+          return this.playerStats(request, url);
         case "POST /createroom":
           return this.createRoom(request);
         case "POST /joinroom":
@@ -154,6 +199,17 @@ export class PokerServer {
   private currentRoom(request: Request): Response {
     const { token, name } = authenticatedUser(request, this.env.JWT_SECRET);
     return success(ensureUser(token, name).roomid || null);
+  }
+
+  private playerStats(request: Request, url: URL): Response {
+    const { token } = authenticatedUser(request, this.env.JWT_SECRET);
+    const requested = url.searchParams.get("window") || "100";
+    const window: AnalyticsWindow = requested === "all"
+      ? "all"
+      : ([20, 50, 100, 500].includes(Number(requested))
+        ? Number(requested) as 20 | 50 | 100 | 500
+        : 100);
+    return success(this.analytics.getReport(token, window));
   }
 
   private async createRoom(request: Request): Promise<Response> {
