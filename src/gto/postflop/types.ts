@@ -101,6 +101,8 @@ export interface PostflopAdvice {
   equityVsRange?: number;
   /** Number of villain combos evaluated for the range equity. */
   equityRangeCombos?: number;
+  /** Hand-group keys of the evaluated continuing range (≤ 160 combos). */
+  continuingRange?: string[];
   heroHandKey: string;
   actionDistribution: PostflopActionDistribution;
   recommended: PostflopAction;

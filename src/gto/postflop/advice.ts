@@ -248,6 +248,7 @@ export function getPostflopAdvice(
         ? round1(decision.equityVsRange)
         : undefined,
     equityRangeCombos: decision.equityRangeCombos,
+    continuingRange: decision.equityRange,
     heroHandKey: handKey,
     actionDistribution: dist,
     recommended,

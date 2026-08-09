@@ -122,14 +122,33 @@ describe("GtoAdviceCard 全局折叠", () => {
     expect(screen.getByText(/对继续范围权益/)).toBeInTheDocument();
     expect(screen.getByText("实际情况偏移建议")).toBeInTheDocument();
 
-    // 通用说明（频率条解释 + 近似说明）默认折叠
+    // 通用说明（频率条解释 + 名词解释 + 近似说明）默认折叠
     expect(screen.getByText("通用说明")).toBeInTheDocument();
     expect(screen.queryByText(/频率条/)).not.toBeInTheDocument();
+    expect(screen.queryByText("名词解释")).not.toBeInTheDocument();
     expect(screen.queryByText(/蒸馏神经网络近似/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("通用说明"));
     expect(screen.getByText(/频率条/)).toBeInTheDocument();
+    expect(screen.getByText("名词解释")).toBeInTheDocument();
+    expect(screen.getByText("有效筹码")).toBeInTheDocument();
     expect(screen.getByText(/蒸馏神经网络近似/)).toBeInTheDocument();
+  });
+
+  it("继续范围明细以二维表展示，可折叠", () => {
+    const entry = postflopEntry();
+    render(<GtoAdviceCard entry={entry} globalCollapsed={false} />);
+
+    // 继续范围明细默认展开（类似翻前牌力表），展示表格与图例
+    expect(screen.getByText(/继续范围明细/)).toBeInTheDocument();
+    expect(
+      screen.getByText("继续范围（颜色越深组合越多）")
+    ).toBeInTheDocument();
+    expect(screen.getByText("不在范围")).toBeInTheDocument();
+
+    // 折叠后表格隐藏
+    fireEvent.click(screen.getByText(/继续范围明细/));
+    expect(screen.queryByText("不在范围")).not.toBeInTheDocument();
   });
 
   it("眼睛图标控制全局展开/折叠并持久化到 localStorage", () => {

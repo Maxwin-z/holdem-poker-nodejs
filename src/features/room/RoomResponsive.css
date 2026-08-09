@@ -4063,6 +4063,33 @@
   margin-top: 6px;
 }
 
+.gto-advice-card__glossary {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.gto-advice-card__glossary-item {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.gto-advice-card__glossary-item dt {
+  color: #9fb8ad;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.gto-advice-card__glossary-item dd {
+  margin: 0;
+  color: #71877f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .range-grid {
   display: grid;
   gap: 2px;
@@ -4109,10 +4136,38 @@
   box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.35);
 }
 
+.range-grid__cell.is-out {
+  color: #55635e;
+}
+
 @supports (container-type: inline-size) {
   .range-grid__cell {
     font-size: clamp(5px, 1.9cqw, 7.5px);
   }
+}
+
+.postflop-advice__range {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.gto-advice-card__range-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.08);
+  color: #8fb8a6;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.gto-advice-card__range-toggle:hover {
+  color: var(--live-green);
 }
 
 .range-grid__legend {

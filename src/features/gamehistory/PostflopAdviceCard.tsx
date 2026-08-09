@@ -4,6 +4,7 @@ import type {
   PostflopAction,
 } from "../../gto/postflop/types";
 import GtoTips from "./GtoTips";
+import PostflopRangeGrid from "./PostflopRangeGrid";
 
 const ACTION_META: Record<
   PostflopAction,
@@ -37,6 +38,7 @@ export default function PostflopAdviceCard({
   globalCollapsed?: boolean;
 }) {
   const [expanded, setExpanded] = useState(!stale && !globalCollapsed);
+  const [rangeOpen, setRangeOpen] = useState(true);
   useEffect(() => {
     if (stale) setExpanded(false);
   }, [stale]);
@@ -160,6 +162,32 @@ export default function PostflopAdviceCard({
           <strong>{Math.round(advice.equityVsRandom * 100)}%</strong>
         </span>
       </div>
+
+      {advice.continuingRange && advice.continuingRange.length > 0 && (
+        <div className="postflop-advice__range">
+          <button
+            type="button"
+            className="gto-advice-card__range-toggle"
+            aria-expanded={rangeOpen}
+            onClick={() => setRangeOpen((v) => !v)}
+          >
+            <span>
+              继续范围明细（
+              {advice.equityRangeCombos ?? advice.continuingRange.length}{" "}
+              组合）
+            </span>
+            <span className="gto-advice-card__tips-arrow">
+              {rangeOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          {rangeOpen && (
+            <PostflopRangeGrid
+              combos={advice.continuingRange}
+              heroHandKey={advice.heroHandKey}
+            />
+          )}
+        </div>
+      )}
 
       {advice.notes.length > 0 && (
         <div className="postflop-advice__notes">

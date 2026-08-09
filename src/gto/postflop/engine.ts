@@ -13,7 +13,7 @@
  * the equilibrium mix.
  */
 
-import { CardId } from "./cards";
+import { CardId, handGroupName } from "./cards";
 import { evaluateHand, HAND_CATEGORY } from "./hand-eval";
 import { equityVsRange } from "./equity";
 import { villainContinuingRange } from "./range";
@@ -45,6 +45,8 @@ export interface PostflopDecision {
   mixedStrategy: PostflopMixedStrategy;
   equityVsRange?: number;
   equityRangeCombos?: number;
+  /** Hand-group keys of the villain combos actually evaluated (≤ 160). */
+  equityRange?: string[];
 }
 
 /** Cap the continuing-range combo count for bounded server latency. */
@@ -265,12 +267,14 @@ function decidePostflopNet(
 
   let eqR: number | undefined;
   let eqCombos: number | undefined;
+  let eqRange: string[] | undefined;
 
   // Anti-punt pot-odds floor facing a bet.
   if (facingBet && finalAction !== "fold") {
     const r = equityVsContinuingRange(sit, true);
     eqR = r.eqR;
     eqCombos = r.combos;
+    eqRange = r.range;
     const potOdds = sit.toCall / (sit.pot + sit.toCall);
     if (eqR < potOdds + 0.02) {
       return {
@@ -280,6 +284,7 @@ function decidePostflopNet(
         mixedStrategy: { fold: 1, check: 0, call: 0, bets: [] },
         equityVsRange: eqR,
         equityRangeCombos: eqCombos,
+        equityRange: eqRange,
       };
     }
     if (finalAction === "raise" && eqR < 0.6) finalAction = "call";
@@ -367,6 +372,7 @@ function decidePostflopNet(
     mixedStrategy,
     equityVsRange: eqR,
     equityRangeCombos: eqCombos,
+    equityRange: eqRange,
   };
 }
 
@@ -382,21 +388,22 @@ function decidePostflopRanged(
 ): PostflopDecision {
   const facingBet = sit.toCall > 0;
   const aggression = facingBet;
-  const { eqR, combos } = equityVsContinuingRange(sit, aggression);
+  const { eqR, combos, range } = equityVsContinuingRange(sit, aggression);
   const pairedBoard = board.isPaired;
   const twoPairType = heroCat === HAND_CATEGORY.TWO_PAIR;
   const dominatedByBoard = dangerousFlush || (pairedBoard && twoPairType);
 
   if (facingBet) {
-    return rangedFacingBet(sit, eqR, combos, dominatedByBoard, heroCat);
+    return rangedFacingBet(sit, eqR, combos, range, dominatedByBoard, heroCat);
   }
-  return rangedFirstToAct(sit, eqR, combos, board, dangerousFlush, heroCat);
+  return rangedFirstToAct(sit, eqR, combos, range, board, dangerousFlush, heroCat);
 }
 
 function rangedFacingBet(
   sit: PostflopSituation,
   eqR: number,
   combos: number,
+  range: string[],
   dominatedByBoard: boolean,
   heroCat: number
 ): PostflopDecision {
@@ -422,6 +429,7 @@ function rangedFacingBet(
       },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -448,6 +456,7 @@ function rangedFacingBet(
       },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -460,6 +469,7 @@ function rangedFacingBet(
       mixedStrategy: { fold: 0, check: 0, call: 1, bets: [] },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -470,6 +480,7 @@ function rangedFacingBet(
     mixedStrategy: { fold: 1, check: 0, call: 0, bets: [] },
     equityVsRange: eqR,
     equityRangeCombos: combos,
+    equityRange: range,
   };
 }
 
@@ -477,6 +488,7 @@ function rangedFirstToAct(
   sit: PostflopSituation,
   eqR: number,
   combos: number,
+  range: string[],
   board: BoardAnalysis,
   dangerousFlush: boolean,
   heroCat: number
@@ -501,6 +513,7 @@ function rangedFirstToAct(
       mixedStrategy: { fold: 0, check: 1, call: 0, bets: [] },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -519,6 +532,7 @@ function rangedFirstToAct(
       },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -540,6 +554,7 @@ function rangedFirstToAct(
       },
       equityVsRange: eqR,
       equityRangeCombos: combos,
+      equityRange: range,
     };
   }
 
@@ -550,6 +565,7 @@ function rangedFirstToAct(
     mixedStrategy: { fold: 0, check: 1, call: 0, bets: [] },
     equityVsRange: eqR,
     equityRangeCombos: combos,
+    equityRange: range,
   };
 }
 
@@ -560,7 +576,7 @@ function rangedFirstToAct(
 function equityVsContinuingRange(
   sit: PostflopSituation,
   aggression: boolean
-): { eqR: number; combos: number } {
+): { eqR: number; combos: number; range: string[] } {
   const range = villainContinuingRange(sit.heroCards, sit.board, {
     aggression,
     multiway: sit.activeVillainCount > 1,
@@ -571,7 +587,11 @@ function equityVsContinuingRange(
     evalRange = range.filter((_, i) => i % stride === 0);
   }
   const res = equityVsRange(sit.heroCards, sit.board, evalRange, 3000);
-  return { eqR: res.equity, combos: res.combos };
+  return {
+    eqR: res.equity,
+    combos: res.combos,
+    range: evalRange.map(([a, b]) => handGroupName(a, b)),
+  };
 }
 
 function heroHoldsRelevantFlush(
@@ -633,7 +653,12 @@ function applySoundnessGate(
   if (eqVsRange === undefined) {
     const r = equityVsContinuingRange(sit, facingBet);
     eqVsRange = r.eqR;
-    decision = { ...decision, equityVsRange: r.eqR, equityRangeCombos: r.combos };
+    decision = {
+      ...decision,
+      equityVsRange: r.eqR,
+      equityRangeCombos: r.combos,
+      equityRange: r.range,
+    };
   }
 
   const result = evaluateSoundness({
