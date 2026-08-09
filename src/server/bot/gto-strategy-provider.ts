@@ -101,6 +101,7 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
         actingToken: request.actingToken,
         lastRaiserToken: request.lastRaiserToken,
         raiseCount: request.raiseCount,
+        minimumRaiseToChips: request.minimumRaiseTo,
         looseness: request.style,
       });
       if (!advice?.hero) return null;
@@ -111,8 +112,8 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
         allin: advice.hero.action === "allin" ? 100 : 0,
       };
       const sizeFor = (action: BotAction) =>
-        advice.actions.find((entry) => entry.action === action)?.sizeChips ||
-        (advice.hero?.action === action ? advice.hero.sizeChips : undefined);
+        (advice.hero?.action === action ? advice.hero.sizeChips : undefined) ||
+        advice.actions.find((entry) => entry.action === action)?.sizeChips;
       const choices = (["fold", "call", "raise", "allin"] as BotAction[]).map(
         (action) => ({
           action,
@@ -124,6 +125,25 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
         choices: calibrate(choices, request),
         fallbackAction: advice.hero.action,
         source: `${this.id}:preflop`,
+        diagnostics: {
+          scenario: advice.scenario,
+          heroPosition: advice.heroPosition,
+          villainPosition: advice.villainPosition,
+          stackBB: advice.stackBB,
+          heroStackBB: advice.heroStackBB,
+          opponentEffectiveStacksBB: advice.opponentEffectiveStacksBB,
+          liveResponderEffectiveStackBB:
+            advice.liveResponderEffectiveStackBB,
+          amountToCallBB: advice.amountToCallBB,
+          callPotOdds: advice.callPotOdds,
+          potBB: advice.potBB,
+          heroHandKey: advice.heroHandKey,
+          recommended: advice.recommended,
+          recommendedSizeBB: advice.recommendedSizeBB,
+          recommendedSizeChips: advice.recommendedSizeChips,
+          notes: advice.notes,
+          limitations: advice.limitations,
+        },
       };
     }
 
@@ -150,6 +170,12 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
       fallbackAction: advice.recommended,
       equityVsRange: advice.equityVsRange,
       source: `${this.id}:postflop`,
+      diagnostics: {
+        heroPosition: request.heroPositionLabel,
+        recommended: advice.recommended,
+        recommendedSizeChips: advice.recommendedSizeChips,
+        equityVsRange: advice.equityVsRange,
+      },
     };
   }
 }

@@ -13,7 +13,14 @@ import {
   SB_SHOVE,
   nearestTable,
 } from "./data/pushfold";
-import { HAND_ORDER, RANKS, comboCount, expandRange, normalizeHandKey } from "./hand";
+import {
+  HAND_ORDER,
+  RANKS,
+  comboCount,
+  expandRange,
+  handStrength,
+  normalizeHandKey,
+} from "./hand";
 import {
   applyCalibration,
   applyMultiwayTightening,
@@ -27,6 +34,7 @@ import {
   investedBB,
   isoSizeBB,
   rfiSizeBB,
+  roundBB,
   threeBetSizeBB,
   toChips,
 } from "./sizing";
@@ -50,9 +58,37 @@ const SCENARIOS: PreflopScenario[] = ["unopened", "iso", "vs-open", "vs-3bet", "
 const JAM_HANDS = new Set(["AA", "KK", "QQ", "AKs", "AKo", "JJ"]);
 const DATA_SOURCE =
   "GreenCharts2024 (Greenline Poker) 预计算图表 + 本地近似调整";
+const JAM_REMAINING_STACK_RATIO = 0.12;
+const JAM_REMAINING_STACK_BB = 2;
+const AUTO_CALL_MAX_STACK_RATIO = 0.08;
+const DEEP_STACK_NO_AUTO_JAM_BB = 120;
 
 function round1(x: number): number {
   return Math.round(x * 10) / 10;
+}
+
+function normalizedDistribution(
+  distribution: ActionDistribution
+): ActionDistribution {
+  const total = ACTIONS.reduce(
+    (sum, action) => sum + Math.max(0, distribution[action]),
+    0
+  );
+  if (total <= 0) return { fold: 100, call: 0, raise: 0, allin: 0 };
+  return {
+    fold: round1((Math.max(0, distribution.fold) / total) * 100),
+    call: round1((Math.max(0, distribution.call) / total) * 100),
+    raise: round1((Math.max(0, distribution.raise) / total) * 100),
+    allin: round1((Math.max(0, distribution.allin) / total) * 100),
+  };
+}
+
+function dominantAction(distribution: ActionDistribution): PreflopAction {
+  let best: PreflopAction = "fold";
+  for (const action of ACTIONS) {
+    if (distribution[action] > distribution[best]) best = action;
+  }
+  return best;
 }
 
 function toHandSet(hands: string[]): Set<string> {
@@ -177,6 +213,17 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     throw new Error(`${scenario} 场景需要提供 villainPosition`);
   }
 
+  const heroStackBB = input.heroStackBB ?? stackBB;
+  const amountToCallBB = Math.max(0, input.amountToCallBB ?? 0);
+  const contestablePotBB = Math.max(
+    0,
+    input.contestablePotBB ?? potBBFor(scenario, input)
+  );
+  const callPotOdds =
+    amountToCallBB > 0
+      ? amountToCallBB / (contestablePotBB + amountToCallBB)
+      : 0;
+
   const looseness = input.looseness || "standard";
   const notes: string[] = [];
   if (input.playerCount >= 10) notes.push("10 人局按 9 人局处理");
@@ -220,6 +267,20 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
   const shortStack = stackBB <= 20 && !pushFold;
   if (shortStack) notes.push(`短码 ${stackBB}bb：加注建议改为全下`);
 
+  // In the source vs-3bet charts, `allin` labels the premium hands that
+  // 4bet and then continue against a 5bet shove. It is not an instruction to
+  // open-jam the full stack over the 3bet. Translate that chart semantics into
+  // the action for the current decision; the stack-commitment logic below can
+  // still turn the normal 4bet into a shove when the raise would leave too
+  // little behind.
+  const chartActionForCurrentDecision = (
+    action: PreflopAction
+  ): PreflopAction => {
+    const translated =
+      scenario === "vs-3bet" && action === "allin" ? "raise" : action;
+    return shortStack && translated === "raise" ? "allin" : translated;
+  };
+
   const actionFor = (
     handKey: string
   ): { action: PreflopAction; freq: number } => {
@@ -245,7 +306,10 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
         best = a;
       }
     }
-    return { action: best, freq: bestFreq };
+    return {
+      action: chartActionForCurrentDecision(best),
+      freq: bestFreq,
+    };
   };
 
   const distributionFor = (handKey: string): ActionDistribution => {
@@ -269,17 +333,15 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
       }
     }
 
+    if (scenario === "vs-3bet" && distribution.allin > 0) {
+      distribution.raise += distribution.allin;
+      distribution.allin = 0;
+    }
     if (shortStack && distribution.raise > 0) {
       distribution.allin += distribution.raise;
       distribution.raise = 0;
     }
-    const total = ACTIONS.reduce((sum, action) => sum + distribution[action], 0);
-    if (total <= 0) return { fold: 100, call: 0, raise: 0, allin: 0 };
-    const normalized = {} as ActionDistribution;
-    for (const action of ACTIONS) {
-      normalized[action] = round1((distribution[action] / total) * 100);
-    }
-    return normalized;
+    return normalizedDistribution(distribution);
   };
 
   const rangeGrid = buildGrid(actionFor);
@@ -328,19 +390,22 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
   const openSize = input.openSizeBB || rfiSizeBB(hero);
   const threeBetSize = input.threeBetSizeBB || openSize * 4;
   const callers = input.callers || 0;
-  const callSizeBB = Math.max(
-    0,
-    round1(
-      scenario === "vs-open"
-        ? openSize - investedBB(hero)
-        : scenario === "vs-3bet"
-        ? threeBetSize - openSize
-        : scenario === "iso"
-        ? 1
-        : 0
-    )
-  );
-  const raiseSizeBB =
+  const callSizeBB =
+    input.amountToCallBB !== undefined
+      ? round1(amountToCallBB)
+      : Math.max(
+          0,
+          round1(
+            scenario === "vs-open"
+              ? openSize - investedBB(hero)
+              : scenario === "vs-3bet"
+              ? threeBetSize - openSize
+              : scenario === "iso"
+              ? 1
+              : 0
+          )
+        );
+  const rawRaiseSizeBB =
     scenario === "unopened"
       ? rfiSizeBB(hero)
       : scenario === "iso"
@@ -349,11 +414,121 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
       ? threeBetSizeBB(openSize, callers, hero)
       : scenario === "vs-3bet"
       ? fourBetSizeBB(threeBetSize)
-      : stackBB;
+      : roundBB(threeBetSize * 2.1);
+
+  const defaultCurrentBetBB =
+    scenario === "vs-open"
+      ? openSize
+      : scenario === "vs-3bet" || scenario === "vs-4bet"
+      ? threeBetSize
+      : 1;
+  const currentBetBB = input.currentBetBB ?? defaultCurrentBetBB;
+  const minimumRaiseToBB =
+    input.minimumRaiseToBB ?? Math.max(2, currentBetBB * 2);
+  const liveResponderEffectiveStackBB = Math.min(
+    heroStackBB,
+    input.liveResponderEffectiveStackBB ?? stackBB
+  );
+  const canRaise =
+    liveResponderEffectiveStackBB > currentBetBB + 0.01;
+  const raiseCapBB = canRaise
+    ? liveResponderEffectiveStackBB
+    : Math.min(heroStackBB, stackBB);
+  const raiseSizeBB = Math.min(
+    heroStackBB,
+    Math.max(minimumRaiseToBB, Math.min(raiseCapBB, rawRaiseSizeBB))
+  );
+  const remainingAfterRaiseBB = Math.max(0, heroStackBB - raiseSizeBB);
+  const jamThresholdBB = Math.max(
+    JAM_REMAINING_STACK_BB,
+    heroStackBB * JAM_REMAINING_STACK_RATIO
+  );
+  const opponentsCanCoverHero = stackBB >= heroStackBB - 0.01;
+  const raiseCommitsHero =
+    canRaise &&
+    opponentsCanCoverHero &&
+    remainingAfterRaiseBB <= jamThresholdBB;
+
+  const effectiveAllInAction: PreflopAction =
+    stackBB >= heroStackBB - 0.01
+      ? "allin"
+      : canRaise
+      ? "raise"
+      : "call";
+
+  const adjustHeroDistribution = (
+    original: ActionDistribution,
+    handKey: string
+  ): {
+    distribution: ActionDistribution;
+    priceProtected: boolean;
+    deepStackJamReduced: boolean;
+  } => {
+    const distribution = { ...original };
+
+    if (distribution.allin > 0 && effectiveAllInAction !== "allin") {
+      distribution[effectiveAllInAction] += distribution.allin;
+      distribution.allin = 0;
+    }
+    const deepStackJamReduced =
+      scenario === "vs-4bet" &&
+      heroStackBB > DEEP_STACK_NO_AUTO_JAM_BB &&
+      canRaise &&
+      distribution.allin > 0;
+    if (deepStackJamReduced) {
+      distribution.raise += distribution.allin;
+      distribution.allin = 0;
+    }
+    if (distribution.raise > 0) {
+      if (!canRaise) {
+        distribution.call += distribution.raise;
+        distribution.raise = 0;
+      } else if (raiseCommitsHero) {
+        distribution.allin += distribution.raise;
+        distribution.raise = 0;
+      }
+    }
+
+    const strength = handStrength(handKey);
+    const opponents = Math.max(
+      1,
+      input.activeOpponentCount ?? playerCount - 1
+    );
+    const maxPotOdds =
+      strength === "strong"
+        ? opponents > 1
+          ? 0.12
+          : 0.16
+        : strength === "medium"
+        ? opponents > 1
+          ? 0.08
+          : 0.1
+        : opponents > 1
+        ? 0.03
+        : 0.055;
+    const callStackRatio =
+      heroStackBB > 0 ? amountToCallBB / heroStackBB : 1;
+    const priceProtected =
+      amountToCallBB > 0 &&
+      distribution.fold > 0 &&
+      (callPotOdds <= maxPotOdds ||
+        (strength !== "weak" &&
+          callStackRatio <= AUTO_CALL_MAX_STACK_RATIO &&
+          callPotOdds <= 0.12));
+    if (priceProtected) {
+      distribution.call += distribution.fold;
+      distribution.fold = 0;
+    }
+    return {
+      distribution: normalizedDistribution(distribution),
+      priceProtected,
+      deepStackJamReduced,
+    };
+  };
 
   const sizeForAction = (action: PreflopAction): number | undefined => {
-    if (action === "raise") return shortStack ? stackBB : raiseSizeBB;
-    if (action === "allin") return stackBB;
+    if (action === "raise") return raiseSizeBB;
+    if (action === "allin") return heroStackBB;
     return undefined;
   };
 
@@ -370,20 +545,52 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
   let heroAdvice: HeroAdvice | undefined;
   if (input.heroHand) {
     const handKey = normalizeHandKey(input.heroHand);
-    const { action, freq } = actionFor(handKey);
-    let finalAction = action;
-    let sizeBB = sizeForAction(action);
-    let finalFreq = freq;
-    if (action === "raise" && shortStack) {
-      finalAction = "allin";
-      sizeBB = stackBB;
+    const baseDistribution = distributionFor(handKey);
+    const adjusted = adjustHeroDistribution(baseDistribution, handKey);
+    const finalAction = dominantAction(adjusted.distribution);
+    let sizeBB = sizeForAction(finalAction);
+    const finalFreq = adjusted.distribution[finalAction];
+    if (finalAction === "raise") sizeBB = raiseSizeBB;
+    else if (finalAction === "allin") sizeBB = heroStackBB;
+    else sizeBB = undefined;
+    if (adjusted.priceProtected) {
+      notes.push(
+        `补注 ${round1(amountToCallBB)}bb，底池赔率约 ${Math.round(
+          callPotOdds * 100
+        )}%：已移除不合理弃牌分支`
+      );
+    }
+    if (raiseCommitsHero && finalAction === "allin") {
+      notes.push(
+        `常规加注后仅剩 ${round1(
+          remainingAfterRaiseBB
+        )}bb：按套池阈值改为直接全下`
+      );
+    }
+    if (adjusted.deepStackJamReduced) {
+      notes.push("超过 120bb 的深码 4bet 底池：自动全下改为小尺度 5bet");
+    }
+    const sourceCell = chart ? normalizeCell(chart[handKey]) : undefined;
+    if (
+      scenario === "vs-3bet" &&
+      finalAction === "raise" &&
+      (sourceCell?.actions.allin || 0) > 0
+    ) {
+      notes.push("牌表强牌档位表示 4bet 后跟进 5bet；当前先采用常规 4bet 尺度");
+    }
+    if (
+      effectiveAllInAction === "raise" &&
+      baseDistribution.allin > 0 &&
+      finalAction === "raise"
+    ) {
+      notes.push("短码对手不能覆盖英雄全部筹码：全下语义改为有效筹码加注");
     }
     const message = buildHeroMessage(
       finalAction,
       finalFreq,
       sizeBB,
       callSizeBB,
-      stackBB,
+      heroStackBB,
       scenario,
       hero
     );
@@ -393,7 +600,7 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
       frequency: finalFreq,
       sizeBB,
       sizeChips: sizeBB !== undefined ? toChips(sizeBB, input.bigBlindChips) : undefined,
-      actionDistribution: distributionFor(handKey),
+      actionDistribution: adjusted.distribution,
       message,
     };
   }
@@ -416,7 +623,7 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     }
     recommended = bestAction;
   }
-  const recommendedSizeBB = sizeForAction(recommended);
+  const recommendedSizeBB = heroAdvice?.sizeBB ?? sizeForAction(recommended);
 
   const actions: AdviceAction[] = ACTIONS.filter(
     (a) => actionDistribution[a] > 0
@@ -432,7 +639,7 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     }))
     .sort((a, b) => b.frequency - a.frequency);
 
-  const potBB = round1(potBBFor(scenario, input));
+  const potBB = round1(contestablePotBB);
 
   return {
     kind: "preflop",
@@ -440,6 +647,11 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     heroPosition: hero,
     heroPositionLabel: input.heroPositionLabel || hero,
     stackBB,
+    heroStackBB,
+    opponentEffectiveStacksBB: input.opponentEffectiveStacksBB,
+    liveResponderEffectiveStackBB,
+    amountToCallBB,
+    callPotOdds,
     scenario,
     villainPosition: input.villainPosition,
     potBB,

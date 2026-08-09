@@ -24,6 +24,7 @@ export interface GamePlayerState {
   /** Total stack in chips, including committed bets. */
   stack: number;
   isFolded: boolean;
+  isAllIn?: boolean;
   hands: { num: number; suit: string }[];
 }
 
@@ -43,6 +44,8 @@ export interface PreflopGameStateInput {
   raiseCount?: number;
   /** Optional range calibration used by AI player profiles. */
   looseness?: Looseness;
+  /** Minimum legal raise-to amount in chips, when known from the game. */
+  minimumRaiseToChips?: number;
 }
 
 function rankChar(num: number): string {
@@ -102,17 +105,33 @@ export function buildPreflopAdvice(
 
   const inHand = sortedUsers.filter((t) => !players[t].isFolded);
   if (inHand.length < 2) return null;
-  // 决策深度（bb）：单挑时取双方较小筹码（即有效筹码）；多人局中，短码玩家
-  // 只限制他自己能投入的注量，开池/加注尺寸和短码判断应以英雄自身筹码为准
-  // （若英雄自己就是最短筹码，则两者相等，行为不变）。
-  const effectiveStackBB =
-    inHand.length === 2
-      ? Math.min(...inHand.map((t) => players[t].stack)) / bbChips
-      : hero.stack / bbChips;
+  const opponentTokens = inHand.filter((t) => t !== actingToken);
+  // Keep one effective stack per opponent. The strategic depth is the
+  // deepest of those matchups, so a 5bb all-in cannot cap action against a
+  // second opponent who can still play 50bb.
+  const opponentEffectiveStacksBB = opponentTokens.map(
+    (t) => Math.min(hero.stack, players[t].stack) / bbChips
+  );
+  const effectiveStackBB = Math.max(...opponentEffectiveStacksBB);
+  const liveResponderEffectiveStackBB = opponentTokens
+    .filter((t) => !players[t].isAllIn && players[t].bet < players[t].stack)
+    .reduce(
+      (deepest, t) =>
+        Math.max(deepest, Math.min(hero.stack, players[t].stack) / bbChips),
+      0
+    );
 
   const bets = sortedUsers.map((t) => players[t].bet);
   const maxBet = Math.max(...bets);
   const heroBet = hero.bet;
+  const callTo = Math.min(maxBet, hero.stack);
+  const amountToCall = Math.max(0, callTo - heroBet);
+  // Contributions above hero's total stack belong to side pots hero cannot
+  // win. Folded players' matched contributions correctly remain in the pot.
+  const contestablePot = sortedUsers.reduce(
+    (pot, t) => pot + Math.min(players[t].bet, hero.stack),
+    0
+  );
 
   const isBlind = (t: string) => t === sortedUsers[0] || t === sortedUsers[1];
   const limpers = sortedUsers.filter(
@@ -207,6 +226,18 @@ export function buildPreflopAdvice(
     heroPosition: seat.chart,
     heroPositionLabel: seat.label,
     effectiveStackBB,
+    heroStackBB: hero.stack / bbChips,
+    heroInvestedBB: heroBet / bbChips,
+    currentBetBB: maxBet / bbChips,
+    minimumRaiseToBB:
+      input.minimumRaiseToChips !== undefined
+        ? input.minimumRaiseToChips / bbChips
+        : undefined,
+    amountToCallBB: amountToCall / bbChips,
+    contestablePotBB: contestablePot / bbChips,
+    opponentEffectiveStacksBB,
+    liveResponderEffectiveStackBB,
+    activeOpponentCount: opponentTokens.length,
     scenario,
     villainPosition,
     openSizeBB,

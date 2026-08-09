@@ -58,10 +58,28 @@ export interface PreflopSituation {
   /** Optional display label (e.g. "UTG+1" for 9-max). Defaults to heroPosition. */
   heroPositionLabel?: string;
   /**
-   * 决策深度（bb）：单挑 = 双方较小筹码（有效筹码）；多人局 = 英雄自身筹码
-   * （短码对手只限制其自身可投入的注量，不拉低开池/加注尺寸）。
+   * Deepest effective stack (bb) between hero and any opponent still in the
+   * hand. A single short stack must not cap play against deeper opponents.
    */
   effectiveStackBB: number;
+  /** Hero's full stack at the start of the hand, including committed chips. */
+  heroStackBB?: number;
+  /** Hero's chips already committed preflop. */
+  heroInvestedBB?: number;
+  /** Current highest preflop contribution. */
+  currentBetBB?: number;
+  /** Minimum legal raise-to amount for the current betting state. */
+  minimumRaiseToBB?: number;
+  /** Additional chips hero must contribute to call, capped by hero's stack. */
+  amountToCallBB?: number;
+  /** Pot hero can actually contest before making the call. */
+  contestablePotBB?: number;
+  /** Effective stacks against every opponent still in the hand. */
+  opponentEffectiveStacksBB?: number[];
+  /** Deepest effective stack among opponents that can still respond. */
+  liveResponderEffectiveStackBB?: number;
+  /** Number of opponents that have not folded. */
+  activeOpponentCount?: number;
   scenario: PreflopScenario;
   /** Raiser position (required for vs-open / vs-3bet / vs-4bet). */
   villainPosition?: ChartPosition;
@@ -141,6 +159,11 @@ export interface PreflopAdvice {
   heroPosition: ChartPosition;
   heroPositionLabel: string;
   stackBB: number;
+  heroStackBB?: number;
+  opponentEffectiveStacksBB?: number[];
+  liveResponderEffectiveStackBB?: number;
+  amountToCallBB?: number;
+  callPotOdds?: number;
   scenario: PreflopScenario;
   villainPosition?: ChartPosition;
   potBB: number;

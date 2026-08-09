@@ -38,6 +38,7 @@ export interface BotStrategyRequest {
   actingToken: string;
   lastRaiserToken?: string;
   raiseCount: number;
+  minimumRaiseTo: number;
   actionHistory: { round: number; type: string; token: string; amount?: number }[];
   heroPositionLabel: string;
   style: BotStyle;
@@ -56,6 +57,8 @@ export interface BotStrategyResult {
   fallbackAction: BotAction;
   equityVsRange?: number;
   source: string;
+  /** Structured context used to explain and audit a sampled bot decision. */
+  diagnostics?: Record<string, unknown>;
 }
 
 export interface BotStrategyProvider {
@@ -64,4 +67,3 @@ export interface BotStrategyProvider {
     request: BotStrategyRequest
   ): BotStrategyResult | null | Promise<BotStrategyResult | null>;
 }
-

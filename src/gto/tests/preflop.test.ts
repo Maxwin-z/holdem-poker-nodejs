@@ -253,7 +253,7 @@ describe("preflop GTO engine", () => {
     assert.strictEqual(co.hero!.action, "raise");
   });
 
-  it("vs 3bet: UTG vs BB 3bet -> AA jams, 99 calls, 72o folds", () => {
+  it("vs 3bet: premium commitment hands use a normal 4bet, not an immediate jam", () => {
     const a = getPreflopAdvice(
       base({
         heroPosition: "UTG",
@@ -264,8 +264,10 @@ describe("preflop GTO engine", () => {
         heroHand: "AA",
       })
     );
-    assert.strictEqual(a.hero!.action, "allin");
-    assert.strictEqual(a.hero!.sizeBB, 100);
+    assert.strictEqual(a.hero!.action, "raise");
+    assert.strictEqual(a.hero!.sizeBB, 27.5);
+    assert.strictEqual(a.hero!.actionDistribution.allin, 0);
+    assert.ok(a.notes.some((note) => note.includes("4bet 后跟进 5bet")));
 
     const call = getPreflopAdvice(
       base({
@@ -290,6 +292,58 @@ describe("preflop GTO engine", () => {
       })
     );
     assert.strictEqual(weak.hero!.action, "fold");
+  });
+
+  it("reproduces hand 8: QQ 4bets 13bb to 30bb instead of jamming 103.5bb", () => {
+    const advice = getPreflopAdvice(
+      base({
+        playerCount: 8,
+        heroPosition: "MP",
+        scenario: "vs-3bet",
+        villainPosition: "BB",
+        openSizeBB: 3,
+        threeBetSizeBB: 13,
+        currentBetBB: 13,
+        minimumRaiseToBB: 23,
+        effectiveStackBB: 103.5,
+        heroStackBB: 103.5,
+        liveResponderEffectiveStackBB: 103.5,
+        amountToCallBB: 10,
+        contestablePotBB: 19,
+        activeOpponentCount: 2,
+        bigBlindChips: 20,
+        heroHand: "QQ",
+      })
+    );
+    assert.strictEqual(advice.hero!.action, "raise");
+    assert.strictEqual(advice.hero!.sizeBB, 30);
+    assert.strictEqual(advice.hero!.sizeChips, 600);
+    assert.deepStrictEqual(advice.hero!.actionDistribution, {
+      fold: 0,
+      call: 0,
+      raise: 100,
+      allin: 0,
+    });
+  });
+
+  it("still jams a vs-3bet premium hand when the normal 4bet commits the stack", () => {
+    const advice = getPreflopAdvice(
+      base({
+        heroPosition: "MP",
+        scenario: "vs-3bet",
+        villainPosition: "BB",
+        openSizeBB: 3,
+        threeBetSizeBB: 13,
+        currentBetBB: 13,
+        minimumRaiseToBB: 23,
+        effectiveStackBB: 25,
+        heroStackBB: 25,
+        liveResponderEffectiveStackBB: 25,
+        heroHand: "QQ",
+      })
+    );
+    assert.strictEqual(advice.hero!.action, "allin");
+    assert.strictEqual(advice.hero!.sizeBB, 25);
   });
 
   it("vs 4bet from the blinds uses the blind-defense charts", () => {
@@ -329,6 +383,27 @@ describe("preflop GTO engine", () => {
       })
     );
     assert.strictEqual(fold.hero!.action, "fold");
+  });
+
+  it("deep stacked vs 4bet uses a small 5bet instead of an automatic jam", () => {
+    const advice = getPreflopAdvice(
+      base({
+        heroPosition: "BTN",
+        scenario: "vs-4bet",
+        villainPosition: "UTG",
+        openSizeBB: 3,
+        threeBetSizeBB: 24,
+        currentBetBB: 24,
+        minimumRaiseToBB: 45,
+        effectiveStackBB: 150,
+        heroStackBB: 150,
+        liveResponderEffectiveStackBB: 150,
+        heroHand: "AA",
+      })
+    );
+    assert.strictEqual(advice.hero!.action, "raise");
+    assert.strictEqual(advice.hero!.sizeBB, 50.5);
+    assert.ok(advice.notes.some((note) => note.includes("深码 4bet")));
   });
 
   it("ISO over limpers: CO with 2 limpers raises to 6bb", () => {

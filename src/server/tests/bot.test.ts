@@ -187,6 +187,7 @@ describe("current bot strategy adapter", () => {
       bbChips: 2,
       actingToken: "btn",
       raiseCount: 0,
+      minimumRaiseTo: 4,
       actionHistory: [],
       heroPositionLabel: "BTN",
       style: "standard",
@@ -198,5 +199,56 @@ describe("current bot strategy adapter", () => {
     });
     assert.approximately(probabilities.fold, 0.5, 0.001);
     assert.approximately(probabilities.raise, 0.5, 0.001);
+  });
+
+  it("passes the hand-8 QQ decision through as a 600-chip 4bet", () => {
+    const seats = ["c", "henry", "william", "emma", "chloe", "grace", "lily", "mia"];
+    const stacks: Record<string, number> = {
+      c: 2070,
+      henry: 1760,
+      william: 2290,
+      emma: 1940,
+      chloe: 2070,
+      grace: 1870,
+      lily: 2070,
+      mia: 1930,
+    };
+    const bets: Record<string, number> = { c: 60, henry: 260, chloe: 60 };
+    const folded = new Set(["william", "emma", "grace", "lily", "mia"]);
+    const players: any = {};
+    seats.forEach((token) => {
+      players[token] = {
+        bet: bets[token] || 0,
+        totalBets: bets[token] || 0,
+        stack: stacks[token],
+        isFolded: folded.has(token),
+        isAllIn: false,
+        hands:
+          token === "chloe"
+            ? [{ num: 12, suit: "s" }, { num: 12, suit: "d" }]
+            : [],
+      };
+    });
+    const result = new CurrentGtoStrategyProvider().decide({
+      round: 0,
+      sortedUsers: seats,
+      players,
+      boardCards: [],
+      bbChips: 20,
+      actingToken: "chloe",
+      lastRaiserToken: "henry",
+      raiseCount: 2,
+      minimumRaiseTo: 460,
+      actionHistory: [],
+      heroPositionLabel: "LJ",
+      style: "tight",
+    });
+    assert.exists(result);
+    const raise = result!.choices.find((choice) => choice.action === "raise");
+    const allin = result!.choices.find((choice) => choice.action === "allin");
+    assert.equal(raise?.probability, 1);
+    assert.equal(raise?.sizeChips, 600);
+    assert.notExists(allin);
+    assert.equal(result!.fallbackAction, "raise");
   });
 });

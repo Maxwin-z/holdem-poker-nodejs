@@ -13,6 +13,8 @@ function makeInput(opts: {
   bets: Record<string, number>;
   stack?: number;
   stacks?: Record<string, number>;
+  folded?: string[];
+  allIn?: string[];
   acting: string;
   heroCards?: CardInput[];
   lastRaiser?: string;
@@ -26,7 +28,8 @@ function makeInput(opts: {
     players[seat] = {
       bet: opts.bets[seat] || 0,
       stack: (opts.stacks && opts.stacks[seat]) ?? stack,
-      isFolded: false,
+      isFolded: Boolean(opts.folded?.includes(seat)),
+      isAllIn: Boolean(opts.allIn?.includes(seat)),
       hands:
         seat === opts.acting && opts.heroCards
           ? opts.heroCards
@@ -174,7 +177,7 @@ describe("preflop advice from game state", () => {
     assert.strictEqual(advice!.hero!.sizeBB, 1.5);
   });
 
-  it("单挑：对手短码时，仍按双方较小筹码作为决策深度", () => {
+  it("单挑：深码英雄面对短码对手时按有效筹码加注，不把自己全部筹码推出", () => {
     const advice = buildPreflopAdvice(
       makeInput({
         seats: ["BTN", "BB"],
@@ -189,7 +192,112 @@ describe("preflop advice from game state", () => {
     );
     assert.ok(advice);
     assert.strictEqual(advice!.stackBB, 1.5);
+    assert.strictEqual(advice!.hero!.action, "raise");
+    assert.strictEqual(advice!.hero!.sizeBB, 2);
+  });
+
+  it("三人桌：100 筹码 BB 不会把 Dealer 对 1000 筹码 SB 的尺度限制到 100", () => {
+    const unopened = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "BTN"],
+        bets: { SB: 10, BB: 20 },
+        stacks: { SB: 1000, BB: 100, BTN: 2000 },
+        acting: "BTN",
+        heroCards: [AH, { num: 14, suit: "d" }],
+        bb: 20,
+      })
+    );
+    assert.ok(unopened);
+    assert.strictEqual(unopened!.stackBB, 50);
+    assert.deepStrictEqual(unopened!.opponentEffectiveStacksBB, [50, 5]);
+    assert.strictEqual(unopened!.hero!.action, "raise");
+    assert.strictEqual(unopened!.hero!.sizeChips, 50);
+
+    const facingShortJam = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "BTN"],
+        bets: { SB: 10, BB: 100 },
+        stacks: { SB: 1000, BB: 100, BTN: 2000 },
+        allIn: ["BB"],
+        acting: "BTN",
+        lastRaiser: "BB",
+        raiseCount: 1,
+        heroCards: [AH, { num: 14, suit: "d" }],
+        bb: 20,
+      })
+    );
+    assert.ok(facingShortJam);
+    assert.strictEqual(facingShortJam!.liveResponderEffectiveStackBB, 50);
+    assert.strictEqual(facingShortJam!.hero!.action, "raise");
+    assert.strictEqual(facingShortJam!.hero!.sizeChips, 350);
+  });
+
+  it("投入 900/1000 后只需补 100 时按真实底池赔率取消弃牌", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "BTN"],
+        bets: { SB: 1000, BB: 20, BTN: 900 },
+        stacks: { SB: 3000, BB: 3000, BTN: 1000 },
+        acting: "BTN",
+        lastRaiser: "SB",
+        raiseCount: 3,
+        heroCards: [
+          { num: 7, suit: "h" },
+          { num: 6, suit: "h" },
+        ],
+        bb: 20,
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.amountToCallBB, 5);
+    assert.ok(advice!.callPotOdds! < 0.06);
+    assert.strictEqual(advice!.hero!.action, "call");
+    assert.deepStrictEqual(advice!.hero!.actionDistribution, {
+      fold: 0,
+      call: 100,
+      raise: 0,
+      allin: 0,
+    });
+  });
+
+  it("常规 3bet 加到 900/1000 会按套池阈值改为直接全下", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "BTN"],
+        bets: { SB: 10, BB: 20, BTN: 225 },
+        stacks: { SB: 3000, BB: 1000, BTN: 3000 },
+        acting: "BB",
+        lastRaiser: "BTN",
+        raiseCount: 1,
+        heroCards: [AH, { num: 14, suit: "d" }],
+        bb: 20,
+      })
+    );
+    assert.ok(advice);
     assert.strictEqual(advice!.hero!.action, "allin");
+    assert.strictEqual(advice!.hero!.sizeChips, 1000);
+    assert.ok(advice!.notes.some((note) => note.includes("套池阈值")));
+  });
+
+  it("深码英雄面对唯一短码全下者时只跟到有效筹码，不超额全下", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["SB", "BB", "BTN"],
+        bets: { SB: 1000, BB: 20, BTN: 900 },
+        stacks: { SB: 1000, BB: 3000, BTN: 3000 },
+        folded: ["BB"],
+        allIn: ["SB"],
+        acting: "BTN",
+        lastRaiser: "SB",
+        raiseCount: 3,
+        heroCards: [AH, { num: 14, suit: "d" }],
+        bb: 20,
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.stackBB, 50);
+    assert.strictEqual(advice!.hero!.action, "call");
+    assert.strictEqual(advice!.hero!.sizeChips, undefined);
   });
 
   it("6-max: 游戏 CO 开池 -> 游戏 UTG 面对（映射为 CO vs UTG，走通用兜底）", () => {
@@ -257,7 +365,43 @@ describe("preflop advice from game state", () => {
     assert.ok(advice);
     assert.strictEqual(advice!.scenario, "vs-3bet");
     assert.strictEqual(advice!.villainPosition, "BB");
-    assert.strictEqual(advice!.hero!.action, "allin");
+    assert.strictEqual(advice!.hero!.action, "raise");
+    assert.strictEqual(advice!.hero!.sizeBB, 16);
+  });
+
+  it("第 8 手回归：深码 QQ 面对 13bb 3bet 只加注到 30bb", () => {
+    const advice = buildPreflopAdvice(
+      makeInput({
+        seats: ["C", "Henry", "William", "Emma", "Chloe", "Grace", "Lily", "Mia"],
+        bets: { C: 60, Henry: 260, Chloe: 60 },
+        stacks: {
+          C: 2070,
+          Henry: 1760,
+          William: 2290,
+          Emma: 1940,
+          Chloe: 2070,
+          Grace: 1870,
+          Lily: 2070,
+          Mia: 1930,
+        },
+        folded: ["William", "Emma", "Grace", "Lily", "Mia"],
+        acting: "Chloe",
+        lastRaiser: "Henry",
+        raiseCount: 2,
+        bb: 20,
+        heroCards: [
+          { num: 12, suit: "s" },
+          { num: 12, suit: "d" },
+        ],
+      })
+    );
+    assert.ok(advice);
+    assert.strictEqual(advice!.scenario, "vs-3bet");
+    assert.strictEqual(advice!.heroPosition, "MP");
+    assert.strictEqual(advice!.heroPositionLabel, "LJ");
+    assert.strictEqual(advice!.recommended, "raise");
+    assert.strictEqual(advice!.recommendedSizeBB, 30);
+    assert.strictEqual(advice!.recommendedSizeChips, 600);
   });
 
   it("CO 4bet facing a BB 5bet: vs-4bet", () => {
@@ -314,7 +458,8 @@ describe("preflop advice from game state", () => {
     assert.ok(advice);
     assert.strictEqual(advice!.scenario, "vs-3bet");
     assert.strictEqual(advice!.villainPosition, "BB");
-    assert.strictEqual(advice!.hero!.action, "allin");
+    assert.strictEqual(advice!.hero!.action, "raise");
+    assert.strictEqual(advice!.hero!.sizeBB, 32);
   });
 
   it("BB with only a blind in facing a cold 4bet: vs-4bet", () => {

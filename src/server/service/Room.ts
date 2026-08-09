@@ -854,6 +854,7 @@ export class Game {
       actingToken: token,
       lastRaiserToken,
       raiseCount: this.raiseCount,
+      minimumRaiseTo: this.raiseBet + this.raiseBetDiff,
       actionHistory: this.actionHistory,
       heroPositionLabel: this.positionLabelOf(token),
       style: userMap[token].botStyle,
@@ -868,7 +869,7 @@ export class Game {
     this.botActionTimer = delayTry(() => {
       this.performBotAction(token).catch((error) => {
         console.warn("bot action failed", error);
-        this.performSafeBotFallback(token);
+        this.performSafeBotFallback(token, "strategy-error");
       });
     }, thinkingTime);
   }
@@ -876,12 +877,11 @@ export class Game {
   async performBotAction(token: Token) {
     const user = userMap[token];
     if (!user?.isBot || !user.isActing || this.isSettling) return;
-    const result = await getBotStrategyProvider().decide(
-      this.buildBotStrategyRequest(token)
-    );
+    const request = this.buildBotStrategyRequest(token);
+    const result = await getBotStrategyProvider().decide(request);
     if (!user.isActing || this.isSettling) return;
     if (!result) {
-      this.performSafeBotFallback(token);
+      this.performSafeBotFallback(token, "no-strategy-result");
       return;
     }
     const choices = this.canonicalBotChoices(
@@ -891,7 +891,8 @@ export class Game {
         : [{ action: result.fallbackAction, probability: 1 }]
     );
     const total = choices.reduce((sum, choice) => sum + choice.probability, 0);
-    let roll = Math.random() * total;
+    const sample = Math.random();
+    let roll = sample * total;
     let selected = choices[choices.length - 1];
     for (const choice of choices) {
       roll -= choice.probability;
@@ -900,16 +901,134 @@ export class Game {
         break;
       }
     }
-    console.log(
-      "[BOT]",
-      user.name,
+    this.logBotDecision(
+      token,
+      request,
       result.source,
-      "=>",
-      selected.action,
-      selected.sizeChips ?? "-"
+      result.diagnostics,
+      result.choices,
+      choices,
+      selected,
+      sample
     );
     this.executeBotChoice(token, selected);
     publish2all(this.roomid);
+  }
+
+  private logBotDecision(
+    token: Token,
+    request: BotStrategyRequest,
+    source: string,
+    diagnostics: Record<string, unknown> | undefined,
+    rawChoices: BotStrategyChoice[],
+    canonicalChoices: BotStrategyChoice[],
+    selected: BotStrategyChoice,
+    sample: number
+  ) {
+    const user = userMap[token];
+    const previousStreetBets = sum(user.bets.slice(0, this.round));
+    const maxTo = user.stack - previousStreetBets;
+    const currentBet = this.maxPreBet();
+    const amountToCall = Math.max(
+      0,
+      Math.min(currentBet, maxTo) - user.bets[this.round]
+    );
+    const rawPotBeforeAction = this.sortedUsers.reduce(
+      (pot, playerToken) => pot + userMap[playerToken].totalBets,
+      0
+    );
+    // Ignore unmatched overbets above this bot's total stack when reporting
+    // the pot it can actually win. This makes near-committed call odds useful.
+    const callablePotBeforeAction = this.sortedUsers.reduce(
+      (pot, playerToken) =>
+        pot + Math.min(userMap[playerToken].totalBets, user.stack),
+      0
+    );
+    const expectedTarget = (() => {
+      if (selected.action === "fold") return undefined;
+      if (selected.action === "check" || selected.action === "call") {
+        return Math.min(currentBet, maxTo);
+      }
+      if (selected.action === "allin" || maxTo <= currentBet) return maxTo;
+      const minimumRaiseTo = this.raiseBet + this.raiseBetDiff;
+      const suggested =
+        selected.sizeChips === Infinity
+          ? maxTo
+          : Number.isFinite(selected.sizeChips)
+          ? Math.round(selected.sizeChips!)
+          : minimumRaiseTo;
+      return Math.min(maxTo, Math.max(minimumRaiseTo, suggested));
+    })();
+    const lastRaiserToken = request.lastRaiserToken;
+    const trace = {
+      event: "bot_decision",
+      roomId: this.roomid,
+      handId: this.analyticsHandId,
+      handSeq: this.handSeq,
+      round: this.round,
+      bot: {
+        id: user.chipsRecordID,
+        name: user.name,
+        style: user.botStyle,
+        position: this.positionLabelOf(token),
+        cards: user.hands,
+        stack: user.stack,
+        committed: user.totalBets,
+        streetBet: user.bets[this.round],
+        remaining: user.stack - user.totalBets,
+      },
+      facing: {
+        lastRaiser:
+          lastRaiserToken && userMap[lastRaiserToken]
+            ? {
+                id: userMap[lastRaiserToken].chipsRecordID,
+                name: userMap[lastRaiserToken].name,
+                stack: userMap[lastRaiserToken].stack,
+                committed: userMap[lastRaiserToken].totalBets,
+                streetBet: userMap[lastRaiserToken].bets[this.round],
+              }
+            : undefined,
+        currentBet,
+        amountToCall,
+        rawPotBeforeAction,
+        callablePotBeforeAction,
+        callPotOdds:
+          amountToCall > 0
+            ? amountToCall / (callablePotBeforeAction + amountToCall)
+            : 0,
+        remainingStackFraction:
+          user.stack > 0 ? (user.stack - user.totalBets) / user.stack : 0,
+        raiseCount: this.raiseCount,
+        lastRaiseTo: this.raiseBet,
+        lastRaiseIncrement: this.raiseBetDiff,
+        minimumRaiseTo: this.raiseBet + this.raiseBetDiff,
+      },
+      players: this.sortedUsers.map((playerToken) => {
+        const player = userMap[playerToken];
+        return {
+          id: player.chipsRecordID,
+          name: player.name,
+          isBot: player.isBot,
+          position: this.positionLabelOf(playerToken),
+          stack: player.stack,
+          committed: player.totalBets,
+          streetBet: player.bets[this.round],
+          remaining: player.stack - player.totalBets,
+          folded: player.isFolded,
+          allIn: player.isAllIn,
+        };
+      }),
+      strategy: {
+        source,
+        diagnostics,
+        rawChoices,
+        canonicalChoices,
+        sample,
+        selected,
+        expectedTarget,
+      },
+    };
+    console.log("[BOT_DECISION]", JSON.stringify(trace));
   }
 
   private canonicalBotChoices(
@@ -971,12 +1090,25 @@ export class Game {
     this.bet(token, Math.min(maxTo, Math.max(minimumRaiseTo, suggested)));
   }
 
-  private performSafeBotFallback(token: Token) {
+  private performSafeBotFallback(token: Token, reason = "safe-fallback") {
     const user = userMap[token];
     if (!user?.isActing) return;
     const currentBet = this.maxPreBet();
-    if (currentBet > user.bets[this.round]) this.fold(token);
-    else this.bet(token, user.bets[this.round]);
+    const choice: BotStrategyChoice = {
+      action: currentBet > user.bets[this.round] ? "fold" : "check",
+      probability: 1,
+    };
+    this.logBotDecision(
+      token,
+      this.buildBotStrategyRequest(token),
+      "safe-fallback",
+      { reason },
+      [choice],
+      [choice],
+      choice,
+      0
+    );
+    this.executeBotChoice(token, choice);
     publish2all(this.roomid);
   }
 
@@ -1017,6 +1149,7 @@ export class Game {
           actingToken: token,
           lastRaiserToken,
           raiseCount: this.raiseCount,
+          minimumRaiseToChips: this.raiseBet + this.raiseBetDiff,
         });
       } else {
         advice = buildPostflopAdvice({
