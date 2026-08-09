@@ -1,5 +1,5 @@
 import { Avatar, Tooltip } from "antd";
-import { ApiOutlined, CoffeeOutlined } from "@ant-design/icons";
+import { ApiOutlined, CoffeeOutlined, RobotOutlined } from "@ant-design/icons";
 import { shallowEqual, useSelector } from "react-redux";
 import { RootState } from "../../app/store";
 import { CountDown } from "./CountDown";
@@ -34,7 +34,9 @@ export function User({ id, seat }: { id: string; seat: string }) {
       <Dealer />
     ) : null;
   const inGame = user.isInCurrentGame && !user.isFoled;
-  const actionText = !user.isReady
+  const actionText = user.pendingBotRemoval && !inGame
+    ? "下一手离桌"
+    : !user.isReady && !inGame
     ? "休息"
     : user.isFoled
     ? "已弃牌"
@@ -49,6 +51,8 @@ export function User({ id, seat }: { id: string; seat: string }) {
         `live-seat--${seat}`,
         !inGame ? "is-folded" : "",
         isActing ? "is-active" : "",
+        user.isBot ? "is-bot" : "",
+        user.pendingBotRemoval ? "is-pending-removal" : "",
         stack >= 100000 ? "has-large-stack" : "",
       ]
         .filter(Boolean)
@@ -93,9 +97,14 @@ export function User({ id, seat }: { id: string; seat: string }) {
 
       <div className="live-seat__profile">
         <div className="live-seat__avatar-wrap">
-          <Avatar className="live-seat__avatar">
+          <Avatar className={`live-seat__avatar ${user.isBot ? "is-bot" : ""}`}>
             {name.slice(0, 2).toUpperCase()}
           </Avatar>
+          {user.isBot ? (
+            <span className="live-seat__bot-badge" title="AI机器人">
+              <RobotOutlined />
+            </span>
+          ) : null}
           {isActing ? (
             <div className="live-seat__countdown">
               <CountDown

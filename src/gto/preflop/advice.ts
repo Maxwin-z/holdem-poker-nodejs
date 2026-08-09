@@ -248,6 +248,40 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     return { action: best, freq: bestFreq };
   };
 
+  const distributionFor = (handKey: string): ActionDistribution => {
+    const distribution: ActionDistribution = {
+      fold: 0,
+      call: 0,
+      raise: 0,
+      allin: 0,
+    };
+    if (pushFold || resolved.ruleBased || !chart) {
+      const { action, freq } = actionFor(handKey);
+      distribution[action] = freq;
+      if (action !== "fold") distribution.fold = Math.max(0, 100 - freq);
+    } else {
+      const cell = normalizeCell(chart[handKey]);
+      const weight = Math.max(0, Math.min(100, cell.weight));
+      distribution.fold = 100 - weight;
+      for (const action of ACTIONS) {
+        distribution[action] +=
+          (weight * Math.max(0, cell.actions[action] || 0)) / 100;
+      }
+    }
+
+    if (shortStack && distribution.raise > 0) {
+      distribution.allin += distribution.raise;
+      distribution.raise = 0;
+    }
+    const total = ACTIONS.reduce((sum, action) => sum + distribution[action], 0);
+    if (total <= 0) return { fold: 100, call: 0, raise: 0, allin: 0 };
+    const normalized = {} as ActionDistribution;
+    for (const action of ACTIONS) {
+      normalized[action] = round1((distribution[action] / total) * 100);
+    }
+    return normalized;
+  };
+
   const rangeGrid = buildGrid(actionFor);
 
   // Standard RFI grids per position, for browsing (looseness-calibrated).
@@ -359,6 +393,7 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
       frequency: finalFreq,
       sizeBB,
       sizeChips: sizeBB !== undefined ? toChips(sizeBB, input.bigBlindChips) : undefined,
+      actionDistribution: distributionFor(handKey),
       message,
     };
   }

@@ -5,7 +5,9 @@ import { secret } from '../config';
 export default async (ctx: Context, next: () => Promise<any>) => {
   console.log(ctx.url, ctx.method);
   const urls = ['/currentroom', '/createroom', '/joinroom'];
-  if (urls.indexOf(ctx.url) != -1) {
+  const protectedRoute =
+    urls.indexOf(ctx.path) != -1 || ctx.path.startsWith('/api/me/');
+  if (protectedRoute) {
     try {
       const user = jwt.verify(ctx.headers.authorization || '', secret);
       ctx.user = user.split('@')[0];

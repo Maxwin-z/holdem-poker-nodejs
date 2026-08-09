@@ -1,5 +1,6 @@
 import User, { Token } from "./User";
 import Room, { RoomID } from "./Room";
+import { v4 as uuidv4 } from "uuid";
 import { OVERTIME_ACTION_TIME_SECONDS } from "../../shared/actionTimer";
 import {
   PokerWebSocket,
@@ -8,6 +9,8 @@ import {
   send2all,
   send2user,
 } from "../api/ws";
+import { BOT_NAMES } from "../bot/names";
+import type { BotStyle, BotStyleSelection } from "../bot/types";
 
 type UserMap = {
   [token: string]: User;
@@ -19,6 +22,23 @@ type RoomMap = {
 export const userMap: UserMap = {};
 
 export const roomMap: RoomMap = {};
+
+const BOT_STYLES: BotStyle[] = ["standard", "tight", "loose"];
+
+function ownerRoom(token: Token): Room {
+  const user = userMap[token];
+  const room = user?.roomid ? roomMap[user.roomid] : undefined;
+  if (!room || !user.isRoomOwner) throw "只有房主可以管理AI机器人";
+  return room;
+}
+
+function resolveBotStyle(selection: BotStyleSelection): BotStyle {
+  if (selection === "random") {
+    return BOT_STYLES[Math.floor(Math.random() * BOT_STYLES.length)];
+  }
+  if (!BOT_STYLES.includes(selection)) throw "无效的AI机器人风格";
+  return selection;
+}
 
 function rand4str(): string {
   let id = `${Math.floor(Math.random() * 10000)}`;
@@ -207,6 +227,10 @@ export function userOverTime(token: Token) {
 
 export function userWatch(token: Token, watch: boolean) {
   if (!watch) {
+    const room = roomMap[userMap[token].roomid];
+    if (userMap[token].isSpectator && room.seatedCount() >= 10) {
+      throw "牌桌最多容纳10名玩家";
+    }
     userMap[token].isSpectator = false;
   } else {
     const roomid = userMap[token].roomid;
@@ -340,5 +364,45 @@ export function userRequestGtoAdvice(token: Token) {
     send2user(token, {
       logs: ["现在不是行动轮次，暂时无法给出 GTO 建议"],
     });
+  }
+}
+
+export function addBot(token: Token, selection: BotStyleSelection = "standard") {
+  const room = ownerRoom(token);
+  const usedNames = new Set(room.users.map((userToken) => userMap[userToken].name));
+  const availableNames = BOT_NAMES.filter((name) => !usedNames.has(name));
+  const baseName = availableNames.length > 0
+    ? availableNames[Math.floor(Math.random() * availableNames.length)]
+    : `Player ${room.users.length + 1}`;
+  const botToken = `bot:${uuidv4()}`;
+  const bot = new User(botToken, baseName, "");
+  bot.isBot = true;
+  bot.botStyleSelection = selection;
+  bot.botStyle = resolveBotStyle(selection);
+  bot.isOffline = false;
+  userMap[botToken] = bot;
+  try {
+    room.addUser(botToken);
+    bot.setRoom(room.id);
+    bot.isReady = true;
+  } catch (error) {
+    delete userMap[botToken];
+    throw error;
+  }
+  return bot;
+}
+
+export function removeBot(token: Token, botId: string) {
+  const room = ownerRoom(token);
+  const botToken = room.users.find(
+    (userToken) =>
+      userMap[userToken].isBot && userMap[userToken].chipsRecordID === botId
+  );
+  if (!botToken) throw "AI机器人不存在";
+  const bot = userMap[botToken];
+  if (room.isGaming && !room.game.isSettling && bot.isInCurrentGame) {
+    bot.pendingBotRemoval = true;
+  } else {
+    room.removeUser(botToken);
   }
 }

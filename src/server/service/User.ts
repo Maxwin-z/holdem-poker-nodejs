@@ -1,5 +1,6 @@
 import { roomMap, userEnterRoom, userLeaveRoom } from ".";
 import { Card } from "../../ApiType";
+import type { BotStyle, BotStyleSelection } from "../bot/types";
 import { PokerWebSocket } from "../api/ws";
 import Room, { RoomID } from "./Room";
 
@@ -27,6 +28,10 @@ class User {
   isAllIn: boolean = false;
   isWinner: boolean = false;
   isSpectator: boolean = false;
+  isBot: boolean = false;
+  botStyleSelection: BotStyleSelection = "standard";
+  botStyle: BotStyle = "standard";
+  pendingBotRemoval: boolean = false;
   needAction: boolean = false; // act each round
   actionName: string = "";
   stack: number = 0;

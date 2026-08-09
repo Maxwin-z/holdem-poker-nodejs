@@ -1,0 +1,23 @@
+export const BOT_NAMES = [
+  "James",
+  "Emma",
+  "Oliver",
+  "Sophia",
+  "William",
+  "Mia",
+  "Henry",
+  "Amelia",
+  "Lucas",
+  "Ava",
+  "Ethan",
+  "Isla",
+  "Noah",
+  "Grace",
+  "Jack",
+  "Chloe",
+  "Leo",
+  "Lily",
+  "Oscar",
+  "Ella",
+];
+

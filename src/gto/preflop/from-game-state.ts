@@ -11,7 +11,12 @@ import {
   chartPositionByActionOrder,
   positionForDistance,
 } from "./positions";
-import type { ChartPosition, PreflopAdvice, PreflopSituation } from "./types";
+import type {
+  ChartPosition,
+  Looseness,
+  PreflopAdvice,
+  PreflopSituation,
+} from "./types";
 
 export interface GamePlayerState {
   /** Chips committed this preflop round. */
@@ -36,6 +41,8 @@ export interface PreflopGameStateInput {
    *  raise the acting player is facing (optional). When absent the builder
    *  falls back to inferring levels from the current bet amounts. */
   raiseCount?: number;
+  /** Optional range calibration used by AI player profiles. */
+  looseness?: Looseness;
 }
 
 function rankChar(num: number): string {
@@ -208,6 +215,7 @@ export function buildPreflopAdvice(
     callers: callers > 0 ? callers : undefined,
     heroHand: handStr,
     bigBlindChips: bbChips,
+    looseness: input.looseness,
   };
 
   return getPreflopAdvice(situation);

@@ -5,6 +5,8 @@ import { createRoom, roomMap, userEnterRoom, userMap } from "../service";
 import User from "../service/User";
 import { getPreflopAdvice } from "../../gto/preflop/advice";
 import { getPostflopAdvice } from "../../gto/postflop/advice";
+import { getPlayerAnalyticsStore } from "../analytics/player-analytics";
+import type { AnalyticsWindow } from "../../shared/playerAnalytics";
 
 const router = new Router();
 export default router;
@@ -51,6 +53,18 @@ router.get("/currentroom", (ctx) => {
     userMap[token] = new User(token, ctx.user, "");
   }
   ctx.data = userMap[token].roomid || null;
+});
+
+router.get("/api/me/stats", (ctx) => {
+  const token = ctx.header.authorization;
+  if (!token) throw "need login";
+  const requested = String(ctx.query.window || "100");
+  const window: AnalyticsWindow = requested === "all"
+    ? "all"
+    : ([20, 50, 100, 500].includes(Number(requested))
+      ? Number(requested) as 20 | 50 | 100 | 500
+      : 100);
+  ctx.data = getPlayerAnalyticsStore().getReport(token, window);
 });
 
 router.post("/createroom", (ctx) => {

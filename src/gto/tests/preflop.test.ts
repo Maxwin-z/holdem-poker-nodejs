@@ -432,6 +432,22 @@ describe("preflop GTO engine", () => {
     assert.strictEqual(a.hero!.sizeChips, 6);
   });
 
+  it("preserves the exact hand's mixed strategy for bot sampling", () => {
+    const advice = getPreflopAdvice(
+      base({
+        heroPosition: "BTN",
+        scenario: "unopened",
+        heroHand: "K8o",
+      })
+    );
+    assert.deepStrictEqual(advice.hero!.actionDistribution, {
+      fold: 50,
+      call: 0,
+      raise: 50,
+      allin: 0,
+    });
+  });
+
   it("provides range grids and the hero hand marker", () => {
     const a = getPreflopAdvice(
       base({

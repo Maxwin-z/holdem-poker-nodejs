@@ -20,6 +20,8 @@ import {
   userSendMessage,
   userSetNextBuyIn,
   userRequestGtoAdvice,
+  addBot,
+  removeBot,
 } from "../service";
 import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
@@ -201,6 +203,12 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.GTO_ADVICE:
       userRequestGtoAdvice(token);
       break;
+    case ActionType.ADD_BOT:
+      addBot(token, data.style);
+      break;
+    case ActionType.REMOVE_BOT:
+      removeBot(token, data.botId);
+      break;
   }
   if (data.action !== ActionType.LEAVE) {
     publish(token, data, ws);
@@ -289,6 +297,9 @@ function getSimpleUser(token: Token): SimpleUser {
     isWinner: user.isWinner,
     isInCurrentGame: user.isInCurrentGame,
     isSpectator: user.isSpectator,
+    isBot: user.isBot,
+    botStyle: user.isBot ? user.botStyleSelection : undefined,
+    pendingBotRemoval: user.pendingBotRemoval,
     actionEndTime: user.actionEndTime,
     actionTimeLimit: user.actionTimeLimit,
     actionName: user.actionName,
@@ -369,8 +380,12 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
       });
       break;
     case ActionType.PAUSE_GAME:
+    case ActionType.ADD_BOT:
+    case ActionType.REMOVE_BOT:
       send2all(room.id, {
         room: simpleRoom,
+        game: simpleGame,
+        chips: getSimpleChipsRecords(room),
       });
       break;
   }

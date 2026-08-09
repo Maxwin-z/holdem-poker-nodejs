@@ -14,6 +14,8 @@ export type ApiRsp = ApiRspSuccess | ApiRspError;
 
 export type RoomID = string;
 export type Token = string;
+export type BotStyle = "standard" | "tight" | "loose";
+export type BotStyleSelection = BotStyle | "random";
 export type Card = {
   num: number;
   suit: string;
@@ -48,6 +50,10 @@ export interface SimpleUser {
   isWinner: boolean;
   isInCurrentGame: boolean;
   isSpectator: boolean;
+  isBot: boolean;
+  /** User-visible style selection. Random bots never expose their resolved strategy. */
+  botStyle?: BotStyleSelection;
+  pendingBotRemoval: boolean;
   actionEndTime: number;
   actionTimeLimit: number;
   actionName: string;
@@ -108,6 +114,8 @@ export enum ActionType {
   RUN_IT_OUT = "RUN_IT_OUT",
   SEND_MESSAGE = "SEND_MESSAGE",
   GTO_ADVICE = "GTO_ADVICE",
+  ADD_BOT = "ADD_BOT",
+  REMOVE_BOT = "REMOVE_BOT",
 }
 
 /** Structured GTO guidance entry displayed in the chat feed. */

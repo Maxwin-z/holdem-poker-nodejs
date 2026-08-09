@@ -16,6 +16,7 @@ import {
   MenuOutlined,
   MessageOutlined,
   TrophyOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { User } from "./User";
@@ -48,6 +49,8 @@ import "./RoomResponsive.css";
 import { createRoomInviteText } from "./roomInvite";
 import { BuyInSettingButton } from "./BuyInSetting";
 import { getVisibleBoardCards } from "./runItOut";
+import { BotManager } from "./BotManager";
+import { PlayerAnalytics } from "./PlayerAnalytics";
 
 const seatNames = [
   // Keep the rotated player list moving continuously around the table.
@@ -90,7 +93,7 @@ export function Room({
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [detailsTab, setDetailsTab] = useState<"chat" | "chips">("chat");
+  const [detailsTab, setDetailsTab] = useState<"chat" | "chips" | "stats">("chat");
   const [hasBottomSafeGap, setHasBottomSafeGap] = useState(
     isStandaloneOrFullscreen
   );
@@ -108,7 +111,8 @@ export function Room({
   ];
   const boardCards = [...cards, null, null, null, null, null].splice(0, 5);
   const onlineCount =
-    room?.users.filter((user) => !user.isOffline).length || 0;
+    room?.users.filter((user) => !user.isBot && !user.isOffline).length || 0;
+  const botCount = room?.users.filter((user) => user.isBot).length || 0;
 
   useEffect(() => {
     const standaloneQuery = window.matchMedia?.("(display-mode: standalone)");
@@ -204,7 +208,7 @@ export function Room({
           >
             <span className="live-room-online">
               <i />
-              {onlineCount} 人在线
+              {onlineCount} 人在线{botCount > 0 ? ` · ${botCount} AI` : ""}
             </span>
             <div className="live-mobile-menu-item">
               <Spectators />
@@ -254,6 +258,12 @@ export function Room({
                   <span>开始游戏</span>
                 </div>
               )
+            ) : null}
+            {self?.isRoomOwner ? (
+              <div className="live-mobile-menu-item">
+                <BotManager />
+                <span>AI机器人</span>
+              </div>
             ) : null}
             {!self?.isSpectator ? (
               self?.isReady ? (
@@ -377,6 +387,18 @@ export function Room({
                 }}
               />
             </Tooltip>
+            <Tooltip title="我的数据">
+              <Button
+                className="live-room-icon-button live-stats-details-trigger"
+                icon={<BarChartOutlined />}
+                aria-label="我的数据"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setDetailsTab("stats");
+                  setShowDetails(true);
+                }}
+              />
+            </Tooltip>
           </div>
         </div>
       </header>
@@ -496,15 +518,25 @@ export function Room({
                 <TrophyOutlined />
                 <span>积分信息</span>
               </button>
+              <button
+                type="button"
+                className={detailsTab === "stats" ? "is-active" : ""}
+                onClick={() => setDetailsTab("stats")}
+              >
+                <BarChartOutlined />
+                <span>我的数据</span>
+              </button>
             </nav>
 
             <div className="live-room-drawer__content">
               {detailsTab === "chat" ? (
                 <GameHistory previewLogs={previewDetails?.logs} />
-              ) : (
+              ) : detailsTab === "chips" ? (
                 <ChipsRecord
                   previewRecords={previewDetails?.chipsRecords}
                 />
+              ) : (
+                <PlayerAnalytics />
               )}
             </div>
           </aside>

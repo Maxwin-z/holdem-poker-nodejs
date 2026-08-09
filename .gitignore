@@ -28,3 +28,6 @@ dist/
 
 # runtime analysis logs
 /logs
+/data/*.sqlite
+/data/*.sqlite-shm
+/data/*.sqlite-wal

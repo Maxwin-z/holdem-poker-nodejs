@@ -78,6 +78,8 @@ function makeUser(
     stack,
     bet: 0,
     ...overrides,
+    isBot: overrides.isBot ?? false,
+    pendingBotRemoval: overrides.pendingBotRemoval ?? false,
   };
 }
 

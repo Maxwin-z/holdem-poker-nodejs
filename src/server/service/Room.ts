@@ -32,6 +32,14 @@ import {
   DISCONNECTED_ACTION_GRACE_SECONDS,
   INITIAL_ACTION_TIME_SECONDS,
 } from "../../shared/actionTimer";
+import { OpponentModel } from "../bot/opponent-model";
+import { getBotStrategyProvider } from "../bot/strategy-registry";
+import type {
+  BotAction,
+  BotStrategyChoice,
+  BotStrategyRequest,
+} from "../bot/types";
+import { getPlayerAnalyticsStore } from "../analytics/player-analytics";
 
 export type RoomID = string;
 export enum GameRound {
@@ -40,6 +48,9 @@ export enum GameRound {
   Turn = 2,
   River = 3,
 }
+
+const BOT_AUTO_REBUY_THRESHOLD_BB = 5;
+const BOT_AUTO_REBUY_TARGET_BB = 100;
 
 function sum(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0);
@@ -67,6 +78,7 @@ export class Game {
   round: GameRound = GameRound.PreFlop;
   sortedUsers: Token[] = [];
   actingUserTimer = setTimeout(() => { }, 0);
+  botActionTimer = setTimeout(() => { }, 0);
   isSettling: boolean = true;
   nextGameTime: number = 0;
   roundLeader: Token = ""; // the max bet
@@ -86,6 +98,8 @@ export class Game {
   multiSettleUsers: Token[] = [];
   multiSettleTimer = setTimeout(() => { }, 0);
   handSeq: number = 0;
+  analyticsHandId: string = "";
+  latestAdviceByToken: Record<Token, PreflopAdvice | PostflopAdvice> = {};
 
   runItOutBoardCardsByUser: { [token: string]: Card[] } = {};
 
@@ -100,6 +114,7 @@ export class Game {
   }
 
   start() {
+    roomMap[this.roomid].prepareBotsForNextHand();
     roomMap[this.roomid].applyReadyNextBuyIns();
     if (!this.initUsers()) return;
     this.cards = randomHands(52);
@@ -111,6 +126,7 @@ export class Game {
     this.raiseUser = "";
     this.raiseCount = 0;
     this.actionHistory = [];
+    this.latestAdviceByToken = {};
 
     this.multiSettleStart = false;
     this.multiSettleRound = GameRound.PreFlop;
@@ -126,10 +142,14 @@ export class Game {
       console.log("not enough users");
       return;
     }
+    roomMap[this.roomid].opponentModel.beginHand(
+      this.sortedUsers.filter((token) => !userMap[token].isBot)
+    );
     console.log(new Array(10).fill("==").join(""));
     console.log("START:", this.sortedUsers);
     console.log(prettify(this.cards));
     this.handSeq += 1;
+    this.analyticsHandId = uuidv4();
     publishLog2all(this.roomid, [
       `<div class="log-banner log-banner--start">🂠 第 ${this.handSeq} 手开始</div>`,
     ]);
@@ -141,6 +161,7 @@ export class Game {
   }
   nextGame() {
     if (!roomMap[this.roomid].isGaming) return;
+    roomMap[this.roomid].prepareBotsForNextHand();
     const tokens = roomMap[this.roomid].users;
     const currentBBIndex = tokens.findIndex((t) => t == this.bigBlindUser);
     for (let i = 0; i < tokens.length - 1; ++i) {
@@ -230,6 +251,7 @@ export class Game {
       userMap[t].needAction = true;
       userMap[t].isInCurrentGame = true;
     });
+    this.beginAnalyticsHand();
     this.nextActUser(bb.token);
   }
   maxPreBet() {
@@ -251,6 +273,11 @@ export class Game {
       throw "not enough chips";
     }
     const preBets = this.maxPreBet();
+    const raiseLevel = this.raiseCount;
+    const facingRaise =
+      this.round === GameRound.PreFlop
+        ? this.raiseCount > 0
+        : preBets > user.bets[this.round];
     if (chips < preBets && chips < availableStack) {
       throw "chips should be large than the previous bet user";
     }
@@ -304,6 +331,21 @@ export class Game {
       token,
       amount: chips,
     });
+    if (!user.isBot) {
+      this.recordHumanAction(
+        token,
+        actionType,
+        chips / (this.smallBlind * 2),
+        facingRaise,
+        raiseLevel
+      );
+      roomMap[this.roomid].opponentModel.observe({
+        token,
+        round: this.round,
+        action: actionType,
+        facingRaise,
+      });
+    }
     if (chips == availableStack) {
       log += `<span class="log-act log-act--allin">全下</span> ${chips}`;
       user.actionName = "AllIn";
@@ -352,6 +394,25 @@ export class Game {
     user.isFolded = true;
     user.actionName = "Fold";
     this.actionHistory.push({ round: this.round, type: "fold", token });
+    if (!user.isBot) {
+      const facingRaise =
+        this.round === GameRound.PreFlop
+          ? this.raiseCount > 0
+          : this.maxPreBet() > user.bets[this.round];
+      this.recordHumanAction(
+        token,
+        "fold",
+        undefined,
+        facingRaise,
+        this.raiseCount
+      );
+      roomMap[this.roomid].opponentModel.observe({
+        token,
+        round: this.round,
+        action: "fold",
+        facingRaise,
+      });
+    }
     this.setActed(token);
     if (!this.decreaseActiveUserToSettle()) {
       this.nextActUser(token);
@@ -466,6 +527,15 @@ export class Game {
         user.isReady = false;
       }
       crs.find((cr) => cr.id === user.chipsRecordID)!.chips = user.stack;
+      if (!user.isBot) {
+        this.recordAnalyticsSettlement(
+          p.id,
+          profits / (this.smallBlind * 2),
+          Boolean(p.isWinner),
+          availableUsers.length > 1,
+          this.multiSettleIndex >= this.multiSettleTimes - 1
+        );
+      }
     });
 
     publishLog2all(this.roomid, logs);
@@ -605,6 +675,9 @@ export class Game {
             send2user(t, {
               selectSettleTimes: 1,
             });
+            if (userMap[t].isBot) {
+              delayTry(() => this.userSetSettleTimes(t, 1), 650);
+            }
           });
 
           this.multiSettleTimer = delayTry(() => {
@@ -645,6 +718,18 @@ export class Game {
     }
 
     this.round += 1;
+    if (this.round === GameRound.Flop) {
+      try {
+        getPlayerAnalyticsStore().markSawFlop(
+          this.analyticsHandId,
+          this.sortedUsers.filter(
+            (token) => !userMap[token].isBot && !userMap[token].isFolded
+          )
+        );
+      } catch (error) {
+        console.warn("player analytics mark flop failed", error);
+      }
+    }
     this.roundLeader = "";
     this.sortedUsers.forEach((t) => (userMap[t].actionName = ""));
     this.raiseUser = "";
@@ -728,7 +813,171 @@ export class Game {
     user.actionTimeLimit = Math.ceil(delay / 1000);
     console.log("setActingUser", user.name);
     this.scheduleActionTimeout(token, delay);
-    this.publishGtoAdvice(token);
+    if (user.isBot) {
+      this.scheduleBotAction(token);
+    } else {
+      this.publishGtoAdvice(token);
+    }
+  }
+
+  private buildBotStrategyRequest(token: Token): BotStrategyRequest {
+    const players: BotStrategyRequest["players"] = {};
+    this.sortedUsers.forEach((playerToken) => {
+      const player = userMap[playerToken];
+      players[playerToken] = {
+        bet: player.bets[this.round],
+        totalBets: player.totalBets,
+        stack: player.stack,
+        isFolded: player.isFolded,
+        isAllIn: player.isAllIn,
+        hands: player.hands,
+      };
+    });
+    const lastRaiserToken = this.raiseUser
+      ? this.sortedUsers.find(
+          (playerToken) =>
+            userMap[playerToken].chipsRecordID === this.raiseUser
+        )
+      : undefined;
+    const humanOpponents = this.sortedUsers.filter(
+      (playerToken) =>
+        playerToken !== token &&
+        !userMap[playerToken].isBot &&
+        !userMap[playerToken].isFolded
+    );
+    return {
+      round: this.round,
+      sortedUsers: this.sortedUsers,
+      players,
+      boardCards: this.boardCards,
+      bbChips: this.smallBlind * 2,
+      actingToken: token,
+      lastRaiserToken,
+      raiseCount: this.raiseCount,
+      actionHistory: this.actionHistory,
+      heroPositionLabel: this.positionLabelOf(token),
+      style: userMap[token].botStyle,
+      opponentTendencies:
+        roomMap[this.roomid].opponentModel.summarize(humanOpponents),
+    };
+  }
+
+  private scheduleBotAction(token: Token) {
+    clearTimeout(this.botActionTimer);
+    const thinkingTime = 650 + Math.floor(Math.random() * 700);
+    this.botActionTimer = delayTry(() => {
+      this.performBotAction(token).catch((error) => {
+        console.warn("bot action failed", error);
+        this.performSafeBotFallback(token);
+      });
+    }, thinkingTime);
+  }
+
+  async performBotAction(token: Token) {
+    const user = userMap[token];
+    if (!user?.isBot || !user.isActing || this.isSettling) return;
+    const result = await getBotStrategyProvider().decide(
+      this.buildBotStrategyRequest(token)
+    );
+    if (!user.isActing || this.isSettling) return;
+    if (!result) {
+      this.performSafeBotFallback(token);
+      return;
+    }
+    const choices = this.canonicalBotChoices(
+      token,
+      result.choices.length > 0
+        ? result.choices
+        : [{ action: result.fallbackAction, probability: 1 }]
+    );
+    const total = choices.reduce((sum, choice) => sum + choice.probability, 0);
+    let roll = Math.random() * total;
+    let selected = choices[choices.length - 1];
+    for (const choice of choices) {
+      roll -= choice.probability;
+      if (roll <= 0) {
+        selected = choice;
+        break;
+      }
+    }
+    console.log(
+      "[BOT]",
+      user.name,
+      result.source,
+      "=>",
+      selected.action,
+      selected.sizeChips ?? "-"
+    );
+    this.executeBotChoice(token, selected);
+    publish2all(this.roomid);
+  }
+
+  private canonicalBotChoices(
+    token: Token,
+    choices: BotStrategyChoice[]
+  ): BotStrategyChoice[] {
+    const user = userMap[token];
+    const currentBet = this.maxPreBet();
+    const facingBet = currentBet > user.bets[this.round];
+    const byAction: Partial<Record<BotAction, BotStrategyChoice>> = {};
+    choices.forEach((choice) => {
+      let action = choice.action;
+      if (!facingBet && (action === "fold" || action === "call")) action = "check";
+      if (facingBet && action === "check") action = "fold";
+      if (facingBet && action === "bet") action = "raise";
+      if (!facingBet && action === "raise") action = "bet";
+      const existing = byAction[action];
+      if (existing) {
+        existing.probability += choice.probability;
+      } else if (choice.probability > 0) {
+        byAction[action] = { ...choice, action };
+      }
+    });
+    const normalized = Object.keys(byAction).map(
+      (action) => byAction[action as BotAction]!
+    );
+    return normalized.length > 0
+      ? normalized
+      : [{ action: facingBet ? "fold" : "check", probability: 1 }];
+  }
+
+  private executeBotChoice(token: Token, choice: BotStrategyChoice) {
+    const user = userMap[token];
+    const previousStreetBets = sum(user.bets.slice(0, this.round));
+    const maxTo = user.stack - previousStreetBets;
+    const currentBet = this.maxPreBet();
+    if (choice.action === "fold") {
+      this.fold(token);
+      return;
+    }
+    if (choice.action === "check" || choice.action === "call") {
+      this.bet(token, Math.min(currentBet, maxTo));
+      return;
+    }
+    if (choice.action === "allin") {
+      this.bet(token, maxTo);
+      return;
+    }
+    if (maxTo <= currentBet) {
+      this.bet(token, maxTo);
+      return;
+    }
+    const minimumRaiseTo = this.raiseBet + this.raiseBetDiff;
+    const suggested = choice.sizeChips === Infinity
+      ? maxTo
+      : Number.isFinite(choice.sizeChips)
+      ? Math.round(choice.sizeChips!)
+      : minimumRaiseTo;
+    this.bet(token, Math.min(maxTo, Math.max(minimumRaiseTo, suggested)));
+  }
+
+  private performSafeBotFallback(token: Token) {
+    const user = userMap[token];
+    if (!user?.isActing) return;
+    const currentBet = this.maxPreBet();
+    if (currentBet > user.bets[this.round]) this.fold(token);
+    else this.bet(token, user.bets[this.round]);
+    publish2all(this.roomid);
   }
 
   /**
@@ -782,6 +1031,7 @@ export class Game {
         });
       }
       if (!advice) return false;
+      this.latestAdviceByToken[token] = advice;
       send2user(token, {
         logs: [
           {
@@ -860,6 +1110,74 @@ export class Game {
       );
     } catch (e) {
       console.warn("writeGtoLog failed:", e);
+    }
+  }
+
+  private beginAnalyticsHand() {
+    try {
+      const bigBlind = this.smallBlind * 2;
+      getPlayerAnalyticsStore().beginHand({
+        handId: this.analyticsHandId,
+        roomId: this.roomid,
+        playerCount: this.sortedUsers.length,
+        hasBot: this.sortedUsers.some((token) => userMap[token].isBot),
+        players: this.sortedUsers
+          .filter((token) => !userMap[token].isBot)
+          .map((token) => ({
+            token,
+            name: userMap[token].name,
+            position: this.positionLabelOf(token),
+            stackBB: userMap[token].stack / bigBlind,
+          })),
+      });
+    } catch (error) {
+      console.warn("player analytics hand start failed", error);
+    }
+  }
+
+  private recordHumanAction(
+    token: Token,
+    action: string,
+    amountBB: number | undefined,
+    facingRaise: boolean,
+    raiseLevel: number
+  ) {
+    try {
+      getPlayerAnalyticsStore().recordAction({
+        handId: this.analyticsHandId,
+        token,
+        street: this.round,
+        position: this.positionLabelOf(token),
+        action,
+        amountBB,
+        facingRaise,
+        raiseLevel,
+        advice: this.latestAdviceByToken[token],
+      });
+      delete this.latestAdviceByToken[token];
+    } catch (error) {
+      console.warn("player analytics action failed", error);
+    }
+  }
+
+  private recordAnalyticsSettlement(
+    token: Token,
+    profitBB: number,
+    won: boolean,
+    showdown: boolean,
+    final: boolean
+  ) {
+    try {
+      getPlayerAnalyticsStore().recordSettlement({
+        handId: this.analyticsHandId,
+        token,
+        profitBB,
+        won,
+        showdown,
+        final,
+      });
+    } catch (error) {
+      console.warn("player analytics settlement failed", error);
     }
   }
 
@@ -1034,6 +1352,7 @@ export class Game {
     userMap[token].isActing = false;
     userMap[token].needAction = false;
     clearTimeout(this.actingUserTimer);
+    clearTimeout(this.botActionTimer);
   }
   calcUserRank() {
     this.sortedUsers.forEach((t) => {
@@ -1061,6 +1380,7 @@ class Room {
   buyIn: number = 0;
   game: Game = new Game("", "", 0);
   chipsRecords: ChipsRecord[] = [];
+  opponentModel = new OpponentModel();
 
   constructor(id: string, sb: number, buyIn: number) {
     if (sb === 0 || buyIn === 0) {
@@ -1170,8 +1490,36 @@ class Room {
     });
   }
 
+  seatedCount(): number {
+    return this.users.filter((token) => !userMap[token].isSpectator).length;
+  }
+
+  prepareBotsForNextHand() {
+    const pending = this.users.filter(
+      (token) => userMap[token].isBot && userMap[token].pendingBotRemoval
+    );
+    pending.forEach((token) => this.removeUser(token));
+    const bigBlind = this.smallBlind * 2;
+    this.users.forEach((token) => {
+      const user = userMap[token];
+      if (
+        user.isBot &&
+        user.stack < BOT_AUTO_REBUY_THRESHOLD_BB * bigBlind &&
+        user.nextBuyIn === null
+      ) {
+        user.nextBuyIn = BOT_AUTO_REBUY_TARGET_BB * bigBlind;
+        // A busted player is marked not-ready during settlement. Bots should
+        // remain seated and take part again after their automatic rebuy.
+        user.isReady = true;
+      }
+    });
+  }
+
   addUser(token: Token): boolean {
     if (this.users.findIndex((t) => t == token) == -1) {
+      if (this.seatedCount() >= 10) {
+        throw "牌桌最多容纳10名玩家";
+      }
       this.users.push(token);
 
       const id = uuidv4();

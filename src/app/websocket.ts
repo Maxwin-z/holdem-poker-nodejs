@@ -383,3 +383,11 @@ export function ws_sendMessage(message: string) {
 export function ws_requestGtoAdvice() {
   send2server({ action: ActionType.GTO_ADVICE });
 }
+
+export function ws_addBot(style: "random" | "standard" | "tight" | "loose") {
+  send2server({ action: ActionType.ADD_BOT, style });
+}
+
+export function ws_removeBot(botId: string) {
+  send2server({ action: ActionType.REMOVE_BOT, botId });
+}

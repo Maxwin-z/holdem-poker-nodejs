@@ -130,6 +130,8 @@ export interface HeroAdvice {
   sizeBB?: number;
   /** Raise-to total size in chips, when the action is raise / allin. */
   sizeChips?: number;
+  /** Mixed strategy for this exact hand, not the whole reference range. */
+  actionDistribution: ActionDistribution;
   message: string;
 }
 
