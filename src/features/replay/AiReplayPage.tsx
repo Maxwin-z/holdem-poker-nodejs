@@ -944,7 +944,7 @@ function SettlePanel({
 
 const TAB_STREETS: ReplayStreet[] = ["preflop", "flop", "turn", "river"];
 
-function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void }) {
+function ReplayDetail({ replay, shared, onBack }: { replay: AiReplayHand; shared: boolean; onBack(): void }) {
   // Participant snapshots are persisted in seat order: SB, BB, early seats..., BTN.
   // Re-derive labels so replays saved before the position-label fix also render correctly.
   const displayParticipants: DisplayParticipant[] = useMemo(() => replay.participants.map((participant, seatIndex) => {
@@ -1091,7 +1091,7 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
   return (
     <main className="replay-detail">
       <div className="replay-detail__mobile-back">
-        <Button icon={<ArrowLeftOutlined />} onClick={onBack}>我的复盘</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={onBack}>{shared ? "返回首页" : "我的复盘"}</Button>
       </div>
       <section className="replay-hero">
         <div className="replay-hero__title">
@@ -1315,14 +1315,17 @@ export function AiReplayPage() {
   }, [selectedId]);
 
   const ownedIds = useMemo(() => new Set(list.items.map((item) => item.publicId)), [list.items]);
+  // A replay the viewer does not own was opened through a share link: show only
+  // that hand and keep the token-gated replay list out of the shared view.
+  const sharedView = Boolean(selectedId) && !ownedIds.has(selectedId!);
   const navigate = (id: string | null) => {
     window.history.pushState({}, "", id ? `/replays/${id}` : "/replays");
     setSelectedId(id);
   };
 
   return (
-    <div className={`replay-page ${selectedId ? "has-selection" : ""}`}>
-      <aside className={`replay-sidebar ${list.items.length === 0 && selectedId ? "is-public" : ""}`}>
+    <div className={`replay-page ${selectedId ? "has-selection" : ""} ${sharedView ? "is-shared" : ""}`}>
+      {!sharedView && <aside className="replay-sidebar">
         <header>
           <button onClick={() => { window.location.href = "/"; }}><ArrowLeftOutlined /></button>
           <div><span>RIVER CLUB</span><strong>AI 牌局复盘</strong></div>
@@ -1340,10 +1343,15 @@ export function AiReplayPage() {
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={localStorage["token"] ? "还没有完成的 AI 对局" : "登录后查看你的复盘列表"} />
           )}
         </div>
-      </aside>
+      </aside>}
       <section className="replay-main">
         {detailLoading ? <div className="replay-loading"><Spin size="large" /></div> : detail ? (
-          <ReplayDetail replay={detail} onBack={() => navigate(null)} key={detail.publicId} />
+          <ReplayDetail
+            replay={detail}
+            shared={sharedView}
+            onBack={() => { sharedView ? (window.location.href = "/") : navigate(null); }}
+            key={detail.publicId}
+          />
         ) : (
           <div className="replay-empty">
             {error ? <><strong>暂时无法打开复盘</strong><p>{error}</p></> : <><RobotOutlined /><strong>选择一手牌开始复盘</strong><p>桌面端可在左侧切换牌局，移动端会进入独立详情页。</p></>}
