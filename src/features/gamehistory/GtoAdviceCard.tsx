@@ -109,7 +109,7 @@ function PreflopGtoAdviceCard({
         role="button"
       >
         <span className="gto-advice-card__badge">GTO</span>
-        <span className="gto-advice-card__summary">翻前</span>
+        <span className="gto-advice-card__summary">Preflop(翻前)</span>
         <span className="gto-advice-card__toggle">
           {stale ? "已过行动阶段 ▸" : "▸"}
         </span>
@@ -121,7 +121,7 @@ function PreflopGtoAdviceCard({
     <div className="gto-advice-card" style={{ borderColor: recMeta.color }}>
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
-        <strong>翻前建议</strong>
+        <strong>Preflop(翻前) 建议</strong>
         <TrustBadge trust={advice.trust} />
         <small>
           {advice.heroPositionLabel} · {advice.stackBB}bb · 底池{" "}

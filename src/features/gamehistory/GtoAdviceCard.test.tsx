@@ -89,14 +89,14 @@ describe("GtoAdviceCard 全局折叠", () => {
   it("默认折叠时只显示 GTO + 行动轮次，不显示建议", () => {
     render(<GtoAdviceCard entry={postflopEntry()} globalCollapsed />);
     expect(screen.getByText("GTO")).toBeInTheDocument();
-    expect(screen.getByText("翻牌")).toBeInTheDocument();
-    expect(screen.queryByText("翻牌建议")).not.toBeInTheDocument();
+    expect(screen.getByText("Flop(翻牌)")).toBeInTheDocument();
+    expect(screen.queryByText("Flop(翻牌) 建议")).not.toBeInTheDocument();
     expect(screen.queryByText(/建议/)).not.toBeInTheDocument();
   });
 
-  it("翻前折叠条显示“翻前”", () => {
+  it("翻前折叠条显示“Preflop(翻前)”", () => {
     render(<GtoAdviceCard entry={preflopEntry()} globalCollapsed />);
-    expect(screen.getByText("翻前")).toBeInTheDocument();
+    expect(screen.getByText("Preflop(翻前)")).toBeInTheDocument();
   });
 
   it("展开态边框颜色与推荐行动字体颜色一致", () => {
@@ -172,17 +172,17 @@ describe("GtoAdviceCard 全局折叠", () => {
     render(<GameHistory />);
 
     // 默认折叠
-    expect(screen.getByText("翻牌")).toBeInTheDocument();
-    expect(screen.queryByText("翻牌建议")).not.toBeInTheDocument();
+    expect(screen.getByText("Flop(翻牌)")).toBeInTheDocument();
+    expect(screen.queryByText("Flop(翻牌) 建议")).not.toBeInTheDocument();
 
     // 点击眼睛展开，写入本地
     fireEvent.click(screen.getByRole("button", { name: "展开 GTO 建议" }));
-    expect(screen.getByText("翻牌建议")).toBeInTheDocument();
+    expect(screen.getByText("Flop(翻牌) 建议")).toBeInTheDocument();
     expect(localStorage.getItem("gtoAdviceCollapsed")).toBe("0");
 
     // 再次点击折叠
     fireEvent.click(screen.getByRole("button", { name: "折叠 GTO 建议" }));
-    expect(screen.queryByText("翻牌建议")).not.toBeInTheDocument();
+    expect(screen.queryByText("Flop(翻牌) 建议")).not.toBeInTheDocument();
     expect(localStorage.getItem("gtoAdviceCollapsed")).toBe("1");
   });
 
@@ -193,6 +193,6 @@ describe("GtoAdviceCard 全局折叠", () => {
       room: { game: { handSeq: 1, acting: "p1" } },
     };
     render(<GameHistory />);
-    expect(screen.getByText("翻牌建议")).toBeInTheDocument();
+    expect(screen.getByText("Flop(翻牌) 建议")).toBeInTheDocument();
   });
 });

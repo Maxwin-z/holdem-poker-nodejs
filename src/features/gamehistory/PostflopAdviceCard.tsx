@@ -20,9 +20,9 @@ const ACTION_META: Record<
 };
 
 const STREET_LABEL: Record<string, string> = {
-  flop: "翻牌",
-  turn: "转牌",
-  river: "河牌",
+  flop: "Flop(翻牌)",
+  turn: "Turn(转牌)",
+  river: "River(河牌)",
 };
 
 function cardColor(suit: string): string {
@@ -94,7 +94,7 @@ export default function PostflopAdviceCard({
     <div className="gto-advice-card" style={{ borderColor: recMeta.color }}>
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
-        <strong>{STREET_LABEL[advice.street]}建议</strong>
+        <strong>{STREET_LABEL[advice.street]} 建议</strong>
         <TrustBadge trust={advice.trust} />
         <small>
           {advice.heroPositionLabel} · 底池 {advice.potChips} 筹码 ·{" "}
