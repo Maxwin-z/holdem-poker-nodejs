@@ -15,6 +15,7 @@
   width: 100%; height: 100%; display: grid; grid-template-columns: 340px minmax(0, 1fr);
   color: var(--replay-text); background: radial-gradient(circle at 65% 0%, #15352a 0, var(--replay-bg) 38%);
 }
+.replay-page.is-shared { grid-template-columns: minmax(0, 1fr); }
 .replay-sidebar { min-width: 0; overflow: hidden; display: flex; flex-direction: column; background: rgba(7, 18, 14, .96); border-right: 1px solid var(--replay-line); }
 .replay-sidebar > header { height: 72px; flex: 0 0 72px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--replay-line); }
 .replay-sidebar > header button { border: 0; background: #14261f; color: #d8ebe1; width: 36px; height: 36px; border-radius: 12px; cursor: pointer; }
@@ -56,6 +57,8 @@
 .replay-empty p { max-width: 420px; text-align: center; }
 .replay-detail { width: min(1220px, calc(100% - 56px)); margin: 0 auto; padding: 34px 0 80px; }
 .replay-detail__mobile-back { display: none; }
+.replay-page.is-shared .replay-detail__mobile-back { display: block; margin-bottom: 10px; }
+.replay-page.is-shared .replay-detail__mobile-back .ant-btn { border-color: var(--replay-line); color: #dcece4; background: var(--replay-panel); }
 .replay-hero { position: relative; padding: 18px 22px 16px; overflow: hidden; border: 1px solid var(--replay-line); border-radius: 20px; background: linear-gradient(135deg, rgba(20, 52, 41, .94), rgba(11, 27, 22, .96)); box-shadow: 0 22px 70px rgba(0, 0, 0, .24); }
 .replay-hero::after { content: "♠"; position: absolute; right: 5%; top: -55px; color: rgba(79, 219, 152, .055); font-size: 170px; line-height: 1; }
 .replay-hero__title { position: relative; z-index: 1; }
