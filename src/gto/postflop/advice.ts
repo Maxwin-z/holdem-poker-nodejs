@@ -32,6 +32,11 @@ function roundBB(x: number): number {
   return Math.round(x * 2) / 2;
 }
 
+/** Equities are kept at 0.1% precision so EV grading stays meaningful. */
+function round3(x: number): number {
+  return Math.round(x * 1000) / 1000;
+}
+
 function pct(x: number): string {
   return `${Math.round(x * 100)}%`;
 }
@@ -83,9 +88,15 @@ function buildLimitations(
   } else {
     lim.push("多人底池采用范围启发式近似，非精确多人均衡");
   }
-  lim.push(
-    "继续范围模型为启发式组合枚举（上限 160 组合等间隔抽样），不是完整对手范围"
-  );
+  if (input.villainRange && input.villainRange.length > 0) {
+    lim.push(
+      "对手范围由翻前图表+行动线追踪（二元保留/剔除过滤），仍是近似而非完整贝叶斯范围"
+    );
+  } else {
+    lim.push(
+      "继续范围模型为启发式组合枚举（上限 160 组合等间隔抽样），不是完整对手范围"
+    );
+  }
   if (input.effectiveStackBB < 80 || input.effectiveStackBB > 120) {
     lim.push(
       `当前有效筹码 ${round1(input.effectiveStackBB)}bb 偏离基准，尺寸/全下规则为近似`
@@ -206,6 +217,9 @@ export function getPostflopAdvice(
   const texture = analyzeBoard(input.board).texture;
   notes.push(`牌面：${BOARD_TEXTURE_CN[texture]}`);
   notes.push(`手牌类别：${HAND_CATEGORY_CN[heroCat]}`);
+  if (input.villainRange && input.villainRange.length > 0) {
+    notes.push("对手范围按翻前图表角色与行动线逐街追踪");
+  }
 
   const handKey = handGroupName(input.heroCards[0], input.heroCards[1]);
   const hero: PostflopHeroAdvice = {
@@ -241,11 +255,13 @@ export function getPostflopAdvice(
     heroPositionLabel: input.heroPositionLabel || (input.heroInPosition ? "IP" : "OOP"),
     potChips: input.pot,
     potBB: round1(input.pot / input.bigBlind),
+    toCallChips: input.toCall,
+    toCallBB: round1(input.toCall / input.bigBlind),
     effectiveStackBB: round1(input.effectiveStackBB),
-    equityVsRandom: round1(deterministicEquity(input.heroCards, input.board)),
+    equityVsRandom: round3(deterministicEquity(input.heroCards, input.board)),
     equityVsRange:
       decision.equityVsRange !== undefined
-        ? round1(decision.equityVsRange)
+        ? round3(decision.equityVsRange)
         : undefined,
     equityRangeCombos: decision.equityRangeCombos,
     continuingRange: decision.equityRange,
@@ -261,5 +277,6 @@ export function getPostflopAdvice(
     adjustments: buildAdjustments(input),
     reasoning: decision.reasoning,
     dataSource: DATA_SOURCE,
+    trust: decision.trust || "heuristic",
   };
 }

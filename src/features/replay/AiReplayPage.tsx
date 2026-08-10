@@ -9,7 +9,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Card } from "../../ApiType";
 import { positionLabelByActionOrder } from "../../gto/preflop/positions";
 import type { PostflopAdvice } from "../../gto/postflop/types";
-import { buildAiReplayComparison, classifyAiReplaySize } from "../../shared/aiReplay";
+import {
+  buildAiReplayComparison,
+  calculateAiReplayDecisionDeviation,
+  classifyAiReplaySize,
+} from "../../shared/aiReplay";
+import { EV_BASIS_LABEL_CN } from "../../shared/evLoss";
 import type {
   AiReplayDeviationLevel,
   AiReplayDecision,
@@ -195,6 +200,22 @@ function buildDecisionAssessments(
     });
   }
 
+  // Recomputed live so older replays get the current EV grading too.
+  const deviation = calculateAiReplayDecisionDeviation(decision);
+  if (deviation && deviation.evLossBB !== undefined) {
+    const basisLabel = deviation.evBasis
+      ? EV_BASIS_LABEL_CN[deviation.evBasis]
+      : "";
+    const evText = `估算 EV 损失 ${deviation.evLossBB.toFixed(2)}bb${basisLabel ? `（${basisLabel}）` : ""}`;
+    assessments.push(
+      deviation.evLossBB < 0.25
+        ? { icon: "✅", tone: "success", text: evText }
+        : deviation.evLossBB < 1
+          ? { icon: "⚠️", tone: "warning", text: evText }
+          : { icon: "❌", tone: "danger", text: evText }
+    );
+  }
+
   const actualAction = advice.kind === "preflop" && decision.actual.action === "check"
     ? "call"
     : decision.actual.action;
@@ -327,6 +348,9 @@ function ReplayListItem({
       </span>
       <span className="replay-list-item__bottom">
         <span><RobotOutlined /> {replay.scoredDecisionCount} 次玩家决策</span>
+        {replay.totalEvLossBB !== null && replay.totalEvLossBB !== undefined && (
+          <span>EV -{replay.totalEvLossBB.toFixed(2)}bb</span>
+        )}
         <strong className={replay.heroProfitBB >= 0 ? "is-win" : "is-loss"}>
           {replay.heroProfitBB > 0 ? "+" : ""}{replay.heroProfitBB.toFixed(1)}bb
         </strong>
@@ -899,6 +923,14 @@ function SettlePanel({
           </b>
         </span>
         <span><small>整手评级</small><b className={`is-deviation-${replay.deviationLevel}`}>{DEVIATION_LABEL[replay.deviationLevel]}</b></span>
+        {replay.totalEvLossBB !== null && replay.totalEvLossBB !== undefined && (
+          <span>
+            <small>估算 EV 损失</small>
+            <b className={replay.totalEvLossBB >= 1 ? "is-loss" : ""}>
+              {replay.totalEvLossBB.toFixed(2)} BB
+            </b>
+          </span>
+        )}
       </div>
       {replay.runouts.length > 1 && (
         <section className="replay-panel__section">

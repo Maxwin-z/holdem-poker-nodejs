@@ -6,6 +6,8 @@
  * heuristic for multiway / fallback, with a soundness gate on top.
  */
 
+import type { AdviceTrust } from "../trust";
+
 export type PostflopStreet = "flop" | "turn" | "river";
 
 export type PostflopAction =
@@ -63,6 +65,12 @@ export interface PostflopSituation {
   heroPositionLabel?: string;
   /** Optional raw board cards for display. */
   boardCards?: { num: number; suit: string }[];
+  /**
+   * Optional action-line-tracked villain range (concrete combos). When
+   * present the engine measures equity against it instead of the generic
+   * board-only continuing-range model.
+   */
+  villainRange?: [number, number][];
 }
 
 export interface PostflopActionDistribution {
@@ -116,6 +124,10 @@ export interface PostflopAdvice {
   heroPositionLabel: string;
   potChips: number;
   potBB: number;
+  /** Chips hero needed to call at decision time (0 when not facing a bet). */
+  toCallChips?: number;
+  /** Same in big blinds; lets graders compute pot-odds EV from the advice. */
+  toCallBB?: number;
   effectiveStackBB: number;
   /** Deterministic equity vs a random hand (0-1). */
   equityVsRandom: number;
@@ -140,6 +152,8 @@ export interface PostflopAdvice {
   adjustments: string[];
   reasoning: string;
   dataSource: string;
+  /** How this advice was produced (model / heuristic). */
+  trust?: AdviceTrust;
 }
 
 export const POSTFLOP_ACTIONS: PostflopAction[] = [

@@ -7,6 +7,10 @@ import { analyzeBoard } from "../postflop/board";
 import { equityVsRange } from "../postflop/equity";
 import { evaluateHand, HAND_CATEGORY } from "../postflop/hand-eval";
 import { villainContinuingRange } from "../postflop/range";
+import {
+  preflopClassRange,
+  trackedVillainRange,
+} from "../postflop/range-tracker";
 import type { PostflopSituation } from "../postflop/types";
 
 const c = (num: number, suit: string) => cardToId({ num, suit });
@@ -105,6 +109,32 @@ describe("postflop equity", () => {
     assert.strictEqual(a, b);
   });
 
+  it("multiway tightens the villain continuing range", () => {
+    const board = [c(13, "d"), c(9, "h"), c(4, "c")];
+    const hero: [number, number] = [c(14, "h"), c(13, "h")];
+    for (const aggression of [false, true]) {
+      const headsUp = villainContinuingRange(hero, board, {
+        aggression,
+        multiway: false,
+      });
+      const multiway = villainContinuingRange(hero, board, {
+        aggression,
+        multiway: true,
+      });
+      assert.ok(
+        multiway.length < headsUp.length,
+        `multiway (${multiway.length}) should be tighter than HU (${headsUp.length}) with aggression=${aggression}`
+      );
+      const headsUpKeys = new Set(headsUp.map(([a, b]) => `${a},${b}`));
+      multiway.forEach(([a, b]) => {
+        assert.ok(
+          headsUpKeys.has(`${a},${b}`),
+          "multiway range must be a subset of the heads-up range"
+        );
+      });
+    }
+  });
+
   it("equityVsRange is exact on the river", () => {
     const board = [c(9, "d"), c(7, "h"), c(2, "c"), c(5, "s"), c(3, "d")];
     const hero: [number, number] = [c(9, "h"), c(9, "s")]; // trips nines
@@ -115,6 +145,94 @@ describe("postflop equity", () => {
     const res = equityVsRange(hero, board, range, 100);
     assert.ok(res.equity > 0.9, `trips should crush the range, got ${res.equity}`);
     assert.ok(res.combos > 0);
+  });
+});
+
+describe("villain range tracker", () => {
+  const hero: [number, number] = [c(14, "h"), c(13, "h")];
+
+  it("builds the preflop base range from the villain's chart role", () => {
+    const open = preflopClassRange("UTG", { kind: "open" })!;
+    assert.ok(open.has("AKs") && open.has("QQ"), "UTG opens premiums");
+    assert.ok(!open.has("72o") && !open.has("Q5s"), "UTG folds junk");
+    const bbCheck = preflopClassRange("BB", { kind: "bb-check" })!;
+    assert.ok(bbCheck.has("72o"), "a checked BB option keeps junk");
+    assert.ok(open.size < bbCheck.size);
+  });
+
+  it("filters street by street using the board as it stood (slicing)", () => {
+    // Villain opened BTN preflop, c-bet the Ks 9h 4c flop; the turn 2d
+    // gives 22 a set — but 22 could not continue the flop bet, so it must
+    // be absent from the tracked turn range while top pair stays.
+    const board = [c(13, "s"), c(9, "h"), c(4, "c"), c(2, "d")];
+    const range = trackedVillainRange(hero, board, {
+      chartPosition: "BTN",
+      preflop: { kind: "open" },
+      streetActions: [{ round: 1, action: "bet" }],
+    })!;
+    assert.ok(range.length >= 20, "tracked range should survive");
+    const keys = new Set(range.map(([a, b]) => `${a},${b}`));
+    const combo = (x: { num: number; suit: string }, y: { num: number; suit: string }) => {
+      const i = cardToId(x);
+      const j = cardToId(y);
+      return `${Math.min(i, j)},${Math.max(i, j)}`;
+    };
+    assert.ok(
+      !keys.has(combo({ num: 2, suit: "s" }, { num: 2, suit: "h" })),
+      "22 (turned set) cannot have c-bet the flop"
+    );
+    assert.ok(
+      keys.has(combo({ num: 13, suit: "d" }, { num: 12, suit: "s" })),
+      "KQ (top pair) continues the c-bet line"
+    );
+  });
+
+  it("tightens across streets and returns null when the range collapses", () => {
+    const board5 = [c(13, "s"), c(9, "h"), c(4, "c"), c(2, "d"), c(3, "s")];
+    const oneBarrel = trackedVillainRange(hero, board5, {
+      chartPosition: "BTN",
+      preflop: { kind: "open" },
+      streetActions: [{ round: 1, action: "bet" }],
+    })!;
+    const threeBarrels = trackedVillainRange(hero, board5, {
+      chartPosition: "BTN",
+      preflop: { kind: "open" },
+      streetActions: [
+        { round: 1, action: "bet" },
+        { round: 2, action: "bet" },
+        { round: 3, action: "bet" },
+      ],
+    });
+    if (threeBarrels) {
+      assert.ok(threeBarrels.length <= oneBarrel.length);
+    }
+    // A 3bet range barreling a board it entirely missed collapses to the
+    // fallback rather than producing a handful of overfit combos.
+    const collapsed = trackedVillainRange(hero, board5, {
+      chartPosition: "SB",
+      preflop: { kind: "3bet", openerPosition: "BTN" },
+      streetActions: [
+        { round: 1, action: "bet" },
+        { round: 2, action: "bet" },
+        { round: 3, action: "bet" },
+      ],
+    });
+    assert.ok(
+      collapsed === null || collapsed.length >= 20,
+      "collapsing ranges must return null, never a tiny overfit set"
+    );
+  });
+
+  it("unknown roles yield no tracked range", () => {
+    const board = [c(13, "s"), c(9, "h"), c(4, "c")];
+    assert.strictEqual(
+      trackedVillainRange(hero, board, {
+        chartPosition: "BTN",
+        preflop: { kind: "unknown" },
+        streetActions: [],
+      }),
+      null
+    );
   });
 });
 

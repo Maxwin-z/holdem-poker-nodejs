@@ -6,13 +6,15 @@
  * multiway tightening, short-stack push/fold handling and sizing.
  */
 
+import { nearestTable } from "./data/pushfold";
 import {
-  BB_CALL_VS_BTN_SHOVE,
-  BB_CALL_VS_SB_SHOVE,
-  BTN_SHOVE,
-  SB_SHOVE,
-  nearestTable,
-} from "./data/pushfold";
+  BB_CALL_VS_BTN_SHOVE_NASH as BB_CALL_VS_BTN_SHOVE,
+  BB_CALL_VS_SB_SHOVE_NASH as BB_CALL_VS_SB_SHOVE,
+  BTN_SHOVE_NASH as BTN_SHOVE,
+  PUSHFOLD_NASH_TRUST as PUSHFOLD_TRUST,
+  SB_SHOVE_NASH as SB_SHOVE,
+} from "./data/pushfold-nash";
+import type { AdviceTrust } from "../trust";
 import {
   HAND_ORDER,
   RANKS,
@@ -23,10 +25,13 @@ import {
 } from "./hand";
 import {
   applyCalibration,
+  applyDepthAdjustment,
+  applyFullRingTightening,
   applyMultiwayTightening,
   normalizeCell,
   resolveChart,
 } from "./lookup";
+import type { DepthBucket } from "./lookup";
 import { GRID_ACTION } from "./types";
 import { normalizePlayerCount } from "./positions";
 import {
@@ -240,7 +245,35 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     0,
     (input.callers || 0) + (input.limpers || 0)
   );
+  const heroLabel = input.heroPositionLabel || hero;
+  let fullRingRemoved = 0;
+  let depthBucket: DepthBucket = null;
   if (chart) {
+    // Order matters: correct the 6-max baseline for full-ring seats first,
+    // then apply the subjective looseness calibration on top.
+    const fullRing = applyFullRingTightening(
+      chart,
+      scenario,
+      playerCount,
+      heroLabel
+    );
+    chart = fullRing.chart;
+    fullRingRemoved = fullRing.removedFraction;
+    if (fullRingRemoved > 0) {
+      notes.push(
+        `${playerCount} 人桌前位（${heroLabel}）：较 6-max 基准收紧约 ${Math.round(
+          fullRingRemoved * 100
+        )}% 最弱开池手牌`
+      );
+    }
+    const depth = applyDepthAdjustment(chart, scenario, stackBB);
+    chart = depth.chart;
+    depthBucket = depth.bucket;
+    if (depthBucket) {
+      notes.push(
+        `有效筹码约 ${depthBucket}bb：隐含赔率下降，投机跟注已按深度收紧`
+      );
+    }
     chart = applyCalibration(chart, looseness, scenario);
     if (extraPlayers > 0) {
       chart = applyMultiwayTightening(chart, extraPlayers);
@@ -256,7 +289,7 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
     input
   );
   if (pushFold) {
-    notes.push(`短码 ${stackBB}bb：按全下/弃牌模型给出参考（近似 Nash）`);
+    notes.push(`短码 ${stackBB}bb：按全下/弃牌 Nash 均衡给出参考（本地求解）`);
   }
   if (resolved.ruleBased) {
     notes.push("面对 4bet：基于 5bet 全下/弃牌的简化规则，非精确 GTO");
@@ -641,6 +674,21 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
 
   const potBB = round1(contestablePotBB);
 
+  // Trust level: how the recommendation was produced for this exact spot.
+  let trust: AdviceTrust;
+  if (pushFold) {
+    trust = PUSHFOLD_TRUST;
+  } else if (resolved.ruleBased) {
+    trust = "rule";
+  } else if (!chart) {
+    // BB with an unopened pot: trivially correct check rule.
+    trust = "rule";
+  } else if (resolved.fallbackNote) {
+    trust = "chart-fallback";
+  } else {
+    trust = "chart";
+  }
+
   return {
     kind: "preflop",
     playerCount,
@@ -676,10 +724,13 @@ export function getPreflopAdvice(input: PreflopSituation): PreflopAdvice {
       playerCount,
       hero,
       extraPlayers,
-      looseness
+      looseness,
+      fullRingRemoved,
+      depthBucket
     ),
     adjustments: buildAdjustments(scenario, stackBB, hero, extraPlayers),
     dataSource: DATA_SOURCE,
+    trust,
   };
 }
 
@@ -717,12 +768,24 @@ function buildLimitations(
   playerCount: number,
   hero: ChartPosition,
   extraPlayers: number,
-  looseness: Looseness
+  looseness: Looseness,
+  fullRingRemoved = 0,
+  depthBucket: DepthBucket = null
 ): string[] {
   const lim: string[] = [];
   lim.push("图表为 100bb 深码 6-max 基准，其他筹码深度通过尺寸/全下规则近似");
+  if (fullRingRemoved > 0) {
+    lim.push("满员桌前位范围为 6-max 图表按比例收紧的近似，非独立求解的全环范围");
+  }
+  if (depthBucket) {
+    lim.push(
+      `${depthBucket}bb 档位为 100bb 图表的投机跟注收紧近似，非该深度的独立求解`
+    );
+  }
   if (stackBB <= 20) {
-    lim.push("短码 push/fold 表为近似 Nash（非精确解）");
+    lim.push(
+      "短码 push/fold 表为本地求解的 Nash 近似（蒙特卡洛权益 ±0.6%，牌类粒度去牌权重；仅覆盖全下/弃牌决策树）"
+    );
   }
   if (playerCount >= 10) {
     lim.push("10 人局按 9 人局处理");

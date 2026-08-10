@@ -385,6 +385,28 @@ export function PlayerAnalytics({
                 <p>衡量翻后主动下注和加注相对于被动跟注的程度；没有跟注样本时不显示。</p>
               </details>
             </article>
+            <article className="player-metric-card">
+              <div className="player-metric-card__title">
+                <strong>EV Loss</strong><span>决策 EV 损失</span>
+              </div>
+              <b className={report.core.evLoss.per100Hands !== null && report.core.evLoss.per100Hands > 12 ? "is-loss" : ""}>
+                {report.core.evLoss.per100Hands === null
+                  ? "—"
+                  : `${report.core.evLoss.per100Hands} BB/100`}
+              </b>
+              <small>
+                {report.core.evLoss.scoredActions > 0
+                  ? `共损失约 ${report.core.evLoss.totalBB} BB · ${report.core.evLoss.scoredActions} 次已评分决策`
+                  : "暂无已评分决策"}
+              </small>
+              <div className="player-metric-card__bar">
+                <i style={{ width: `${Math.min((report.core.evLoss.per100Hands || 0) * 2, 100)}%` }} />
+              </div>
+              <details>
+                <summary>Estimated EV Loss</summary>
+                <p>估算每百手因偏离参考策略损失的大盲数。混合策略内的行动视为无损；数值越低越好，比行动匹配率更贴近真实决策质量。</p>
+              </details>
+            </article>
           </div>
 
           <section className="player-analysis-section">
@@ -431,7 +453,12 @@ export function PlayerAnalytics({
                   <span>{row.street === "flop" ? "FLOP · 翻牌" : row.street === "turn" ? "TURN · 转牌" : "RIVER · 河牌"}</span>
                   <strong>{row.aggressionFrequency === null ? "—" : `${row.aggressionFrequency}%`} <small>Agg%</small></strong>
                   <div><i>行动 {row.actions}</i><i>跟注 {row.call}</i><i>弃牌 {row.fold}</i><i>主动 {row.aggressive}</i></div>
-                  <p>GTO Match {row.gtoAlignment === null ? "—" : `${row.gtoAlignment}%`}</p>
+                  <p>
+                    GTO Match {row.gtoAlignment === null ? "—" : `${row.gtoAlignment}%`}
+                    {row.evLossBB !== null && row.evLossBB !== undefined
+                      ? ` · EV -${row.evLossBB}bb`
+                      : ""}
+                  </p>
                 </article>
               ))}
             </div>

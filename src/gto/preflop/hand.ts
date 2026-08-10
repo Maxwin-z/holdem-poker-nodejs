@@ -177,6 +177,25 @@ function isWeakFormula(key: string): boolean {
   return false;
 }
 
+/**
+ * Implied-odds class: hands whose preflop calls rely on stack depth to pay
+ * off (set mining, small suited connectivity). Used by the depth-adjustment
+ * layer to tighten calls as stacks get shallower.
+ */
+export type ImpliedOddsClass = "small-pair" | "speculative-suited" | null;
+
+export function impliedOddsClass(handKey: string): ImpliedOddsClass {
+  const key = normalizeHandKey(handKey);
+  if (key.length === 2) {
+    return RANK_INDEX[key[0]] <= 6 ? "small-pair" : null;
+  }
+  if (!key.endsWith("s")) return null;
+  const hiV = RANK_INDEX[key[0]];
+  const loV = RANK_INDEX[key[1]];
+  if (hiV <= 10 && hiV - loV <= 3) return "speculative-suited";
+  return null;
+}
+
 /** Classify a hand key into strong / medium / weak. */
 export function handStrength(handKey: string): HandStrength {
   const key = normalizeHandKey(handKey);

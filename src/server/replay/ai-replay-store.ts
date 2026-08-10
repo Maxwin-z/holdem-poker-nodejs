@@ -16,7 +16,9 @@ import { calculateAiReplayHandDeviation } from "../../shared/aiReplay";
 import type { Card } from "../../ApiType";
 
 const SCHEMA_VERSION = 1;
-const STRATEGY_VERSION = "current-gto-v1";
+// v2: EV-loss grading, trust labels, full-ring/depth preflop adjustments,
+// Nash push/fold tables, multiway + action-line range tracking.
+const STRATEGY_VERSION = "current-gto-v2";
 const MAX_HANDS_PER_USER = 100;
 
 function defaultDatabasePath() {

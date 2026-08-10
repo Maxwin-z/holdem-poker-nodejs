@@ -4,6 +4,12 @@ import type { HandStrength } from "../gto/preflop/hand";
 import type { PreflopAdvice } from "../gto/preflop/types";
 import type { PostflopAdvice } from "../gto/postflop/types";
 import type { BotStyle } from "../server/bot/types";
+import {
+  EV_BASIS_LABEL_CN,
+  MIXED_CREDIT_MIN_FREQUENCY,
+  estimateEvLossBB,
+} from "./evLoss";
+import type { EvLossBasis } from "./evLoss";
 
 export type ReplayStreet = "preflop" | "flop" | "turn" | "river";
 export type ReplayActorType = "human" | "bot";
@@ -90,6 +96,10 @@ export interface AiReplayComparison {
   recommendedSizeBB?: number;
   actualActionProbability?: number;
   actionMatch: boolean;
+  /** Estimated EV lost by this decision, in big blinds (>= 0). */
+  evLossBB?: number;
+  /** How the EV loss was computed (pot-odds EV vs frequency proxy...). */
+  evBasis?: EvLossBasis;
   sizeDifferenceBB?: number;
   sizeDifferenceRatio?: number;
   sizeClassification?: AiReplaySizeClassification;
@@ -135,6 +145,9 @@ export interface AiReplayDecisionDeviation {
   actionScore: number;
   sizeScore?: number;
   score: number;
+  /** Estimated EV lost by this decision, in big blinds. */
+  evLossBB?: number;
+  evBasis?: EvLossBasis;
 }
 
 export interface AiReplayHandDeviation {
@@ -143,6 +156,8 @@ export interface AiReplayHandDeviation {
   scoredDecisionCount: number;
   severeDecisionCount: number;
   maxDecisionDeviation: number | null;
+  /** Total estimated EV lost across scored decisions, in big blinds. */
+  totalEvLossBB: number | null;
 }
 
 const AGGRESSIVE_REPLAY_ACTIONS = new Set(["bet", "raise", "allin"]);
@@ -200,11 +215,13 @@ export interface AiReplayActionGrading {
 
 /**
  * Grade an action against the reference strategy. For genuinely mixed
- * references this is the plain frequency shortfall. For deterministic
- * preflop charts (one action at 100%) the mismatch penalty is scaled by
- * hand strength and deviation direction, and the displayed frequency is
- * widened toward the range-wide distribution so a near-indifferent hand
- * is not reported as a maximal deviation.
+ * references, any action played at a meaningful frequency (>= 15%) is
+ * treated as indifferent and gets FULL CREDIT — in an equilibrium mix the
+ * mixed actions have (near-)equal EV, so a frequency shortfall is not a
+ * mistake. For deterministic preflop charts (one action at 100%) the
+ * mismatch penalty is scaled by hand strength and deviation direction, and
+ * the displayed frequency is widened toward the range-wide distribution so
+ * a near-indifferent hand is not reported as a maximal deviation.
  */
 export function gradeAiReplayAction(
   actualAction: string,
@@ -224,9 +241,13 @@ export function gradeAiReplayAction(
   const deterministic =
     advice.kind === "preflop" && Boolean(advice.hero) && bestProbability >= 99.5;
   if (!deterministic || !handKey || probability >= 99.5) {
+    const indifferent =
+      bestProbability < 99.5 && probability >= MIXED_CREDIT_MIN_FREQUENCY;
     return {
       probability,
-      actionScore: calculateAiReplayActionDeviation(probability, bestProbability),
+      actionScore: indifferent
+        ? 0
+        : calculateAiReplayActionDeviation(probability, bestProbability),
       softened: false,
     };
   }
@@ -284,9 +305,18 @@ export function buildAiReplayComparison(input: {
   const actionMatch = normalizedAction === recommended;
   let classification: AiReplayComparison["classification"];
   if (actionMatch) classification = "recommended";
-  else if (probability >= 15) classification = "mixed-acceptable";
+  else if (probability >= MIXED_CREDIT_MIN_FREQUENCY)
+    classification = "mixed-acceptable";
   else if (probability > 0) classification = "low-frequency";
   else classification = "deviation";
+
+  const evEstimate = estimateEvLossBB({
+    advice,
+    action: normalizedAction,
+    amountToChips: amountTo,
+    bigBlindChips: input.bigBlind,
+    actionScore: grading?.actionScore,
+  });
 
   const aggressiveAction = AGGRESSIVE_REPLAY_ACTIONS.has(normalizedAction);
   const preflopSize =
@@ -305,9 +335,15 @@ export function buildAiReplayComparison(input: {
       : undefined;
   const reasons: string[] = [];
   if (actionMatch) reasons.push("实际行动与策略主推荐一致");
-  else if (probability >= 15) reasons.push(`该行动属于混合策略，频率 ${probability}%`);
+  else if (probability >= MIXED_CREDIT_MIN_FREQUENCY)
+    reasons.push(`该行动属于混合策略，频率 ${probability}%，按无损计分`);
   else if (probability > 0) reasons.push(`该行动仅以 ${probability}% 的低频率出现`);
   else reasons.push("该行动不在当前参考策略的行动分布中");
+  if (evEstimate && evEstimate.evLossBB >= 0.05) {
+    reasons.push(
+      `估算 EV 损失约 ${evEstimate.evLossBB}bb（${EV_BASIS_LABEL_CN[evEstimate.basis]}）`
+    );
+  }
   if (grading?.softened && !actionMatch) {
     reasons.push("参考图表将该手牌固定为单一动作，已按手牌强度与整体频率放宽评分");
   }
@@ -336,6 +372,8 @@ export function buildAiReplayComparison(input: {
     recommendedSizeBB,
     actualActionProbability: probability,
     actionMatch,
+    evLossBB: evEstimate?.evLossBB,
+    evBasis: evEstimate?.basis,
     sizeDifferenceBB,
     sizeDifferenceRatio,
     sizeClassification,
@@ -422,21 +460,30 @@ export function calculateAiReplayDecisionDeviation(
     ? actionScore
     : actionScore + (100 - actionScore) * 0.35 * (sizeScore / 100);
 
+  const evEstimate = estimateEvLossBB({
+    advice,
+    action: actualAction,
+    amountToChips: decision.actual.amountTo,
+    actionScore,
+  });
+
   return {
     actionScore,
     sizeScore,
     score: roundScore(score),
+    evLossBB: evEstimate?.evLossBB,
+    evBasis: evEstimate?.basis,
   };
 }
 
 export function calculateAiReplayHandDeviation(
   decisions: Array<Pick<AiReplayDecision, "actorType" | "actual" | "advice" | "comparison">>
 ): AiReplayHandDeviation {
-  const scores = decisions
+  const results = decisions
     .filter((decision) => decision.actorType === "human")
     .map(calculateAiReplayDecisionDeviation)
-    .filter((result): result is AiReplayDecisionDeviation => result !== null)
-    .map((result) => result.score);
+    .filter((result): result is AiReplayDecisionDeviation => result !== null);
+  const scores = results.map((result) => result.score);
   if (!scores.length) {
     return {
       deviationScore: null,
@@ -444,17 +491,26 @@ export function calculateAiReplayHandDeviation(
       scoredDecisionCount: 0,
       severeDecisionCount: 0,
       maxDecisionDeviation: null,
+      totalEvLossBB: null,
     };
   }
   const deviationScore = roundScore(Math.sqrt(
     scores.reduce((total, score) => total + score * score, 0) / scores.length
   ));
+  const evLosses = results
+    .map((result) => result.evLossBB)
+    .filter((value): value is number => value !== undefined);
+  const totalEvLossBB = evLosses.length
+    ? Math.round(evLosses.reduce((total, value) => total + value, 0) * 100) /
+      100
+    : null;
   return {
     deviationScore,
     deviationLevel: classifyAiReplayDeviation(deviationScore),
     scoredDecisionCount: scores.length,
     severeDecisionCount: scores.filter((score) => score > 60).length,
     maxDecisionDeviation: Math.max(...scores),
+    totalEvLossBB,
   };
 }
 
@@ -490,6 +546,8 @@ export interface AiReplaySummary {
   scoredDecisionCount: number;
   severeDecisionCount: number;
   maxDecisionDeviation: number | null;
+  /** Total estimated EV lost across the hero's scored decisions (bb). */
+  totalEvLossBB: number | null;
 }
 
 export interface AiReplayHand extends AiReplaySummary {

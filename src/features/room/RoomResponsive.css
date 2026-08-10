@@ -3806,6 +3806,35 @@
   letter-spacing: 0.06em;
 }
 
+/* Trust level: how the advice was produced (chart / model / heuristic...). */
+.gto-advice-card__trust {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #9fb4ab;
+  cursor: help;
+}
+
+.gto-advice-card__trust.is-chart,
+.gto-advice-card__trust.is-solved {
+  color: #6fe3ae;
+  border-color: rgba(111, 227, 174, 0.4);
+}
+
+.gto-advice-card__trust.is-chart-fallback,
+.gto-advice-card__trust.is-model {
+  color: #e8c66f;
+  border-color: rgba(232, 198, 111, 0.4);
+}
+
+.gto-advice-card__trust.is-rule,
+.gto-advice-card__trust.is-heuristic {
+  color: #e89a6f;
+  border-color: rgba(232, 154, 111, 0.4);
+}
+
 .gto-advice-card__head strong {
   font-size: 13px;
 }

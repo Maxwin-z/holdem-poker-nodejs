@@ -6,6 +6,15 @@ export interface RateMetric {
   denominator: number;
 }
 
+export interface EvLossMetric {
+  /** Total estimated EV lost across graded decisions in the window (bb). */
+  totalBB: number;
+  /** Estimated EV lost per 100 hands (bb/100), null without graded hands. */
+  per100Hands: number | null;
+  /** Number of decisions carrying an EV-loss estimate. */
+  scoredActions: number;
+}
+
 export interface PlayerAnalyticsCore {
   hands: number;
   vpip: RateMetric;
@@ -16,6 +25,9 @@ export interface PlayerAnalyticsCore {
   wentToShowdown: RateMetric;
   wonAtShowdown: RateMetric;
   gtoAlignment: RateMetric;
+  /** EV-loss based grading (primary learning metric; gtoAlignment kept for
+   *  continuity as the frequency-match view). */
+  evLoss: EvLossMetric;
   netBB: number;
   bbPer100: number;
 }
@@ -36,6 +48,8 @@ export interface StreetAnalyticsRow {
   aggressive: number;
   aggressionFrequency: number | null;
   gtoAlignment: number | null;
+  /** Total estimated EV lost on this street in the window (bb). */
+  evLossBB: number | null;
 }
 
 export interface AnalyticsInsight {

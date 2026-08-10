@@ -75,6 +75,53 @@ describe("player analytics SQLite store", () => {
     assert.equal(report.core.netBB, 6.5);
     assert.equal(report.positions[0].position, "BTN");
     assert.equal(report.streets[0].aggressionFrequency, 100);
+    // Both actions matched the recommendation: graded, zero EV loss.
+    assert.equal(report.core.evLoss.scoredActions, 2);
+    assert.equal(report.core.evLoss.totalBB, 0);
+    assert.equal(report.core.evLoss.per100Hands, 0);
+  });
+
+  it("aggregates EV loss for negative-price calls into the report", () => {
+    const store = new PlayerAnalyticsStore(":memory:");
+    const token = "ev-loss-user";
+    const handId = "hand-ev";
+    store.beginHand({
+      handId,
+      roomId: "1003",
+      playerCount: 2,
+      hasBot: false,
+      players: [{ token, name: "Cara", position: "BB", stackBB: 100 }],
+    });
+    // EV(call) = 0.2 × (10 + 5) − 5 = −2bb: calling burns 2bb.
+    store.recordAction({
+      handId,
+      token,
+      street: 2,
+      position: "BB",
+      action: "call",
+      amountBB: 5,
+      facingRaise: true,
+      raiseLevel: 1,
+      advice: {
+        kind: "postflop",
+        recommended: "fold",
+        potBB: 10,
+        toCallBB: 5,
+        equityVsRange: 0.2,
+        actionDistribution: {
+          fold: 100, check: 0, call: 0, bet: 0, raise: 0, allin: 0,
+        },
+      } as any,
+    });
+    store.recordSettlement({
+      handId, token, profitBB: -5, won: false, showdown: true, final: true,
+    });
+
+    const report = store.getReport(token, 5000);
+    assert.equal(report.core.evLoss.scoredActions, 1);
+    assert.closeTo(report.core.evLoss.totalBB, 2, 0.001);
+    assert.closeTo(report.core.evLoss.per100Hands!, 200, 0.1);
+    assert.closeTo(report.streets[1].evLossBB!, 2, 0.001);
   });
 
   it("counts a 3-bet only when raising over an opening raise", () => {
@@ -246,6 +293,7 @@ function analyticsCore(overrides: Partial<PlayerAnalyticsCore>): PlayerAnalytics
     wentToShowdown: metric(29, 200),
     wonAtShowdown: metric(51, 60),
     gtoAlignment: metric(null, 0),
+    evLoss: { totalBB: 0, per100Hands: null, scoredActions: 0 },
     netBB: 0,
     bbPer100: 0,
     ...overrides,

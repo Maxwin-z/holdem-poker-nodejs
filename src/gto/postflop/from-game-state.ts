@@ -8,6 +8,13 @@
 
 import { getPostflopAdvice } from "./advice";
 import { cardToId } from "./cards";
+import { trackedVillainRange } from "./range-tracker";
+import type {
+  VillainPreflopRole,
+  VillainStreetAction,
+  VillainTrack,
+} from "./range-tracker";
+import { chartPositionByActionOrder } from "../preflop/positions";
 import type {
   PostflopAdvice,
   PostflopSituation,
@@ -59,6 +66,114 @@ function roundToStreet(round: number): PostflopStreet | null {
 
 function sum(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0);
+}
+
+/** Preflop action-order index for a seat (0 = first actor = UTG/earliest). */
+function actorIndexOf(sortedUsers: string[], token: string): number {
+  const n = sortedUsers.length;
+  const idx = sortedUsers.indexOf(token);
+  if (idx < 0) return -1;
+  return idx >= 2 ? idx - 2 : n - 2 + idx;
+}
+
+/**
+ * Pick the villain whose range is worth tracking: the last aggressor on the
+ * current street, else the last preflop raiser still in the hand, else the
+ * first live opponent. Returns their tracker input, or null when the line
+ * cannot be reconstructed.
+ */
+function buildVillainTrack(
+  input: PostflopGameStateInput,
+  inHand: string[]
+): VillainTrack | null {
+  const n = input.sortedUsers.length;
+  if (n < 2 || n > 10) return null;
+  const liveOpponents = inHand.filter((t) => t !== input.actingToken);
+  if (liveOpponents.length === 0) return null;
+
+  const isAggressive = (type: string) =>
+    type === "bet" || type === "raise" || type === "allin";
+
+  const currentStreetAggressor = [...input.actionHistory]
+    .reverse()
+    .find(
+      (a) =>
+        a.round === input.round &&
+        isAggressive(a.type) &&
+        liveOpponents.indexOf(a.token) >= 0
+    );
+  const preflopRaises = input.actionHistory.filter(
+    (a) => a.round === 0 && isAggressive(a.type)
+  );
+  const lastPreflopRaise = preflopRaises[preflopRaises.length - 1];
+  const villainToken =
+    currentStreetAggressor?.token ||
+    (lastPreflopRaise && liveOpponents.indexOf(lastPreflopRaise.token) >= 0
+      ? lastPreflopRaise.token
+      : liveOpponents[0]);
+
+  const villainIndex = actorIndexOf(input.sortedUsers, villainToken);
+  if (villainIndex < 0) return null;
+  let chartPosition;
+  try {
+    chartPosition = chartPositionByActionOrder(n, villainIndex);
+  } catch (_) {
+    return null;
+  }
+
+  // Preflop role.
+  let preflop: VillainPreflopRole;
+  const villainRaised = preflopRaises.some((a) => a.token === villainToken);
+  const villainPreflopActions = input.actionHistory.filter(
+    (a) => a.round === 0 && a.token === villainToken
+  );
+  const openerToken = preflopRaises[0]?.token;
+  let openerPosition;
+  if (openerToken && openerToken !== villainToken) {
+    const openerIndex = actorIndexOf(input.sortedUsers, openerToken);
+    try {
+      openerPosition =
+        openerIndex >= 0 ? chartPositionByActionOrder(n, openerIndex) : undefined;
+    } catch (_) {
+      openerPosition = undefined;
+    }
+  }
+  if (villainRaised) {
+    const villainMadeFirstRaise = openerToken === villainToken;
+    if (villainMadeFirstRaise) {
+      preflop = { kind: "open" };
+    } else if (openerPosition) {
+      preflop = { kind: "3bet", openerPosition };
+    } else {
+      preflop = { kind: "open" };
+    }
+  } else if (preflopRaises.length > 0) {
+    preflop = openerPosition
+      ? { kind: "call-vs-open", openerPosition }
+      : { kind: "unknown" };
+  } else if (chartPosition === "BB") {
+    preflop = { kind: "bb-check" };
+  } else if (villainPreflopActions.some((a) => a.type === "call")) {
+    preflop = { kind: "limp" };
+  } else {
+    // SB completing in an unraised pot behaves like a limp.
+    preflop = chartPosition === "SB" ? { kind: "limp" } : { kind: "unknown" };
+  }
+  if (preflop.kind === "unknown") return null;
+
+  const streetActions: VillainTrack["streetActions"] = [];
+  for (const a of input.actionHistory) {
+    if (a.token !== villainToken) continue;
+    if (a.round < 1 || a.round > 3 || a.round > input.round) continue;
+    if (a.type === "fold") return null;
+    if (["bet", "raise", "allin", "call", "check"].indexOf(a.type) < 0) continue;
+    streetActions.push({
+      round: a.round as 1 | 2 | 3,
+      action: a.type as VillainStreetAction,
+    });
+  }
+
+  return { chartPosition, preflop, streetActions };
 }
 
 /**
@@ -122,10 +237,29 @@ export function buildPostflopAdvice(
     (a) => a.type === "raise" || a.type === "allin"
   );
 
+  const heroCardIds: [number, number] = [
+    cardToId(hero.hands[0]),
+    cardToId(hero.hands[1]),
+  ];
+  const boardIds = input.boardCards.map(cardToId);
+
+  // Action-line villain range tracking; falls back to the generic model
+  // inside the engine when the line can't be reconstructed or collapses.
+  let villainRange: [number, number][] | undefined;
+  try {
+    const track = buildVillainTrack(input, inHand);
+    if (track) {
+      villainRange =
+        trackedVillainRange(heroCardIds, boardIds, track) || undefined;
+    }
+  } catch (_) {
+    villainRange = undefined;
+  }
+
   const situation: PostflopSituation = {
     street,
-    heroCards: [cardToId(hero.hands[0]), cardToId(hero.hands[1])],
-    board: input.boardCards.map(cardToId),
+    heroCards: heroCardIds,
+    board: boardIds,
     pot,
     currentBet,
     heroBet: hero.bet || 0,
@@ -142,6 +276,7 @@ export function buildPostflopAdvice(
     facedRaiseThisStreet,
     heroPositionLabel: input.heroPositionLabel,
     boardCards: input.boardCards,
+    villainRange,
   };
 
   return getPostflopAdvice(situation);

@@ -28,6 +28,7 @@ import {
   PostflopSituation,
   PostflopStreet,
 } from "./types";
+import type { AdviceTrust } from "../trust";
 
 export interface PostflopMixedStrategy {
   fold: number;
@@ -42,6 +43,8 @@ export interface PostflopDecision {
   amount?: number;
   confidence: number;
   reasoning: string;
+  /** Which decision path produced this: distilled net or range heuristic. */
+  trust?: AdviceTrust;
   mixedStrategy: PostflopMixedStrategy;
   equityVsRange?: number;
   equityRangeCombos?: number;
@@ -155,10 +158,21 @@ export function decidePostflop(sit: PostflopSituation): PostflopDecision {
   const equityVsRandom = deterministicEquity(sit.heroCards, sit.board);
 
   let decision: PostflopDecision;
+  let trust: AdviceTrust = "heuristic";
   if (sit.activeVillainCount === 1) {
-    decision =
-      decidePostflopNet(sit, board, heroCat, dangerousFlush, equityVsRandom) ||
-      decidePostflopRanged(sit, board, heroCat, dangerousFlush);
+    const netDecision = decidePostflopNet(
+      sit,
+      board,
+      heroCat,
+      dangerousFlush,
+      equityVsRandom
+    );
+    if (netDecision) {
+      decision = netDecision;
+      trust = "model";
+    } else {
+      decision = decidePostflopRanged(sit, board, heroCat, dangerousFlush);
+    }
   } else {
     decision = decidePostflopRanged(sit, board, heroCat, dangerousFlush);
   }
@@ -185,7 +199,7 @@ export function decidePostflop(sit: PostflopSituation): PostflopDecision {
     decision.action === "allin"
       ? "allin"
       : argmaxAction(decision.mixedStrategy, facingBet);
-  const result = { ...decision, action: finalAction };
+  const result = { ...decision, action: finalAction, trust };
   // The recommended action may be a check/call/fold while the mixed strategy
   // still contains a bet/raise branch. Carry that branch's (legalized) size
   // so advice cards can render both lines, e.g. "过牌 50% / 下注 11 筹码 50%".
@@ -417,6 +431,15 @@ function decidePostflopRanged(
   return rangedFirstToAct(sit, eqR, combos, range, details, board, dangerousFlush, heroCat);
 }
 
+/**
+ * Multiway threshold shift: the range model measures equity against ONE
+ * continuing range, but every extra live villain means more ways to be
+ * beaten — value thresholds rise and thin calls tighten with each one.
+ */
+function extraVillainsOf(sit: PostflopSituation): number {
+  return Math.max(0, sit.activeVillainCount - 1);
+}
+
 function rangedFacingBet(
   sit: PostflopSituation,
   eqR: number,
@@ -428,11 +451,13 @@ function rangedFacingBet(
 ): PostflopDecision {
   const pot = sit.pot;
   const bb = sit.bigBlind || 1;
+  const extraVillains = extraVillainsOf(sit);
   const callThreshold = sit.toCall / (pot + sit.toCall);
-  const buffer = 0.02;
+  const buffer = Math.min(0.05, 0.02 + 0.01 * extraVillains);
+  const valueRaiseEq = Math.min(0.78, 0.7 + 0.03 * extraVillains);
 
   // Value raise: high equity vs range and not dominated by the board.
-  if (eqR >= 0.7 && !dominatedByBoard) {
+  if (eqR >= valueRaiseEq && !dominatedByBoard) {
     const raiseTo = roundToStake(sit.currentBet * 2.5, bb);
     const raiseFreq = eqR >= 0.82 ? 0.8 : 0.6;
     return {
@@ -453,13 +478,15 @@ function rangedFacingBet(
     };
   }
 
-  // Bluff raise (low frequency): low equity but blockers/draws.
+  // Bluff raise (low frequency): low equity but blockers/draws. Never into
+  // more than one live villain — someone usually has it multiway.
   if (
     eqR < callThreshold &&
     eqR > 0.2 &&
     sit.street !== "river" &&
     heroCat <= HAND_CATEGORY.PAIR &&
-    !dominatedByBoard
+    !dominatedByBoard &&
+    extraVillains === 0
   ) {
     const raiseTo = roundToStake(sit.currentBet * 2.5, bb);
     const bluffFreq = 0.1;
@@ -518,6 +545,8 @@ function rangedFirstToAct(
   heroCat: number
 ): PostflopDecision {
   const bb = sit.bigBlind || 1;
+  const extraVillains = extraVillainsOf(sit);
+  const valueBetEq = Math.min(0.72, 0.62 + 0.03 * extraVillains);
   const wet =
     board.texture === "wet" ||
     board.texture === "very_wet" ||
@@ -543,7 +572,7 @@ function rangedFirstToAct(
   }
 
   // Value bet.
-  if (eqR >= 0.62) {
+  if (eqR >= valueBetEq) {
     return {
       action: "bet",
       amount: betSize,
@@ -562,11 +591,17 @@ function rangedFirstToAct(
     };
   }
 
-  // Semi-bluff with draw equity.
+  // Semi-bluff with draw equity. Skipped three-way or more: fold equity
+  // shrinks with every extra caller.
   const alpha = betSize / (betSize + sit.pot);
   const hasDrawEquity =
     eqR >= 0.3 && eqR < 0.55 && heroCat <= HAND_CATEGORY.PAIR;
-  if (hasDrawEquity && sit.street !== "river" && !dangerousFlush) {
+  if (
+    hasDrawEquity &&
+    sit.street !== "river" &&
+    !dangerousFlush &&
+    extraVillains <= 1
+  ) {
     return {
       action: alpha >= 0.5 ? "bet" : "check",
       amount: alpha >= 0.5 ? betSize : undefined,
@@ -610,10 +645,15 @@ function equityVsContinuingRange(
   range: string[];
   details: NonNullable<PostflopDecision["equityRangeDetails"]>;
 } {
-  const range = villainContinuingRange(sit.heroCards, sit.board, {
-    aggression,
-    multiway: sit.activeVillainCount > 1,
-  });
+  // Prefer the action-line-tracked villain range when the bridge supplied
+  // one; the generic board-only model is the fallback.
+  const range =
+    sit.villainRange && sit.villainRange.length > 0
+      ? sit.villainRange
+      : villainContinuingRange(sit.heroCards, sit.board, {
+          aggression,
+          multiway: sit.activeVillainCount > 1,
+        });
   let evalRange = range;
   if (range.length > MAX_RANGE_COMBOS) {
     const stride = Math.ceil(range.length / MAX_RANGE_COMBOS);

@@ -8,6 +8,7 @@ import type {
 import PreflopRangeGrid from "./PreflopRangeGrid";
 import PostflopAdviceCard from "./PostflopAdviceCard";
 import GtoTips from "./GtoTips";
+import TrustBadge from "./TrustBadge";
 
 const ACTION_META: Record<
   PreflopAction,
@@ -121,6 +122,7 @@ function PreflopGtoAdviceCard({
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
         <strong>翻前建议</strong>
+        <TrustBadge trust={advice.trust} />
         <small>
           {advice.heroPositionLabel} · {advice.stackBB}bb · 底池{" "}
           {advice.potBB}bb

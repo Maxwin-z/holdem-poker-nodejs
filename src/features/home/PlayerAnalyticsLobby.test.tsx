@@ -20,6 +20,7 @@ const report: PlayerAnalyticsReport = {
     wentToShowdown: { value: 29, numerator: 12, denominator: 41 },
     wonAtShowdown: { value: 51, numerator: 6, denominator: 12 },
     gtoAlignment: { value: 62, numerator: 62, denominator: 100 },
+    evLoss: { totalBB: 9.4, per100Hands: 9.4, scoredActions: 86 },
     netBB: 18.6,
     bbPer100: 18.6,
   },
@@ -27,7 +28,7 @@ const report: PlayerAnalyticsReport = {
     { position: "BTN", hands: 22, vpip: 32, pfr: 27, netBB: 12.4 },
   ],
   streets: [
-    { street: "flop", actions: 40, fold: 9, call: 12, aggressive: 19, aggressionFrequency: 48, gtoAlignment: 64 },
+    { street: "flop", actions: 40, fold: 9, call: 12, aggressive: 19, aggressionFrequency: 48, gtoAlignment: 64, evLossBB: 3.1 },
   ],
   insights: [],
 };

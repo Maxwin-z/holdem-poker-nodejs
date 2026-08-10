@@ -9,6 +9,8 @@ import type {
   PlayerAnalyticsReport,
   RateMetric,
 } from "../../shared/playerAnalytics";
+import { gradeAiReplayAction } from "../../shared/aiReplay";
+import { estimateEvLossBB } from "../../shared/evLoss";
 
 export type AnalyticsSqliteDatabase = {
   exec(sql: string): void;
@@ -114,6 +116,12 @@ export class PlayerAnalyticsStore {
       CREATE INDEX IF NOT EXISTS idx_player_actions_user_hand
         ON player_actions(user_key, hand_id, street);
     `);
+    // Older databases predate EV-loss grading; the column is additive.
+    try {
+      this.db.exec("ALTER TABLE player_actions ADD COLUMN ev_loss_bb REAL");
+    } catch (_) {
+      // Column already exists.
+    }
   }
 
   beginHand(input: {
@@ -179,13 +187,28 @@ export class PlayerAnalyticsStore {
         ? Math.abs(input.amountBB - recommendedSizeBB) / recommendedSizeBB
         : undefined;
 
+    let evLossBB: number | undefined;
+    if (input.advice) {
+      const grading = gradeAiReplayAction(adviceAction, input.advice);
+      // amountBB is already in big blinds, so a unit big blind makes the
+      // estimator's chips→bb conversion an identity.
+      const estimate = estimateEvLossBB({
+        advice: input.advice,
+        action: adviceAction,
+        amountToChips: input.amountBB,
+        bigBlindChips: 1,
+        actionScore: grading?.actionScore,
+      });
+      evLossBB = estimate?.evLossBB;
+    }
+
     this.db.prepare(`
       INSERT INTO player_actions (
         hand_id, user_key, street, position, action, amount_bb,
         facing_raise, raise_level, gto_probability,
         gto_recommended_action, gto_recommended_size_bb,
-        size_error_ratio, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        size_error_ratio, ev_loss_bb, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.handId,
       userKey,
@@ -199,6 +222,7 @@ export class PlayerAnalyticsStore {
       input.advice?.recommended || null,
       recommendedSizeBB === undefined ? null : recommendedSizeBB,
       sizeErrorRatio === undefined ? null : sizeErrorRatio,
+      evLossBB === undefined ? null : evLossBB,
       Date.now()
     );
 
@@ -305,6 +329,17 @@ export class PlayerAnalyticsStore {
       (total, action) => total + Number(action.gto_probability),
       0
     );
+    const evScoredActions = actions.filter(
+      (action) =>
+        action.ev_loss_bb !== null && action.ev_loss_bb !== undefined
+    );
+    const totalEvLossBB = round(
+      evScoredActions.reduce(
+        (total, action) => total + Number(action.ev_loss_bb),
+        0
+      ),
+      2
+    );
 
     const core = {
       hands,
@@ -323,6 +358,14 @@ export class PlayerAnalyticsStore {
         value: scoredActions.length > 0 ? round(gtoScore / scoredActions.length) : null,
         numerator: round(gtoScore),
         denominator: scoredActions.length,
+      },
+      evLoss: {
+        totalBB: totalEvLossBB,
+        per100Hands:
+          evScoredActions.length > 0 && hands > 0
+            ? round((totalEvLossBB / hands) * 100, 2)
+            : null,
+        scoredActions: evScoredActions.length,
       },
       netBB,
       bbPer100: hands > 0 ? round((netBB / hands) * 100, 2) : 0,
@@ -351,6 +394,9 @@ export class PlayerAnalyticsStore {
       const calls = rows.filter((action) => action.action === "call").length;
       const folds = rows.filter((action) => action.action === "fold").length;
       const scored = rows.filter((action) => action.gto_probability !== null);
+      const evScored = rows.filter(
+        (action) => action.ev_loss_bb !== null && action.ev_loss_bb !== undefined
+      );
       return {
         street,
         actions: rows.length,
@@ -362,6 +408,12 @@ export class PlayerAnalyticsStore {
           : null,
         gtoAlignment: scored.length
           ? round(scored.reduce((n, row) => n + row.gto_probability, 0) / scored.length)
+          : null,
+        evLossBB: evScored.length
+          ? round(
+              evScored.reduce((n, row) => n + Number(row.ev_loss_bb), 0),
+              2
+            )
           : null,
       };
     });
@@ -408,6 +460,13 @@ function buildInsights(core: PlayerAnalyticsReport["core"], hands: number): Anal
   else if (vpip < 18) insights.push({ tone: "warning", title: "翻前可能过紧", detail: `VPIP 为 ${vpip}%，可检查 CO、BTN 和 SB 是否错过开池机会。` });
   else insights.push({ tone: "positive", title: "入池范围较稳定", detail: `VPIP 为 ${vpip}%，整体处于常见合理区间。` });
   if (vpip - pfr > 12) insights.push({ tone: "warning", title: "跟注多于主动加注", detail: `VPIP 与 PFR 相差 ${round(vpip - pfr)} 个百分点，考虑减少冷跟并提高主动加注比例。` });
+  if (core.evLoss.per100Hands !== null && core.evLoss.scoredActions >= 20) {
+    insights.push({
+      tone: core.evLoss.per100Hands <= 12 ? "positive" : "warning",
+      title: "决策 EV 损失",
+      detail: `估算每百手因决策偏差损失约 ${core.evLoss.per100Hands}bb（${core.evLoss.scoredActions} 次已评分决策）。混合策略内的行动不计损失。`,
+    });
+  }
   if (core.gtoAlignment.value !== null && core.gtoAlignment.denominator >= 20) {
     insights.push({
       tone: core.gtoAlignment.value >= 55 ? "positive" : "warning",
@@ -415,7 +474,7 @@ function buildInsights(core: PlayerAnalyticsReport["core"], hands: number): Anal
       detail: `所选行动在 GTO 混合策略中的平均频率为 ${core.gtoAlignment.value}%，基于 ${core.gtoAlignment.denominator} 次决策。`,
     });
   }
-  return insights.slice(0, 4);
+  return insights.slice(0, 5);
 }
 
 let singleton: PlayerAnalyticsStore | undefined;

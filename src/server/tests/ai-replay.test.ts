@@ -309,6 +309,113 @@ describe("AI replay deviation scoring", () => {
   });
 });
 
+describe("EV-loss grading", () => {
+  /** Postflop advice facing a bet, with a measured equity vs range. */
+  function postflopAdvice(overrides: Record<string, unknown> = {}) {
+    return {
+      kind: "postflop",
+      recommended: "fold",
+      potBB: 10,
+      potChips: 200,
+      toCallBB: 5,
+      toCallChips: 100,
+      equityVsRange: 0.2,
+      actionDistribution: { fold: 100, check: 0, call: 0, bet: 0, raise: 0, allin: 0 },
+      ...overrides,
+    } as any;
+  }
+
+  it("gives full credit to actions inside a mixed reference", () => {
+    // call runs at 30% in the mix: indifferent, zero action score & EV loss.
+    const comparison = buildAiReplayComparison({
+      action: "call",
+      advice: replayAdvice(),
+      bigBlind: 2,
+    });
+    assert.equal(comparison.classification, "mixed-acceptable");
+    assert.equal(comparison.evLossBB, 0);
+    assert.equal(comparison.evBasis, "indifference");
+    const deviation = calculateAiReplayDecisionDeviation({
+      actual: { action: "call", origin: "human" },
+      advice: replayAdvice(),
+      comparison,
+    });
+    assert.equal(deviation?.actionScore, 0);
+    assert.equal(deviation?.score, 0);
+  });
+
+  it("prices calling with insufficient equity by pot odds", () => {
+    // EV(call) = 0.2 × (10 + 5) − 5 = −2bb.
+    const comparison = buildAiReplayComparison({
+      action: "call",
+      advice: postflopAdvice(),
+      bigBlind: 20,
+    });
+    assert.equal(comparison.evBasis, "pot-odds");
+    assert.closeTo(comparison.evLossBB!, 2, 0.001);
+  });
+
+  it("prices folding away a profitable call by pot odds", () => {
+    // EV(call) = 0.5 × (10 + 5) − 5 = +2.5bb forfeited by folding.
+    const comparison = buildAiReplayComparison({
+      action: "fold",
+      advice: postflopAdvice({
+        recommended: "call",
+        equityVsRange: 0.5,
+        actionDistribution: { fold: 0, check: 0, call: 100, bet: 0, raise: 0, allin: 0 },
+      }),
+      bigBlind: 20,
+    });
+    assert.equal(comparison.evBasis, "pot-odds");
+    assert.closeTo(comparison.evLossBB!, 2.5, 0.001);
+  });
+
+  it("falls back to a pot-scaled frequency proxy without equity data", () => {
+    // Missed value bet: no equity pricing for bet-vs-check, proxy applies.
+    const comparison = buildAiReplayComparison({
+      action: "check",
+      advice: postflopAdvice({
+        recommended: "bet",
+        toCallBB: 0,
+        toCallChips: 0,
+        actionDistribution: { fold: 0, check: 5, call: 0, bet: 95, raise: 0, allin: 0 },
+      }),
+      bigBlind: 20,
+    });
+    assert.equal(comparison.evBasis, "frequency");
+    assert.isAbove(comparison.evLossBB!, 0);
+  });
+
+  it("totals EV loss across scored human decisions", () => {
+    const callAdvice = postflopAdvice();
+    const comparison = buildAiReplayComparison({
+      action: "call",
+      advice: callAdvice,
+      bigBlind: 20,
+    });
+    const hand = calculateAiReplayHandDeviation([
+      {
+        actorType: "human",
+        actual: { action: "call", origin: "human" },
+        advice: callAdvice,
+        comparison,
+      },
+      {
+        actorType: "human",
+        actual: { action: "fold", origin: "human" },
+        advice: postflopAdvice(),
+        comparison: buildAiReplayComparison({
+          action: "fold",
+          advice: postflopAdvice(),
+          bigBlind: 20,
+        }),
+      },
+    ]);
+    // First decision burns 2bb; the second matches the recommendation.
+    assert.closeTo(hand.totalEvLossBB!, 2, 0.001);
+  });
+});
+
 describe("suit-aware continuing range equity", () => {
   it("returns an independent equity result for every concrete combo", () => {
     const hero: [number, number] = [

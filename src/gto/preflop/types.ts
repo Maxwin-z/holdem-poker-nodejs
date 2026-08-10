@@ -5,6 +5,8 @@
  * Positions of 2-9 handed games are normalized onto the 6-max chart keys.
  */
 
+import type { AdviceTrust } from "../trust";
+
 export type PreflopAction = "fold" | "call" | "raise" | "allin";
 
 /** Weighted chart cell used after adjustments (weight 0-100). */
@@ -190,4 +192,6 @@ export interface PreflopAdvice {
   /** 实际游戏相对 GTO 基线的偏移建议。 */
   adjustments: string[];
   dataSource: string;
+  /** How this advice was produced (chart / fallback / solved / rule). */
+  trust?: AdviceTrust;
 }

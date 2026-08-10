@@ -68,7 +68,9 @@ export function villainContinuingRange(
     }
   }
 
-  // 2. Pocket pairs (sets, overpairs, and low pairs when no aggression).
+  // 2. Pocket pairs. Sets and overpairs always continue; low pocket pairs
+  // only continue heads-up with no aggression to face — multiway pots and
+  // bets fold them out of the continuing range.
   for (let r = 0; r < 13; r++) {
     const ofRank = deck.filter((c) => rankOf(c) === r);
     for (let i = 0; i < ofRank.length; i++) {
@@ -77,22 +79,33 @@ export function villainContinuingRange(
         const isOverpair = boardRanks.every((br) => r > br);
         if (isSet || isOverpair) {
           add(ofRank[i], ofRank[j]);
-        } else if (!ctx.aggression) {
+        } else if (!ctx.aggression && !ctx.multiway) {
           add(ofRank[i], ofRank[j]);
         }
       }
     }
   }
 
-  // 3. Hands that pair the board (top pair+, two pair, trips).
+  // 3. Hands that pair the board (top pair+, two pair, trips). Aggression
+  // or a multiway pot restricts continues to the top two board ranks, and
+  // multiway aggression additionally demands a T+ kicker.
   const topBoardRank = sortedBoardRanks[sortedBoardRanks.length - 1] ?? -1;
   const secondBoardRank = sortedBoardRanks[sortedBoardRanks.length - 2] ?? -1;
+  const minKickerRank = ctx.aggression && ctx.multiway ? 8 : 6;
   for (const br of sortedBoardRanks) {
-    if (ctx.aggression && br !== topBoardRank && br !== secondBoardRank) continue;
+    if (
+      (ctx.aggression || ctx.multiway) &&
+      br !== topBoardRank &&
+      br !== secondBoardRank
+    ) {
+      continue;
+    }
     const pairCards = deck.filter((c) => rankOf(c) === br);
     for (const pc of pairCards) {
       const kickers = deck.filter(
-        (c) => c !== pc && (rankOf(c) >= 6 || boardRankSet.has(rankOf(c)))
+        (c) =>
+          c !== pc &&
+          (rankOf(c) >= minKickerRank || boardRankSet.has(rankOf(c)))
       );
       for (const k of kickers) add(pc, k);
     }
@@ -124,6 +137,5 @@ export function villainContinuingRange(
     }
   }
 
-  void ctx.multiway;
   return combos;
 }

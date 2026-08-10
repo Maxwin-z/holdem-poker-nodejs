@@ -597,6 +597,90 @@ describe("preflop GTO engine", () => {
     }
   });
 
+  it("tightens full-ring early positions relative to the 6-max chart", () => {
+    const sixMaxUtg = getPreflopAdvice(
+      base({ playerCount: 6, heroPosition: "UTG" })
+    );
+    const nineMaxUtg = getPreflopAdvice(
+      base({ playerCount: 9, heroPosition: "UTG", heroPositionLabel: "UTG" })
+    );
+    const nineMaxUtg1 = getPreflopAdvice(
+      base({ playerCount: 9, heroPosition: "UTG", heroPositionLabel: "UTG+1" })
+    );
+    const sixCount = (sixMaxUtg.ranges.raise || []).length;
+    const nineCount = (nineMaxUtg.ranges.raise || []).length;
+    const nineUtg1Count = (nineMaxUtg1.ranges.raise || []).length;
+    assert.ok(
+      nineCount < sixCount,
+      `9-max UTG (${nineCount}) should open tighter than 6-max UTG (${sixCount})`
+    );
+    assert.ok(
+      nineCount < nineUtg1Count && nineUtg1Count < sixCount,
+      "UTG should be tighter than UTG+1, both tighter than 6-max"
+    );
+    // The button never tightens with table size.
+    const sixBtn = getPreflopAdvice(base({ playerCount: 6 }));
+    const nineBtn = getPreflopAdvice(
+      base({ playerCount: 9, heroPositionLabel: "BTN" })
+    );
+    assert.strictEqual(
+      (sixBtn.ranges.raise || []).length,
+      (nineBtn.ranges.raise || []).length
+    );
+    assert.ok(
+      nineMaxUtg.notes.some((n) => n.includes("收紧")),
+      "should note the full-ring tightening"
+    );
+  });
+
+  it("tightens implied-odds calls as stacks get shallower", () => {
+    const spot = (stackBB: number, hand: string) =>
+      getPreflopAdvice(
+        base({
+          heroPosition: "BB",
+          scenario: "vs-open",
+          villainPosition: "BTN",
+          openSizeBB: 2.5,
+          effectiveStackBB: stackBB,
+          heroStackBB: stackBB,
+          heroHand: hand,
+        })
+      );
+    // 22 is a pure chart call at 100bb; its call weight shrinks with depth.
+    const deep = spot(100, "22").hero!.actionDistribution.call;
+    const mid = spot(40, "22").hero!.actionDistribution.call;
+    const shallow = spot(25, "22").hero!.actionDistribution.call;
+    assert.ok(mid < deep, `40bb call ${mid} should be below 100bb ${deep}`);
+    assert.ok(shallow < mid || shallow === 0, "25bb drops set-mining calls");
+    // Premium hands are untouched by the depth layer.
+    const aaDeep = spot(100, "AA").hero!.action;
+    const aaMid = spot(40, "AA").hero!.action;
+    assert.strictEqual(aaDeep, aaMid);
+    const advice = spot(40, "22");
+    assert.ok(
+      advice.notes.some((n) => n.includes("40bb")),
+      "should note the depth bucket"
+    );
+  });
+
+  it("labels advice with a trust level", () => {
+    assert.strictEqual(getPreflopAdvice(base({})).trust, "chart");
+    const pushFold = getPreflopAdvice(
+      base({ heroPosition: "SB", effectiveStackBB: 10 })
+    );
+    assert.ok(pushFold.trust === "chart-fallback" || pushFold.trust === "solved");
+    const vs4bet = getPreflopAdvice(
+      base({
+        heroPosition: "BTN",
+        scenario: "vs-4bet",
+        villainPosition: "CO",
+        openSizeBB: 3,
+        threeBetSizeBB: 9,
+      })
+    );
+    assert.strictEqual(vs4bet.trust, "rule");
+  });
+
   it("surfaces approximations and practical offsets on the advice", () => {
     const advice = getPreflopAdvice(
       base({

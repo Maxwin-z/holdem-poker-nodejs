@@ -48,6 +48,7 @@ const previewAnalytics: PlayerAnalyticsReport = {
     wentToShowdown: { value: 29, numerator: 12, denominator: 41 },
     wonAtShowdown: { value: 51, numerator: 6, denominator: 12 },
     gtoAlignment: { value: 62, numerator: 62, denominator: 100 },
+    evLoss: { totalBB: 9.4, per100Hands: 9.4, scoredActions: 86 },
     netBB: 18.6,
     bbPer100: 18.6,
   },
@@ -58,9 +59,9 @@ const previewAnalytics: PlayerAnalyticsReport = {
     { position: "BB", hands: 20, vpip: 30, pfr: 10, netBB: -5.7 },
   ],
   streets: [
-    { street: "flop", actions: 48, fold: 12, call: 13, aggressive: 23, aggressionFrequency: 48, gtoAlignment: 66 },
-    { street: "turn", actions: 27, fold: 8, call: 7, aggressive: 12, aggressionFrequency: 44, gtoAlignment: 61 },
-    { street: "river", actions: 16, fold: 5, call: 5, aggressive: 6, aggressionFrequency: 38, gtoAlignment: 57 },
+    { street: "flop", actions: 48, fold: 12, call: 13, aggressive: 23, aggressionFrequency: 48, gtoAlignment: 66, evLossBB: 3.2 },
+    { street: "turn", actions: 27, fold: 8, call: 7, aggressive: 12, aggressionFrequency: 44, gtoAlignment: 61, evLossBB: 2.5 },
+    { street: "river", actions: 16, fold: 5, call: 5, aggressive: 6, aggressionFrequency: 38, gtoAlignment: 57, evLossBB: 3.7 },
   ],
   insights: [],
 };

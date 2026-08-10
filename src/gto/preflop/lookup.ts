@@ -11,7 +11,14 @@ import {
   GENERIC_VS_OPEN,
   MP_VS_OPEN_UTG,
 } from "./data/fallback";
-import { HAND_ORDER, comboCount, handScore, normalizeHandKey } from "./hand";
+import {
+  HAND_ORDER,
+  comboCount,
+  handScore,
+  handStrength,
+  impliedOddsClass,
+  normalizeHandKey,
+} from "./hand";
 import type {
   Chart,
   ChartCell,
@@ -195,6 +202,154 @@ export function applyMultiwayTightening(
   return out;
 }
 
+/** Remove the weakest `fraction` of a chart's hands by preflop score. */
+function removeWeakestFraction(chart: Chart, fraction: number): Chart {
+  if (fraction <= 0) return chart;
+  const byScore = Object.keys(chart).sort(
+    (a, b) => handScore(a) - handScore(b)
+  );
+  const removeCount = Math.min(
+    byScore.length,
+    Math.max(1, Math.floor(byScore.length * fraction))
+  );
+  const remove = new Set(byScore.slice(0, removeCount));
+  const out: Chart = {};
+  for (const [hand, cell] of Object.entries(chart)) {
+    if (!remove.has(hand)) out[hand] = cell;
+  }
+  return out;
+}
+
+/**
+ * Full-ring early positions must open tighter than the 6-max charts the
+ * data pack provides: a true 9-max UTG range is meaningfully narrower than
+ * a 6-max UTG range. Approximated by removing the weakest fraction of the
+ * opening chart, scaled by table size and seat.
+ *
+ * Only applies to open-raise scenarios (unopened / iso); defense charts
+ * keep the 6-max baseline.
+ */
+export function fullRingTightenFraction(
+  playerCount: number,
+  heroLabel: string
+): number {
+  if (playerCount < 7) return 0;
+  const label = heroLabel.toUpperCase();
+  if (playerCount >= 9) {
+    if (label === "UTG") return 0.3;
+    if (label === "UTG+1") return 0.2;
+    if (label === "MP") return 0.1;
+    if (label === "LJ") return 0.05;
+    return 0;
+  }
+  if (playerCount === 8) {
+    if (label === "UTG") return 0.2;
+    if (label === "MP") return 0.08;
+    if (label === "LJ") return 0.05;
+    return 0;
+  }
+  // 7-handed
+  if (label === "UTG") return 0.12;
+  if (label === "MP") return 0.05;
+  return 0;
+}
+
+/** Apply the full-ring early-position tightening to an opening chart. */
+export function applyFullRingTightening(
+  chart: Chart,
+  scenario: PreflopScenario,
+  playerCount: number,
+  heroLabel: string
+): { chart: Chart; removedFraction: number } {
+  if (scenario !== "unopened" && scenario !== "iso") {
+    return { chart, removedFraction: 0 };
+  }
+  const fraction = fullRingTightenFraction(playerCount, heroLabel);
+  if (fraction <= 0) return { chart, removedFraction: 0 };
+  return { chart: removeWeakestFraction(chart, fraction), removedFraction: fraction };
+}
+
+/** Stack-depth buckets between push/fold (<=20bb) and the 100bb baseline. */
+export type DepthBucket = 25 | 40 | 60 | null;
+
+export function depthBucketOf(stackBB: number): DepthBucket {
+  if (stackBB <= 20) return null; // push/fold territory, handled separately
+  if (stackBB <= 30) return 25;
+  if (stackBB <= 50) return 40;
+  if (stackBB <= 75) return 60;
+  return null;
+}
+
+/** Call-weight multipliers per depth bucket. */
+const DEPTH_CALL_FACTORS: Record<
+  25 | 40 | 60,
+  { smallPair: number; speculative: number; vs3betNonPremium: number }
+> = {
+  // 60bb: implied odds are mildly worse; trim speculative calls a little.
+  60: { smallPair: 0.85, speculative: 0.85, vs3betNonPremium: 0.85 },
+  // 40bb: set mining and low suited connectivity no longer pay full price.
+  40: { smallPair: 0.5, speculative: 0.6, vs3betNonPremium: 0.6 },
+  // 25bb: speculative flatting is mostly gone; play tighter or jam.
+  25: { smallPair: 0, speculative: 0.3, vs3betNonPremium: 0.35 },
+};
+
+/**
+ * Depth adjustment for 20-75bb stacks: the 100bb charts overvalue
+ * implied-odds calls (small pairs, low suited connectors) and vs-3bet
+ * continues when stacks are shallow. Raise/jam branches are untouched;
+ * only call weight is reduced, with the difference folding.
+ */
+export function applyDepthAdjustment(
+  chart: Chart,
+  scenario: PreflopScenario,
+  stackBB: number
+): { chart: Chart; bucket: DepthBucket } {
+  const bucket = depthBucketOf(stackBB);
+  if (!bucket) return { chart, bucket: null };
+  if (scenario !== "vs-open" && scenario !== "vs-3bet") {
+    return { chart, bucket: null };
+  }
+  const factors = DEPTH_CALL_FACTORS[bucket];
+  const out: Chart = {};
+  for (const [hand, cell] of Object.entries(chart)) {
+    if (!cell) continue;
+    const w = normalizeCell(cell);
+    const callShare = w.actions.call || 0;
+    if (callShare <= 0) {
+      out[hand] = cell;
+      continue;
+    }
+    let factor = 1;
+    if (scenario === "vs-3bet") {
+      factor = handStrength(hand) === "strong" ? 1 : factors.vs3betNonPremium;
+    } else {
+      const klass = impliedOddsClass(hand);
+      if (klass === "small-pair") factor = factors.smallPair;
+      else if (klass === "speculative-suited") factor = factors.speculative;
+    }
+    if (factor >= 1) {
+      out[hand] = cell;
+      continue;
+    }
+    // Convert to combo-mass space: reduce only the calling mass.
+    const weight = Math.max(0, Math.min(100, w.weight));
+    const callMass = (weight * callShare) / 100;
+    const keptCallMass = callMass * factor;
+    const otherMass = weight - callMass;
+    const newWeight = otherMass + keptCallMass;
+    if (newWeight < 1) continue; // folds entirely
+    const actions: WeightedCell["actions"] = {};
+    for (const [action, share] of Object.entries(w.actions)) {
+      if (!share || action === "fold") continue;
+      const mass = action === "call" ? keptCallMass : (weight * share) / 100;
+      if (mass <= 0.05) continue;
+      actions[action as PreflopAction] = round1((mass / newWeight) * 100);
+    }
+    out[hand] = { weight: round1(newWeight), actions };
+  }
+  return { chart: out, bucket };
+}
+
 /**
  * Calibration: "loose" adds the strongest absent hands to RFI/ISO charts;
  * "tight" removes the weakest 10% of hands from any chart.
@@ -206,14 +361,7 @@ export function applyCalibration(
 ): Chart {
   if (looseness === "standard" || !chart) return chart;
   if (looseness === "tight") {
-    const byScore = Object.keys(chart).sort((a, b) => handScore(a) - handScore(b));
-    const removeCount = Math.max(1, Math.floor(byScore.length * 0.1));
-    const remove = new Set(byScore.slice(0, removeCount));
-    const out: Chart = {};
-    for (const [hand, cell] of Object.entries(chart)) {
-      if (!remove.has(hand)) out[hand] = cell;
-    }
-    return out;
+    return removeWeakestFraction(chart, 0.1);
   }
   // loose
   const out: Chart = { ...chart };

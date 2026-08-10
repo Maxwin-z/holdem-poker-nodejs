@@ -8,11 +8,16 @@
  * Exact short-stack Nash solving is planned for a later phase.
  */
 
+import type { AdviceTrust } from "../../trust";
+
 export interface PushFoldTable {
   /** Nearest stack bucket the table applies to (in bb). */
   stackBB: number;
   hands: string[];
 }
+
+/** Provenance of these tables (authored approximations, not solved). */
+export const PUSHFOLD_TRUST: AdviceTrust = "chart-fallback";
 
 const R = (hands: string) => hands.split(",").map((h) => h.trim());
 

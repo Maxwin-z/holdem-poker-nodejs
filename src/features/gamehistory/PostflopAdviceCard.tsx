@@ -5,6 +5,7 @@ import type {
 } from "../../gto/postflop/types";
 import GtoTips from "./GtoTips";
 import PostflopRangeGrid from "./PostflopRangeGrid";
+import TrustBadge from "./TrustBadge";
 
 const ACTION_META: Record<
   PostflopAction,
@@ -94,6 +95,7 @@ export default function PostflopAdviceCard({
       <div className="gto-advice-card__head">
         <span className="gto-advice-card__badge">GTO</span>
         <strong>{STREET_LABEL[advice.street]}建议</strong>
+        <TrustBadge trust={advice.trust} />
         <small>
           {advice.heroPositionLabel} · 底池 {advice.potChips} 筹码 ·{" "}
           {advice.effectiveStackBB}bb
