@@ -234,6 +234,23 @@ test("K, C, and M shortcuts execute only their available actions", () => {
   expect(ws_userBet).toHaveBeenCalledWith(20);
 });
 
+test("AI practice disables the paid overtime button and its M shortcut", () => {
+  setActingState();
+  const [hero] = mockState.room.room.users;
+  mockState.room.room.users.push(
+    { ...hero, id: "bot-1", isActing: false, isBot: true },
+    { ...hero, id: "bot-2", isActing: false, isBot: true }
+  );
+  const { getByLabelText } = render(<Owner />);
+
+  fireEvent.keyDown(document, { key: "M" });
+
+  expect(ws_overtime).not.toHaveBeenCalled();
+  expect(
+    (getByLabelText("行动倒计时与加时") as HTMLButtonElement).disabled
+  ).toBe(true);
+});
+
 test("I toggles the waiting check-fold preaction", () => {
   setActingState();
   mockState.room.room.users[0].isActing = false;

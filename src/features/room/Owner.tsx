@@ -19,6 +19,7 @@ import { Poker } from "./Poker";
 import { BigBlind, Dealer, SmallBlind } from "./Symbol";
 import { selectGame, selectRoom, selectSelf } from "./roomSlice";
 import { calculateOvertimeCost } from "../../shared/overtime";
+import { isAiPracticeTable } from "../../shared/actionTimer";
 import { BuyInSettingButton } from "./BuyInSetting";
 import { canRunItOut as getCanRunItOut } from "./runItOut";
 const hintsound = require("../../assets/hint.wav");
@@ -84,12 +85,16 @@ export function Owner() {
     self && !self.isReady
       ? "休息"
       : self?.actionName || (isActing ? "轮到你" : "等待");
-  const overtimeCost = calculateOvertimeCost({
-    bigBlind: bb,
-    pots,
-    playerCount: game?.userCount || 0,
-    availableStack: stack,
-  });
+  // Solo AI practice already grants 3 minutes per action, so overtime is off.
+  const isAiPractice = isAiPracticeTable(room?.users || []);
+  const overtimeCost = isAiPractice
+    ? 0
+    : calculateOvertimeCost({
+        bigBlind: bb,
+        pots,
+        playerCount: game?.userCount || 0,
+        availableStack: stack,
+      });
 
   const [raiseInput, setRaiseInput] = useState("");
   const [now, setNow] = useState(0);
@@ -374,6 +379,8 @@ export function Owner() {
                       ? `快捷键 M · 点击加时，需支付其他玩家各 ${formatChips(
                           overtimeCost
                         )} 筹码`
+                      : isAiPractice
+                      ? "AI 练习模式，每次行动有 3 分钟思考时间"
                       : "剩余筹码不足，无法购买加时"
                   }
                 >

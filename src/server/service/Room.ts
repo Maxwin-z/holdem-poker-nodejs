@@ -32,6 +32,8 @@ import { buildAiReplayComparison } from "../../shared/aiReplay";
 import {
   DISCONNECTED_ACTION_GRACE_SECONDS,
   INITIAL_ACTION_TIME_SECONDS,
+  PRACTICE_ACTION_TIME_SECONDS,
+  isAiPracticeTable,
 } from "../../shared/actionTimer";
 import { OpponentModel } from "../bot/opponent-model";
 import { getBotStrategyProvider } from "../bot/strategy-registry";
@@ -878,17 +880,31 @@ export class Game {
     }
     publish2all(this.roomid);
   }
+  /** AI practice: the acting human is the only human left at the table. */
+  isAiPracticeRoom(): boolean {
+    const tokens = roomMap[this.roomid]?.users || [];
+    return isAiPracticeTable(
+      tokens.map((token) => ({ isBot: !!userMap[token]?.isBot }))
+    );
+  }
+
+  private actionBaseSeconds(token: Token): number {
+    const user = userMap[token];
+    return !user?.isBot && this.isAiPracticeRoom()
+      ? PRACTICE_ACTION_TIME_SECONDS
+      : INITIAL_ACTION_TIME_SECONDS;
+  }
+
   setActingUser(token: Token, requestedDelay?: number) {
     const user = userMap[token];
-    let delay = requestedDelay ?? INITIAL_ACTION_TIME_SECONDS * 1000;
+    const baseSeconds = this.actionBaseSeconds(token);
+    let delay = requestedDelay ?? baseSeconds * 1000;
     if (
       requestedDelay === undefined &&
       user.isOffline &&
       !user.hasUsedOfflineActionGrace
     ) {
-      delay =
-        (INITIAL_ACTION_TIME_SECONDS + DISCONNECTED_ACTION_GRACE_SECONDS) *
-        1000;
+      delay = (baseSeconds + DISCONNECTED_ACTION_GRACE_SECONDS) * 1000;
       user.hasUsedOfflineActionGrace = true;
     }
 
@@ -1600,14 +1616,14 @@ export class Game {
       return;
     }
 
-    user.hasUsedOfflineActionGrace = true;
     const actionTimeLimit =
-      INITIAL_ACTION_TIME_SECONDS + DISCONNECTED_ACTION_GRACE_SECONDS;
+      this.actionBaseSeconds(token) + DISCONNECTED_ACTION_GRACE_SECONDS;
     const extendedEndTime = user.actionStartTime + actionTimeLimit * 1000;
     if (extendedEndTime <= user.actionEndTime) {
       return;
     }
 
+    user.hasUsedOfflineActionGrace = true;
     user.actionEndTime = extendedEndTime;
     user.actionTimeLimit = actionTimeLimit;
     this.scheduleActionTimeout(token, Math.max(0, extendedEndTime - Date.now()));
@@ -1642,6 +1658,9 @@ export class Game {
       this.isSettling
     ) {
       throw "当前不是你的行动时间";
+    }
+    if (this.isAiPracticeRoom()) {
+      throw "AI 练习模式已有充裕思考时间，无需购买加时";
     }
 
     const pots = sum(this.sortedUsers.map((t) => sum(userMap[t].bets)));

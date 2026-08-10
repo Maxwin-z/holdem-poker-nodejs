@@ -1,6 +1,7 @@
 import { assert } from "chai";
 import { calculateOvertimeCost } from "../../shared/overtime";
 import {
+  addBot,
   createRoom,
   createUser,
   roomMap,
@@ -32,6 +33,29 @@ function createOvertimeGame() {
   });
 
   return { game, room, tokens };
+}
+
+/** One human plus two bots, i.e. the AI practice table. */
+function createPracticeGame(humanCount = 1) {
+  const humans = new Array(humanCount)
+    .fill(0)
+    .map((_, index) => `human-${index}`);
+  humans.forEach((token) => createUser(token, token.toUpperCase(), ""));
+
+  const room = createRoom(humans[0], 1, 200);
+  humans.slice(1).forEach((token) => userEnterRoom(token, room.id));
+  const bots = [addBot(humans[0], "standard"), addBot(humans[0], "tight")];
+
+  const game = new Game(room.id, humans[0], 1);
+  room.game = game;
+  game.isSettling = false;
+  game.sortedUsers = [...humans, ...bots.map((bot) => bot.token)];
+  game.sortedUsers.forEach((token) => {
+    userMap[token].isInCurrentGame = true;
+    userMap[token].bets = [0, 0, 0, 0];
+  });
+
+  return { game, room, humans, bots };
 }
 
 describe("Overtime", () => {
@@ -153,6 +177,92 @@ describe("Overtime", () => {
 
     assert.equal(error, "剩余筹码不足，无法购买加时");
     assert.equal(buyer.actionEndTime, actionEndTime);
+    clearTimeout(game.actingUserTimer);
+  });
+});
+
+describe("AI practice action timer", () => {
+  beforeEach(clean);
+
+  it("gives the lone human 3 minutes per action", () => {
+    const { game, humans } = createPracticeGame();
+    const hero = userMap[humans[0]];
+    const startedAt = Date.now();
+
+    game.setActingUser(hero.token);
+    const configuredAt = Date.now();
+
+    assert.isTrue(game.isAiPracticeRoom());
+    assert.equal(hero.actionTimeLimit, 180);
+    assert.isAtLeast(hero.actionEndTime, startedAt + 180000);
+    assert.isAtMost(hero.actionEndTime, configuredAt + 180000);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("keeps bots on the standard 20 seconds", () => {
+    const { game, bots } = createPracticeGame();
+
+    game.setActingUser(bots[0].token);
+
+    assert.equal(bots[0].actionTimeLimit, 20);
+    clearTimeout(game.actingUserTimer);
+    clearTimeout(game.botActionTimer);
+  });
+
+  it("falls back to 20 seconds once a second human is in the room", () => {
+    const { game, humans } = createPracticeGame(2);
+    const hero = userMap[humans[0]];
+
+    game.setActingUser(hero.token);
+
+    assert.isFalse(game.isAiPracticeRoom());
+    assert.equal(hero.actionTimeLimit, 20);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("extends the offline grace on top of the practice time", () => {
+    const { game, humans } = createPracticeGame();
+    const hero = userMap[humans[0]];
+    hero.isOffline = true;
+
+    game.setActingUser(hero.token);
+
+    assert.equal(hero.actionTimeLimit, 210);
+    assert.isTrue(hero.hasUsedOfflineActionGrace);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("never shortens a practice turn when the socket drops mid-action", () => {
+    const { game, humans } = createPracticeGame();
+    const hero = userMap[humans[0]];
+    game.setActingUser(hero.token);
+    const actionEndTime = hero.actionEndTime;
+
+    game.handleUserDisconnected(hero.token);
+
+    assert.isAtLeast(hero.actionEndTime, actionEndTime);
+    assert.equal(hero.actionTimeLimit, 210);
+    assert.isTrue(hero.hasUsedOfflineActionGrace);
+    clearTimeout(game.actingUserTimer);
+  });
+
+  it("rejects buying overtime, which would shorten the practice clock", () => {
+    const { game, humans } = createPracticeGame();
+    const hero = userMap[humans[0]];
+    game.setActingUser(hero.token);
+    const stackBefore = hero.stack;
+    const actionEndTime = hero.actionEndTime;
+    let error = "";
+
+    try {
+      userOverTime(hero.token);
+    } catch (caught) {
+      error = String(caught);
+    }
+
+    assert.equal(error, "AI 练习模式已有充裕思考时间，无需购买加时");
+    assert.equal(hero.stack, stackBefore);
+    assert.equal(hero.actionEndTime, actionEndTime);
     clearTimeout(game.actingUserTimer);
   });
 });
