@@ -391,3 +391,7 @@ export function ws_addBot(style: "random" | "standard" | "tight" | "loose") {
 export function ws_removeBot(botId: string) {
   send2server({ action: ActionType.REMOVE_BOT, botId });
 }
+
+export function ws_setBotAutoReveal(enabled: boolean) {
+  send2server({ action: ActionType.SET_BOT_AUTO_REVEAL, enabled });
+}

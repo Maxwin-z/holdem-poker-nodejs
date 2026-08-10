@@ -187,6 +187,7 @@ export function RoomUiPreview() {
       isGaming: !isOwnerWaiting,
       minBuyIn: 4000,
       maxBuyIn: 186400,
+      botAutoReveal: false,
       users,
     };
     const game: SimpleGame = {

@@ -583,6 +583,12 @@ export class Game {
         this.round === GameRound.River &&
         availableUsers.length > 1 &&
         (user.isAllIn || (!user.isFolded && index <= lastWinnerIndex));
+      // "AI auto show": bots reveal hole cards only, even when they mucked.
+      user.forceRevealHands =
+        roomMap[this.roomid].botAutoReveal &&
+        user.isBot &&
+        user.isInCurrentGame &&
+        user.hands.length > 0;
 
       logs.push(
         `<strong class="log-player">${user.name}</strong> ${user.shouldShowHand
@@ -591,7 +597,9 @@ export class Game {
             .join("")}】${p.maxCards
               ?.map((c) => `${c.num}${c.suit}`)
               .join("")} ${user.handsType} `
-          : ""
+          : user.forceRevealHands
+            ? `【${user.hands.map((c) => `${c.num}${c.suit}`).join("")}】 `
+            : ""
         }<span class="log-profit log-profit--${
           profits >= 0 ? "win" : "lose"
         }">${profits >= 0 ? "+" : ""}${profits}</span>`
@@ -1775,6 +1783,8 @@ class Room {
   game: Game = new Game("", "", 0);
   chipsRecords: ChipsRecord[] = [];
   opponentModel = new OpponentModel();
+  /** Room-wide switch: reveal every bot's hole cards at settlement. */
+  botAutoReveal: boolean = false;
 
   constructor(id: string, sb: number, buyIn: number) {
     if (sb === 0 || buyIn === 0) {

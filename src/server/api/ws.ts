@@ -22,6 +22,7 @@ import {
   userRequestGtoAdvice,
   addBot,
   removeBot,
+  setBotAutoReveal,
 } from "../service";
 import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
@@ -209,6 +210,9 @@ function handle(ws: PokerWebSocket, data: ActionBase) {
     case ActionType.REMOVE_BOT:
       removeBot(token, data.botId);
       break;
+    case ActionType.SET_BOT_AUTO_REVEAL:
+      setBotAutoReveal(token, data.enabled);
+      break;
   }
   if (data.action !== ActionType.LEAVE) {
     publish(token, data, ws);
@@ -226,6 +230,7 @@ function getSimpleRoom(room: Room): SimpleRoom {
     isGaming: room.isGaming,
     minBuyIn: buyInBounds.min,
     maxBuyIn: buyInBounds.max,
+    botAutoReveal: room.botAutoReveal,
     users: room.users.map((t) => getSimpleUser(t)),
   };
 }
@@ -303,7 +308,10 @@ function getSimpleUser(token: Token): SimpleUser {
     actionEndTime: user.actionEndTime,
     actionTimeLimit: user.actionTimeLimit,
     actionName: user.actionName,
-    hands: user.shouldShowHand ? user.hands : [null, null],
+    hands:
+      user.shouldShowHand || user.forceRevealHands
+        ? user.hands
+        : [null, null],
     maxCards: user.shouldShowHand ? user.maxCards : [],
     profits: user.profits,
     position: user.positon,
@@ -382,6 +390,7 @@ export function publish(token: Token, data: ActionBase, ws: PokerWebSocket) {
     case ActionType.PAUSE_GAME:
     case ActionType.ADD_BOT:
     case ActionType.REMOVE_BOT:
+    case ActionType.SET_BOT_AUTO_REVEAL:
       send2all(room.id, {
         room: simpleRoom,
         game: simpleGame,

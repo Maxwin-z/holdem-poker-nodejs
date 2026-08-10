@@ -191,6 +191,7 @@ function buildPreview(demoState: DemoState) {
     isGaming: true,
     minBuyIn: 4000,
     maxBuyIn: 186400,
+    botAutoReveal: false,
     users,
   };
   const game: SimpleGame = {

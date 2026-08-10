@@ -376,6 +376,12 @@
   filter: grayscale(0.78);
 }
 
+/* A mucked hand that is being revealed still has to be readable. */
+.live-seat.is-folded .live-seat__cards.has-visible-cards {
+  opacity: 0.72;
+  filter: grayscale(0.3);
+}
+
 .live-seat.is-folded .live-seat__meta {
   opacity: 0.66;
 }
@@ -692,6 +698,28 @@
 
 .live-bot-manager__capacity {
   margin: 10px 0 16px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+}
+
+.live-bot-manager__reveal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.live-bot-manager__reveal-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.live-bot-manager__reveal-copy small {
   color: rgba(255, 255, 255, 0.55);
   font-size: 12px;
 }

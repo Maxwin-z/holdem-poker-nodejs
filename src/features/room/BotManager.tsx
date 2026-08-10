@@ -3,10 +3,14 @@ import {
   PlusOutlined,
   RobotOutlined,
 } from "@ant-design/icons";
-import { Button, Modal, Popconfirm, Select, Tag, Tooltip } from "antd";
+import { Button, Modal, Popconfirm, Select, Switch, Tag, Tooltip } from "antd";
 import { useState } from "react";
 import type { BotStyleSelection } from "../../ApiType";
-import { ws_addBot, ws_removeBot } from "../../app/websocket";
+import {
+  ws_addBot,
+  ws_removeBot,
+  ws_setBotAutoReveal,
+} from "../../app/websocket";
 import { useAppSelector } from "../../app/hooks";
 import { selectRoom } from "./roomSlice";
 
@@ -68,6 +72,18 @@ export function BotManager() {
         <p className="live-bot-manager__capacity">
           当前座位 {seatedCount}/10；随机风格的实际策略仅由系统内部决定。
         </p>
+        <div className="live-bot-manager__reveal">
+          <div className="live-bot-manager__reveal-copy">
+            <strong>AI自动秀牌</strong>
+            <small>开启后，每手结算时所有AI机器人都会亮出手牌（含已弃牌）。</small>
+          </div>
+          <Switch
+            aria-label="AI自动秀牌"
+            checked={Boolean(room?.botAutoReveal)}
+            disabled={bots.length === 0 && !room?.botAutoReveal}
+            onChange={(checked) => ws_setBotAutoReveal(checked)}
+          />
+        </div>
         <div className="live-bot-manager__list">
           {bots.length === 0 ? (
             <div className="live-bot-manager__empty">还没有AI机器人</div>

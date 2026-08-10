@@ -1,15 +1,18 @@
 import { assert } from "chai";
+import type { SimpleRoom, SimpleUser } from "../../ApiType";
 import {
   addBot,
   createRoom,
   createUser,
   removeBot,
   roomMap,
+  setBotAutoReveal,
   startGame,
   userEnterRoom,
   userMap,
   userReady,
 } from "../service";
+import { publish2all, PokerWebSocket } from "../api/ws";
 import { OpponentModel } from "../bot/opponent-model";
 import { CurrentGtoStrategyProvider } from "../bot/gto-strategy-provider";
 import {
@@ -132,6 +135,135 @@ describe("AI bots", () => {
     } finally {
       setBotStrategyProvider(previous);
     }
+  });
+});
+
+describe("AI auto show", () => {
+  beforeEach(clean);
+
+  function withoutTimers<T>(fn: () => T): T {
+    const originalSetTimeout = global.setTimeout;
+    global.setTimeout = (() => 0) as unknown as typeof setTimeout;
+    try {
+      return fn();
+    } finally {
+      global.setTimeout = originalSetTimeout;
+    }
+  }
+
+  /** Owner plus two bots, dealt in, with the acting timers disarmed. */
+  function seatOwnerWithBots() {
+    const owner = createUser("owner", "Owner", "");
+    const room = createRoom(owner.token, 1, 200);
+    userReady(owner.token);
+    const folder = addBot(owner.token, "standard");
+    const shower = addBot(owner.token, "tight");
+    startGame(owner.token);
+    clearTimeout(room.game.actingUserTimer);
+    clearTimeout(room.game.botActionTimer);
+
+    const inbox: any[] = [];
+    const socket: PokerWebSocket = {
+      send(data: string) {
+        inbox.push(JSON.parse(data));
+      },
+      close() {},
+    };
+    userMap[owner.token].addWebsocket(socket);
+
+    /** What the owner's client sees for a seat, straight off the wire. */
+    const seatSeenByOwner = (chipsRecordID: string): SimpleUser => {
+      inbox.length = 0;
+      publish2all(room.id);
+      const simpleRoom: SimpleRoom = inbox[inbox.length - 1].room;
+      return simpleRoom.users.find((user) => user.id === chipsRecordID)!;
+    };
+
+    return { owner, room, folder, shower, seatSeenByOwner };
+  }
+
+  it("hides mucked bot hands while the switch is off", () => {
+    const { room, folder, shower, seatSeenByOwner } = seatOwnerWithBots();
+
+    folder.isFolded = true;
+    withoutTimers(() => room.game.settle());
+
+    assert.isFalse(room.botAutoReveal);
+    assert.deepEqual(seatSeenByOwner(folder.chipsRecordID).hands, [null, null]);
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, [null, null]);
+  });
+
+  it("reveals every bot's hole cards at settlement while the switch is on", () => {
+    const { owner, room, folder, shower, seatSeenByOwner } =
+      seatOwnerWithBots();
+    setBotAutoReveal(owner.token, true);
+
+    // Turning it on mid-hand must not leak live hole cards.
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, [null, null]);
+
+    folder.isFolded = true;
+    withoutTimers(() => room.game.settle());
+
+    // Folded bots reveal too, and the hand ended before the river, so this is
+    // the auto-show path rather than a real showdown.
+    assert.isFalse(folder.shouldShowHand);
+    assert.deepEqual(seatSeenByOwner(folder.chipsRecordID).hands, folder.hands);
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, shower.hands);
+    // Hole cards only: no hand ranking is invented for an unfinished board.
+    assert.equal(seatSeenByOwner(shower.chipsRecordID).handsType, "");
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).maxCards, []);
+    // The human's own cards stay private to everyone else.
+    assert.deepEqual(seatSeenByOwner(userMap[owner.token].chipsRecordID).hands, [
+      null,
+      null,
+    ]);
+  });
+
+  it("hides the bots again once the next hand is dealt", () => {
+    const { owner, room, folder, shower, seatSeenByOwner } =
+      seatOwnerWithBots();
+    setBotAutoReveal(owner.token, true);
+
+    folder.isFolded = true;
+    withoutTimers(() => room.game.settle());
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, shower.hands);
+
+    withoutTimers(() => room.game.nextGame());
+    clearTimeout(room.game.actingUserTimer);
+    clearTimeout(room.game.botActionTimer);
+
+    assert.isTrue(room.botAutoReveal);
+    assert.lengthOf(shower.hands, 2);
+    assert.deepEqual(seatSeenByOwner(folder.chipsRecordID).hands, [null, null]);
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, [null, null]);
+  });
+
+  it("hides the bots again as soon as the switch goes off", () => {
+    const { owner, room, folder, shower, seatSeenByOwner } =
+      seatOwnerWithBots();
+    setBotAutoReveal(owner.token, true);
+
+    folder.isFolded = true;
+    withoutTimers(() => room.game.settle());
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, shower.hands);
+
+    setBotAutoReveal(owner.token, false);
+
+    assert.isFalse(room.botAutoReveal);
+    assert.deepEqual(seatSeenByOwner(folder.chipsRecordID).hands, [null, null]);
+    assert.deepEqual(seatSeenByOwner(shower.chipsRecordID).hands, [null, null]);
+  });
+
+  it("only lets the room owner flip the switch", () => {
+    const { owner, room } = seatOwnerWithBots();
+    const guest = createUser("guest", "Guest", "");
+    userEnterRoom(guest.token, room.id);
+
+    assert.throws(() => setBotAutoReveal(guest.token, true), /只有房主/);
+    assert.isFalse(room.botAutoReveal);
+
+    setBotAutoReveal(owner.token, true);
+    assert.isTrue(room.botAutoReveal);
   });
 });
 

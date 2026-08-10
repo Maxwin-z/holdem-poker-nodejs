@@ -72,6 +72,8 @@ export interface SimpleRoom {
   isGaming: boolean;
   minBuyIn: number;
   maxBuyIn: number;
+  /** When on, every AI bot's hole cards are revealed at settlement. */
+  botAutoReveal: boolean;
   users: SimpleUser[];
 }
 
@@ -116,6 +118,7 @@ export enum ActionType {
   GTO_ADVICE = "GTO_ADVICE",
   ADD_BOT = "ADD_BOT",
   REMOVE_BOT = "REMOVE_BOT",
+  SET_BOT_AUTO_REVEAL = "SET_BOT_AUTO_REVEAL",
 }
 
 /** Structured GTO guidance entry displayed in the chat feed. */

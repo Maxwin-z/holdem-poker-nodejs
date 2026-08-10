@@ -406,3 +406,17 @@ export function removeBot(token: Token, botId: string) {
     room.removeUser(botToken);
   }
 }
+
+export function setBotAutoReveal(token: Token, enabled: boolean) {
+  const room = ownerRoom(token);
+  room.botAutoReveal = Boolean(enabled);
+  // Apply to the hand already on screen instead of waiting for the next one.
+  // Only ever during settlement, so live hole cards stay hidden.
+  const revealNow = room.botAutoReveal && Boolean(room.game?.isSettling);
+  room.users.forEach((userToken) => {
+    const user = userMap[userToken];
+    user.forceRevealHands =
+      revealNow && user.isBot && user.isInCurrentGame && user.hands.length > 0;
+  });
+  return room.botAutoReveal;
+}

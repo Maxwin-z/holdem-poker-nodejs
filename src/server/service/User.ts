@@ -43,6 +43,11 @@ class User {
   profits: number = 0;
   handsType: string = "";
   shouldShowHand: boolean = false;
+  /**
+   * Set at settlement when the room has "AI auto show" on: reveals a bot's
+   * hole cards only, without the showdown hand ranking.
+   */
+  forceRevealHands: boolean = false;
   autoLeaveTimer: ReturnType<typeof setTimeout> = setTimeout(() => {}, 0);
   settleTimes: number = 0;
 
@@ -85,6 +90,7 @@ class User {
     this.handsType = "";
     this.maxCards = [];
     this.shouldShowHand = false;
+    this.forceRevealHands = false;
   }
   setRoom(roomid: RoomID) {
     this.roomid = roomid;
@@ -100,6 +106,7 @@ class User {
     this.isFolded = false;
     this.needAction = false;
     this.shouldShowHand = false;
+    this.forceRevealHands = false;
     this.isInCurrentGame = false;
     this.isWinner = false;
     this.positon = "";
@@ -114,6 +121,7 @@ class User {
     this.isActing = false;
     this.needAction = false;
     this.shouldShowHand = false;
+    this.forceRevealHands = false;
     this.isInCurrentGame = false;
     this.isWinner = false;
     this.nextBuyIn = null;
