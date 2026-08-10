@@ -1,4 +1,9 @@
-import { render, screen, wait } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+// RTL v9 exports `wait` at runtime but the bundled @types predate it.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { wait } = require("@testing-library/react") as {
+  wait: (callback: () => void) => Promise<void>;
+};
 import type { AiReplaySummary } from "../../shared/aiReplay";
 import { AiReplayPage } from "./AiReplayPage";
 
@@ -21,10 +26,11 @@ function summary(publicId: string): AiReplaySummary {
     result: "win",
     decisionCount: 2,
     deviationScore: 12,
-    deviationLevel: "low",
+    deviationLevel: "minor",
     scoredDecisionCount: 2,
     severeDecisionCount: 0,
     maxDecisionDeviation: 18,
+    totalEvLossBB: null,
   };
 }
 
