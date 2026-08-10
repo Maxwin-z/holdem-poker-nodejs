@@ -169,7 +169,13 @@ export function User({
             <span className={isActing ? "is-thinking" : ""} title={actionText}>
               {actionText}
             </span>
-            {bet > 0 ? <b>+{bet.toLocaleString("en-US")}</b> : null}
+            {bet > 0 ? (
+              <>
+                {/* key 随金额变化重挂载,重放入场动画 */}
+                <i className="live-chip-disc" key={bet} aria-hidden="true" />
+                <b>+{bet.toLocaleString("en-US")}</b>
+              </>
+            ) : null}
           </div>
         )}
       </div>

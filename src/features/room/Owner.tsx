@@ -417,7 +417,13 @@ export function Owner() {
 
         <div className="live-owner-bet">
           <span>{actionText}</span>
-          {bet > 0 ? <b>+{formatChips(bet)}</b> : null}
+          {bet > 0 ? (
+            <>
+              {/* key 随金额变化重挂载,重放入场动画 */}
+              <i className="live-chip-disc" key={bet} aria-hidden="true" />
+              <b>+{formatChips(bet)}</b>
+            </>
+          ) : null}
           {self?.handsType ? <em>{self.handsType}</em> : null}
         </div>
       </div>
