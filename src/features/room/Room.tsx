@@ -18,7 +18,7 @@ import {
   TrophyOutlined,
   BarChartOutlined,
 } from "@ant-design/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { User } from "./User";
 import { Owner } from "./Owner";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -71,6 +71,18 @@ type RoomPreviewDetails = {
   chipsRecords?: SimpleChipsRecord[];
 };
 
+type ChipFlight = {
+  key: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  delay: number;
+};
+
+const FLIGHT_CHIPS_PER_WINNER = 5;
+const FLIGHT_TOTAL_MS = 1400;
+
 function isStandaloneOrFullscreen() {
   const iosNavigator = window.navigator as Navigator & {
     standalone?: boolean;
@@ -101,6 +113,9 @@ export function Room({
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
   const { ref: stageRef, layout } = useTableLayout<HTMLDivElement>();
+  const [chipFlights, setChipFlights] = useState<ChipFlight[]>([]);
+  const prevWinnerIds = useRef<Set<string>>(new Set());
+  const flightTimer = useRef<number>();
   const room = useAppSelector(selectRoom);
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
@@ -132,6 +147,57 @@ export function Room({
       queries.forEach((query) => query.removeEventListener?.("change", update));
     };
   }, []);
+
+  useEffect(() => () => window.clearTimeout(flightTimer.current), []);
+
+  // 结算时让筹码从底池飞向新出现的赢家座位
+  useEffect(() => {
+    const winners = new Set(
+      (room?.users || [])
+        .filter((user) => user.isWinner && user.profits >= 0)
+        .map((user) => user.id)
+    );
+    const appeared = [...winners].filter(
+      (id) => !prevWinnerIds.current.has(id)
+    );
+    prevWinnerIds.current = winners;
+    if (!appeared.length || !layout) return;
+
+    const seatIds = users.slice(0, 9).map((id) => `${id}`);
+    const from = {
+      x: layout.board.x + layout.board.w / 2,
+      y: layout.board.y + 24,
+    };
+    const flights: ChipFlight[] = [];
+    appeared.forEach((id, winnerIndex) => {
+      const seatIndex = seatIds.indexOf(id);
+      const seat = seatIndex >= 0 ? layout.seats[seatIndex] : null;
+      // 自己不在 9 个座位里,朝舞台底部中央(自家区方向)飞
+      const to = seat
+        ? { x: seat.x + seat.w / 2, y: seat.y + seat.h / 2 }
+        : {
+            x: layout.felt.x + layout.felt.w / 2,
+            y: layout.felt.y + layout.felt.h,
+          };
+      for (let i = 0; i < FLIGHT_CHIPS_PER_WINNER; i++) {
+        flights.push({
+          key: `${id}-${winnerIndex}-${i}`,
+          fromX: from.x + (i - 2) * 5,
+          fromY: from.y,
+          toX: to.x,
+          toY: to.y,
+          delay: winnerIndex * 120 + i * 70,
+        });
+      }
+    });
+
+    window.clearTimeout(flightTimer.current);
+    setChipFlights(flights);
+    flightTimer.current = window.setTimeout(
+      () => setChipFlights([]),
+      FLIGHT_TOTAL_MS
+    );
+  }, [room?.users, users, layout]);
 
   function setSettleTimes(times: number) {
     ws_settleTimes(times);
@@ -460,7 +526,10 @@ export function Room({
                 <div className="live-pot">
                   <span>总底池</span>
                   <i>●</i>
-                  <strong>{(game?.pots || 0).toLocaleString("en-US")}</strong>
+                  {/* key 随底池变化重挂载,触发跳动动画 */}
+                  <strong key={game?.pots || 0}>
+                    {(game?.pots || 0).toLocaleString("en-US")}
+                  </strong>
                 </div>
                 <div className="live-community-cards">
                   {boardCards.map((card, index) => (
@@ -472,6 +541,23 @@ export function Room({
                 </div>
               </div>
             ) : null}
+
+            {chipFlights.map((flight) => (
+              <span
+                key={flight.key}
+                className="live-chip-flight"
+                aria-hidden="true"
+                style={
+                  {
+                    left: flight.fromX,
+                    top: flight.fromY,
+                    animationDelay: `${flight.delay}ms`,
+                    "--fly-x": `${flight.toX - flight.fromX}px`,
+                    "--fly-y": `${flight.toY - flight.fromY}px`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
 
             {selectSettleStatus ? (
               <div className="live-settle-picker">
