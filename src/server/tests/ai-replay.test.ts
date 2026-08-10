@@ -3,6 +3,7 @@ import * as jwt from "jsonwebtoken";
 import { cardToId } from "../../gto/postflop/cards";
 import { equityVsRange } from "../../gto/postflop/equity";
 import {
+  buildAiReplayComparison,
   calculateAiReplayActionDeviation,
   calculateAiReplayDecisionDeviation,
   calculateAiReplayHandDeviation,
@@ -41,6 +42,28 @@ function replayAdvice() {
     actionDistribution,
     actions: [{ action: "raise", frequency: 60, sizeChips: 5 }],
     hero: { actionDistribution },
+  } as any;
+}
+
+/** Advice from a binary chart that pins the hand to a single action. */
+function deterministicAdvice(hand: string, chartAction: "raise" | "fold" = "raise") {
+  const rangeDistribution = { fold: 35.3, call: 26.2, raise: 38.5, allin: 0 };
+  const heroDistribution = chartAction === "raise"
+    ? { fold: 0, call: 0, raise: 100, allin: 0 }
+    : { fold: 100, call: 0, raise: 0, allin: 0 };
+  return {
+    kind: "preflop",
+    recommended: chartAction,
+    recommendedSizeChips: chartAction === "raise" ? 240 : undefined,
+    recommendedSizeBB: chartAction === "raise" ? 12 : undefined,
+    actionDistribution: rangeDistribution,
+    actions: [{ action: "raise", frequency: 38.5, sizeBB: 12, sizeChips: 240 }],
+    hero: {
+      hand,
+      action: chartAction,
+      frequency: 100,
+      actionDistribution: heroDistribution,
+    },
   } as any;
 }
 
@@ -164,6 +187,91 @@ describe("AI replay deviation scoring", () => {
       },
     });
     assert.equal(absentAction?.score, 100);
+  });
+
+  it("softens deterministic-chart mismatches by hand strength and direction", () => {
+    // A binary chart pins every hand to one action; grading a fold of a
+    // marginal hand as a 100-point deviation overstates the error.
+    const foldT3s = buildAiReplayComparison({
+      action: "fold",
+      advice: deterministicAdvice("T3s"),
+      bigBlind: 20,
+    });
+    // Weak hand, passive direction: widened toward the range frequencies.
+    assert.equal(foldT3s.classification, "low-frequency");
+    assert.equal(foldT3s.actualActionProbability, 12.4);
+    const foldT3sDeviation = calculateAiReplayDecisionDeviation({
+      actual: { action: "fold", origin: "human" },
+      advice: deterministicAdvice("T3s"),
+      comparison: foldT3s,
+    });
+    assert.equal(foldT3sDeviation?.actionScore, 30);
+    assert.equal(foldT3sDeviation?.score, 30);
+    const hand = calculateAiReplayHandDeviation([
+      {
+        actorType: "human",
+        actual: { action: "fold", origin: "human" },
+        advice: deterministicAdvice("T3s"),
+        comparison: foldT3s,
+      },
+    ]);
+    assert.equal(hand.deviationScore, 30);
+    assert.equal(hand.deviationLevel, "minor");
+    assert.equal(hand.severeDecisionCount, 0);
+
+    // Medium hand: partial softening.
+    const foldK9s = buildAiReplayComparison({
+      action: "fold",
+      advice: deterministicAdvice("K9s"),
+      bigBlind: 20,
+    });
+    assert.equal(foldK9s.classification, "low-frequency");
+    assert.equal(foldK9s.actualActionProbability, 7.1);
+    const foldK9sDeviation = calculateAiReplayDecisionDeviation({
+      actual: { action: "fold", origin: "human" },
+      advice: deterministicAdvice("K9s"),
+      comparison: foldK9s,
+    });
+    assert.equal(foldK9sDeviation?.actionScore, 60);
+
+    // Premium hand: no softening, folding stays a full deviation.
+    const foldAA = buildAiReplayComparison({
+      action: "fold",
+      advice: deterministicAdvice("AA"),
+      bigBlind: 20,
+    });
+    assert.equal(foldAA.classification, "deviation");
+    assert.equal(foldAA.actualActionProbability, 0);
+    const foldAADeviation = calculateAiReplayDecisionDeviation({
+      actual: { action: "fold", origin: "human" },
+      advice: deterministicAdvice("AA"),
+      comparison: foldAA,
+    });
+    assert.equal(foldAADeviation?.actionScore, 100);
+
+    // Over-aggression with junk the chart folds stays a full deviation.
+    const raiseJunk = buildAiReplayComparison({
+      action: "raise",
+      advice: deterministicAdvice("72o", "fold"),
+      bigBlind: 20,
+    });
+    assert.equal(raiseJunk.classification, "deviation");
+    const raiseJunkDeviation = calculateAiReplayDecisionDeviation({
+      actual: { action: "raise", origin: "human" },
+      advice: deterministicAdvice("72o", "fold"),
+      comparison: raiseJunk,
+    });
+    assert.equal(raiseJunkDeviation?.actionScore, 100);
+
+    // Matching the pinned action is still a clean recommendation.
+    const raiseT3s = buildAiReplayComparison({
+      action: "raise",
+      amountTo: 240,
+      advice: deterministicAdvice("T3s"),
+      bigBlind: 20,
+    });
+    assert.equal(raiseT3s.classification, "recommended");
+    assert.equal(raiseT3s.actualActionProbability, 100);
   });
 
   it("uses RMS across scored human decisions and excludes bots or unscored actions", () => {

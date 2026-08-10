@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Card } from "../../ApiType";
 import { positionLabelByActionOrder } from "../../gto/preflop/positions";
 import type { PostflopAdvice } from "../../gto/postflop/types";
-import { classifyAiReplaySize } from "../../shared/aiReplay";
+import { buildAiReplayComparison, classifyAiReplaySize } from "../../shared/aiReplay";
 import type {
   AiReplayDeviationLevel,
   AiReplayDecision,
@@ -180,12 +180,19 @@ function buildDecisionAssessments(
     assessments.push({
       icon: "⚠️",
       tone: "warning",
-      text: `实际行动仅以${probability !== undefined ? ` ${formatAmount(probability)}%` : "较低"}频率出现，存在明显偏差`,
+      text: `实际行动仅以${probability !== undefined ? ` ${formatAmount(probability)}%` : "较低"}的低频率出现`,
     });
   } else if (decision.comparison.classification === "deviation") {
     assessments.push({ icon: "❌", tone: "danger", text: "实际行动不在当前 GTO 参考策略中" });
   } else {
     assessments.push({ icon: "⚠️", tone: "warning", text: "当前行动缺少可用的 GTO 评分" });
+  }
+  if (decision.comparison.softened) {
+    assessments.push({
+      icon: "⚠️",
+      tone: "warning",
+      text: "参考图表将该手牌固定为单一动作，评分已按手牌强度与该位置整体频率放宽",
+    });
   }
 
   const actualAction = advice.kind === "preflop" && decision.actual.action === "check"
@@ -353,6 +360,66 @@ function DistributionChart({
           <b>{row.value.toFixed(row.value % 1 ? 1 : 0)}%</b>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Visualizes how the bot's dice roll picked an action: the mixed strategy
+ * is drawn as a stacked bar (segments in sampling order, widths by
+ * probability) and the marker sits at the sampled roll, inside the segment
+ * that was selected.
+ */
+function StrategySampleBar({
+  choices,
+  sample,
+}: {
+  choices: Array<{ action?: string; probability?: number; sizeChips?: number }>;
+  sample: number;
+}) {
+  const segments = choices
+    .map((choice) => ({
+      action: choice.action || "",
+      probability: Math.max(0, Number(choice.probability || 0)),
+      sizeChips: choice.sizeChips,
+    }))
+    .filter((segment) => segment.action && segment.probability > 0);
+  const total = segments.reduce((sum, segment) => sum + segment.probability, 0);
+  if (!segments.length || total <= 0) return null;
+  // Mirror the sampler: roll = sample * total walks the segments in array
+  // order, so on a proportional bar the marker sits at exactly `sample`.
+  const roll = sample * total;
+  let cumulative = 0;
+  let hitIndex = segments.length - 1;
+  for (let index = 0; index < segments.length; index += 1) {
+    cumulative += segments[index].probability;
+    if (roll <= cumulative) {
+      hitIndex = index;
+      break;
+    }
+  }
+  const hit = segments[hitIndex];
+  return (
+    <div className="replay-sample">
+      <div className="replay-sample__track">
+        <div className="replay-sample__bar">
+          {segments.map((segment, index) => (
+            <i
+              key={index}
+              className={`is-${segment.action === "allin" ? "allin" : actionTone(segment.action)}`}
+              style={{ width: `${(segment.probability / total) * 100}%` }}
+              title={`${actionTagText(segment.action, segment.sizeChips)} · ${((segment.probability / total) * 100).toFixed(1)}%`}
+            />
+          ))}
+        </div>
+        <span
+          className="replay-sample__marker"
+          style={{ left: `${Math.max(0, Math.min(100, sample * 100))}%` }}
+        />
+      </div>
+      <small>
+        采样 <b>{sample.toFixed(4)}</b>，落入 <b>{actionTagText(hit.action, hit.sizeChips)}</b> 区间
+      </small>
     </div>
   );
 }
@@ -632,6 +699,11 @@ function BotPanel({ replay, step, participant }: {
     if (choice.action) result[choice.action] = Number(choice.probability || 0) * 100;
     return result;
   }, {});
+  const advice = decision.advice;
+  const classification = decision.comparison.classification;
+  const normalizedActual = advice?.kind === "preflop" && decision.actual.action === "check"
+    ? "call"
+    : decision.actual.action;
   return (
     <PanelShell
       eyebrow="AI 行动"
@@ -646,18 +718,40 @@ function BotPanel({ replay, step, participant }: {
           <div className="replay-panel__meta">
             {participant?.botStyle && <span>风格 <b>{participant.botStyle}</b></span>}
             <span>策略源 <b>{decision.botStrategy.source}</b></span>
-            {decision.botStrategy.sample !== undefined && (
+            {decision.botStrategy.sample !== undefined && choices.length === 0 && (
               <span>采样 <b>{decision.botStrategy.sample.toFixed(4)}</b></span>
             )}
           </div>
           {Object.keys(distribution).length > 0 && (
             <DistributionChart distribution={distribution} actual={decision.actual.action} />
           )}
+          {decision.botStrategy.sample !== undefined && (
+            <StrategySampleBar choices={choices} sample={decision.botStrategy.sample} />
+          )}
           <p className="replay-panel__note">机器人在校准后的混合策略中按概率采样，实际行动不一定等于最高频动作。</p>
         </>
       )}
       {!decision.botStrategy && (
         <p className="replay-panel__note">该 AI 行动没有记录策略抽样信息。</p>
+      )}
+      {advice && (
+        <section className="replay-panel__section">
+          <div className="replay-panel__section-head">
+            <h4>GTO 参考策略</h4>
+            <span className={`replay-grade is-${classification}`}>{CLASS_LABEL[classification]}</span>
+          </div>
+          <p className="replay-panel__note">
+            主推荐 {ACTION_LABEL[advice.recommended] || advice.recommended}
+            {advice.recommendedSizeChips !== undefined &&
+              `到 ${formatAmount(advice.recommendedSizeChips)}（${formatBB(advice.recommendedSizeChips, replay.bigBlind)}）`}
+            ，以下为该位置整体范围的动作频率与建议尺寸。
+          </p>
+          <DistributionChart
+            distribution={advice.actionDistribution as unknown as Record<string, number>}
+            actual={normalizedActual}
+            sizes={strategyActionSizes(advice)}
+          />
+        </section>
       )}
     </PanelShell>
   );
@@ -685,7 +779,10 @@ function HeroPanel({
   const assessments = advice ? buildDecisionAssessments(decision, advice, sizes, replay.bigBlind) : [];
   const classification = decision.comparison.classification;
   const recommendation = decision.comparison.recommendedAction;
-  const recommendedSize = decision.comparison.recommendedSizeChips;
+  // The stored comparison only carries a size when the actual action was
+  // aggressive; fall back to the advice's own size for the recommendation.
+  const recommendedSize = decision.comparison.recommendedSizeChips ??
+    (recommendation ? sizes[recommendation]?.chips : undefined);
   const actualMatchesRecommendation = decision.comparison.actionMatch;
   return (
     <PanelShell
@@ -986,8 +1083,8 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
       };
     }
     return {
-      className: `replay-step-dot--${actionTone(decision.actual.action)}`,
-      label: `${decision.actorName} ${actionText}`,
+      className: `replay-step-dot--bot is-${decision.comparison.classification}`,
+      label: `${decision.actorName} ${actionText}（${CLASS_LABEL[decision.comparison.classification]}）`,
     };
   };
 
@@ -1137,7 +1234,8 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
             <span><i className="is-mixed-acceptable" />混合策略</span>
             <span><i className="is-low-frequency" />低频选择</span>
             <span><i className="is-deviation" />策略偏差</span>
-            <span className="replay-step-legend__hint">大圆点 = 我的决策，小圆点 = AI 行动</span>
+            <span><i className="is-unscored" />未评分</span>
+            <span className="replay-step-legend__hint">大圆点 = 我的决策，小圆点 = AI 行动，颜色 = 与策略的偏差评级</span>
           </div>
         </div>
 
@@ -1196,7 +1294,22 @@ export function AiReplayPage() {
     setDetailLoading(true);
     setError("");
     api<AiReplayHand>(`/api/ai-replays/${selectedId}`)
-      .then(setDetail)
+      // Re-grade stored decisions so older replays also use the current
+      // classification thresholds and deterministic-chart softening.
+      .then((hand) => setDetail({
+        ...hand,
+        decisions: hand.decisions.map((decision) => decision.advice
+          ? {
+              ...decision,
+              comparison: buildAiReplayComparison({
+                action: decision.actual.action,
+                amountTo: decision.actual.amountTo,
+                advice: decision.advice,
+                bigBlind: hand.bigBlind,
+              }),
+            }
+          : decision),
+      }))
       .catch((requestError) => setError(String(requestError.message || requestError)))
       .finally(() => setDetailLoading(false));
   }, [selectedId]);

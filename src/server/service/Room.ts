@@ -28,7 +28,7 @@ import type {
 } from "../../gto/postflop/from-game-state";
 import type { PostflopAdvice } from "../../gto/postflop/types";
 import { calculateOvertimeCost } from "../../shared/overtime";
-import { classifyAiReplaySize } from "../../shared/aiReplay";
+import { buildAiReplayComparison } from "../../shared/aiReplay";
 import {
   DISCONNECTED_ACTION_GRACE_SECONDS,
   INITIAL_ACTION_TIME_SECONDS,
@@ -1508,75 +1508,12 @@ export class Game {
     amountTo: number | undefined,
     advice: PreflopAdvice | PostflopAdvice | undefined
   ): AiReplayComparison {
-    if (!advice) {
-      return {
-        actionMatch: false,
-        classification: "unscored",
-        reasons: ["当前局面没有生成可用的策略建议"],
-      };
-    }
-    const normalizedAction = advice.kind === "preflop" && action === "check"
-      ? "call"
-      : action;
-    const distribution = advice.kind === "preflop" && advice.hero
-      ? advice.hero.actionDistribution
-      : advice.actionDistribution;
-    const probability = Number(
-      (distribution as unknown as Record<string, number>)[normalizedAction] || 0
-    );
-    const recommended = advice.recommended;
-    const actionMatch = normalizedAction === recommended;
-    let classification: AiReplayComparison["classification"];
-    if (actionMatch) classification = "recommended";
-    else if (probability >= 15) classification = "mixed-acceptable";
-    else if (probability > 0) classification = "low-frequency";
-    else classification = "deviation";
-
-    const aggressiveAction = ["bet", "raise", "allin"].includes(normalizedAction);
-    const preflopSize = advice.kind === "preflop"
-      ? advice.actions.find((candidate) => candidate.action === normalizedAction)
-      : undefined;
-    const recommendedSize = aggressiveAction
-      ? preflopSize?.sizeChips ?? advice.recommendedSizeChips
-      : undefined;
-    const recommendedSizeBB = aggressiveAction
-      ? preflopSize?.sizeBB ?? advice.recommendedSizeBB
-      : undefined;
-    const bigBlind = this.smallBlind * 2;
-    const sizeDifference =
-      amountTo !== undefined && recommendedSize !== undefined
-        ? amountTo - recommendedSize
-        : undefined;
-    const reasons: string[] = [];
-    if (actionMatch) reasons.push("实际行动与策略主推荐一致");
-    else if (probability >= 15) reasons.push(`该行动属于混合策略，频率 ${probability}%`);
-    else if (probability > 0) reasons.push(`该行动仅以 ${probability}% 的低频率出现`);
-    else reasons.push("该行动不在当前参考策略的行动分布中");
-    if (sizeDifference !== undefined && recommendedSize && Math.abs(sizeDifference) > 0.001) {
-      const differencePercent = Math.abs(sizeDifference / recommendedSize) * 100;
-      reasons.push(
-        `实际尺寸比建议${sizeDifference > 0 ? "大" : "小"} ${Math.abs(sizeDifference / bigBlind).toFixed(1)}bb（${differencePercent.toFixed(1)}%）`
-      );
-    }
-    const sizeDifferenceBB =
-      sizeDifference === undefined ? undefined : sizeDifference / bigBlind;
-    const sizeDifferenceRatio =
-      sizeDifference === undefined || !recommendedSize
-        ? undefined
-        : sizeDifference / recommendedSize;
-    const sizeClassification = classifyAiReplaySize(amountTo, recommendedSize);
-    return {
-      recommendedAction: recommended,
-      recommendedSizeChips: recommendedSize,
-      recommendedSizeBB,
-      actualActionProbability: probability,
-      actionMatch,
-      sizeDifferenceBB,
-      sizeDifferenceRatio,
-      sizeClassification,
-      classification,
-      reasons,
-    };
+    return buildAiReplayComparison({
+      action,
+      amountTo,
+      advice,
+      bigBlind: this.smallBlind * 2,
+    });
   }
 
   private recordAiReplayDecision(input: {
