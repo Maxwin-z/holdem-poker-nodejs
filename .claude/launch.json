@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "replay-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PORT=3100", "BROWSER=none", "npm", "run", "start:web"],
+      "port": 3100
+    }
+  ]
+}
