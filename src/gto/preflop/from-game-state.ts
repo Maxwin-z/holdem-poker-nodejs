@@ -9,7 +9,7 @@
 import { getPreflopAdvice } from "./advice";
 import {
   chartPositionByActionOrder,
-  positionForDistance,
+  positionLabelByActionOrder,
 } from "./positions";
 import type {
   ChartPosition,
@@ -59,7 +59,7 @@ function rankChar(num: number): string {
 
 /**
  * 翻前行动顺序序号：0 = 第一个行动者。
- * 本牌局从 sortedUsers[2] 开始行动（CO），然后是 3..n-1（直到 BTN），
+ * 本牌局从 sortedUsers[2] 开始行动（UTG/最早位），然后是 3..n-1（直到 BTN），
  * 最后回到 sortedUsers[0]（SB）、sortedUsers[1]（BB）。
  */
 function actorIndexOf(sortedUsers: string[], token: string): number {
@@ -75,14 +75,10 @@ function chartPositionAt(
   token: string
 ): { chart: ChartPosition; label: string } {
   const n = sortedUsers.length;
-  const idx = sortedUsers.indexOf(token);
-  const buttonIndex = n > 2 ? n - 1 : 0;
-  const dist = (idx - buttonIndex + n) % n;
-  // 展示标签沿用牌局自己的座位名（CO/MP/UTG...），图表键按行动顺序映射。
-  const seat = positionForDistance(count, Math.min(dist, count - 1));
+  const actorIndex = actorIndexOf(sortedUsers, token);
   return {
-    chart: chartPositionByActionOrder(n, actorIndexOf(sortedUsers, token)),
-    label: seat.label,
+    chart: chartPositionByActionOrder(n, actorIndex),
+    label: positionLabelByActionOrder(n, actorIndex),
   };
 }
 

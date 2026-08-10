@@ -7,6 +7,7 @@ import { getPreflopAdvice } from "../../gto/preflop/advice";
 import { getPostflopAdvice } from "../../gto/postflop/advice";
 import { getPlayerAnalyticsStore } from "../analytics/player-analytics";
 import type { AnalyticsWindow } from "../../shared/playerAnalytics";
+import { getAiReplayStore } from "../replay/ai-replay-store";
 
 const router = new Router();
 export default router;
@@ -59,12 +60,22 @@ router.get("/api/me/stats", (ctx) => {
   const token = ctx.header.authorization;
   if (!token) throw "need login";
   const requested = String(ctx.query.window || "100");
-  const window: AnalyticsWindow = requested === "all"
-    ? "all"
-    : ([20, 50, 100, 500].includes(Number(requested))
-      ? Number(requested) as 20 | 50 | 100 | 500
-      : 100);
+  const window = ([20, 50, 100, 500, 2000, 5000].includes(Number(requested))
+    ? Number(requested)
+    : 100) as AnalyticsWindow;
   ctx.data = getPlayerAnalyticsStore().getReport(token, window);
+});
+
+router.get("/api/me/ai-replays", (ctx) => {
+  const token = ctx.header.authorization;
+  if (!token) throw "need login";
+  ctx.data = getAiReplayStore().listForToken(token);
+});
+
+router.get("/api/ai-replays/:publicId", (ctx) => {
+  const replay = getAiReplayStore().getPublic(ctx.params.publicId);
+  if (!replay) throw "牌局复盘不存在或已过期";
+  ctx.data = replay;
 });
 
 router.post("/createroom", (ctx) => {

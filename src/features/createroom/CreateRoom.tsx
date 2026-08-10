@@ -10,6 +10,7 @@ import {
   DownOutlined,
   LogoutOutlined,
   PlusOutlined,
+  RobotOutlined,
   SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
@@ -25,15 +26,19 @@ import {
   RecentGameEntry,
   RecentGameRecords,
 } from "./RecentGameRecords";
+import { PlayerAnalytics } from "../room/PlayerAnalytics";
+import type { PlayerAnalyticsReport } from "../../shared/playerAnalytics";
 
 export function CreateRoom({
   initialRoomID = "",
   previewName,
   previewRecords,
+  previewAnalytics,
 }: {
   initialRoomID?: string;
   previewName?: string;
   previewRecords?: RecentGameEntry[];
+  previewAnalytics?: PlayerAnalyticsReport;
 } = {}) {
   const dispatch = useAppDispatch();
 
@@ -188,6 +193,24 @@ export function CreateRoom({
           </article>
         </section>
 
+        <div className="lobby-analytics">
+          <PlayerAnalytics variant="lobby" previewReport={previewAnalytics} />
+        </div>
+        {!previewName && (
+          <section className="lobby-replay-entry">
+            <div>
+              <span className="lobby-room-card__icon"><RobotOutlined /></span>
+              <div>
+                <small>AI HAND REVIEW</small>
+                <h2>AI 对局复盘</h2>
+                <p>回看最近 100 手人机对局，逐个决策比较实际行动与 GTO 参考策略。</p>
+              </div>
+            </div>
+            <Button size="large" onClick={() => { window.location.href = "/replays"; }}>
+              查看复盘 <ArrowRightOutlined />
+            </Button>
+          </section>
+        )}
         <RecentGameRecords previewRecords={previewRecords} />
       </div>
     </main>

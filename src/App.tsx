@@ -5,8 +5,12 @@ import { Home } from './features/home/Home';
 import { ResponsiveTableDemo } from './features/demo/ResponsiveTableDemo';
 import { RoomUiPreview } from './features/demo/RoomUiPreview';
 import { HomeUiPreview } from './features/demo/HomeUiPreview';
+import { AiReplayPage } from './features/replay/AiReplayPage';
 
 function App() {
+  if (window.location.pathname === '/replays' || window.location.pathname.startsWith('/replays/')) {
+    return <AiReplayPage />;
+  }
   if (window.location.pathname === '/responsive-demo') {
     return <ResponsiveTableDemo />;
   }

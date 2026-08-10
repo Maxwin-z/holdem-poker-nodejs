@@ -669,8 +669,27 @@
   background: rgba(255, 255, 255, 0.025);
 }
 
-.lobby-recent {
+.lobby-analytics {
   margin-top: 38px;
+  overflow: hidden;
+  border: 1px solid var(--lobby-line);
+  border-radius: 22px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2);
+}
+
+.lobby-analytics .player-analytics {
+  min-height: 0;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(47, 211, 155, 0.1), transparent 34%),
+    linear-gradient(145deg, rgba(13, 34, 28, 0.98), rgba(6, 20, 16, 0.98));
+}
+
+.lobby-analytics .player-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.lobby-recent {
+  margin-top: 30px;
 }
 
 .lobby-recent__heading {
@@ -927,6 +946,10 @@
   .lobby-room-actions {
     grid-template-columns: 1fr 1fr;
   }
+
+  .lobby-analytics .player-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1016,6 +1039,11 @@
 
   .lobby-room-card__heading {
     margin-bottom: 18px;
+  }
+
+  .lobby-analytics {
+    margin-top: 30px;
+    border-radius: 18px;
   }
 
   .lobby-session-card summary {
@@ -1209,5 +1237,57 @@
   .lobby-shell .ant-input-number-handler,
   .lobby-account-menu button {
     transition-duration: 0.01ms !important;
+  }
+}
+
+.lobby-replay-entry {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 24px;
+  border: 1px solid rgba(83, 230, 184, 0.18);
+  border-radius: 20px;
+  background: linear-gradient(120deg, rgba(20, 55, 43, 0.86), rgba(12, 29, 24, 0.92));
+}
+
+.lobby-replay-entry > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 16px;
+}
+
+.lobby-replay-entry small {
+  color: var(--lobby-green);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.lobby-replay-entry h2 {
+  margin: 2px 0 3px;
+  color: var(--lobby-text);
+}
+
+.lobby-replay-entry p {
+  margin: 0;
+  color: var(--lobby-muted);
+}
+
+.lobby-replay-entry > .ant-btn {
+  color: #092019;
+  border: 0;
+  background: var(--lobby-green);
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .lobby-replay-entry {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lobby-replay-entry > .ant-btn {
+    width: 100%;
   }
 }

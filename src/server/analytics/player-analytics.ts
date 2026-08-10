@@ -251,20 +251,27 @@ export class PlayerAnalyticsStore {
 
   getReport(token: string, window: AnalyticsWindow): PlayerAnalyticsReport {
     const userKey = analyticsUserKey(token);
-    const limit = window === "all" ? Number.MAX_SAFE_INTEGER : window;
+    const limit = window;
     const handRows = this.db.prepare(`
       SELECT * FROM player_hands
       WHERE user_key = ? AND completed_at IS NOT NULL
       ORDER BY completed_at DESC LIMIT ?
     `).all(userKey, limit) as any[];
-    const handIds = handRows.map((row) => row.hand_id);
-    const actions = handIds.length === 0
+    const actions = handRows.length === 0
       ? []
       : this.db.prepare(`
-          SELECT * FROM player_actions
-          WHERE user_key = ? AND hand_id IN (${handIds.map(() => "?").join(",")})
-          ORDER BY created_at ASC
-        `).all(userKey, ...handIds) as any[];
+          SELECT actions.*
+          FROM player_actions AS actions
+          INNER JOIN (
+            SELECT hand_id
+            FROM player_hands
+            WHERE user_key = ? AND completed_at IS NOT NULL
+            ORDER BY completed_at DESC
+            LIMIT ?
+          ) AS selected_hands ON selected_hands.hand_id = actions.hand_id
+          WHERE actions.user_key = ?
+          ORDER BY actions.created_at ASC
+        `).all(userKey, limit, userKey) as any[];
 
     const hands = handRows.length;
     const sumHands = (key: string) =>
@@ -290,6 +297,7 @@ export class PlayerAnalyticsStore {
       ["bet", "raise", "allin"].includes(action.action)
     ).length;
     const postflopCalls = postflop.filter((action) => action.action === "call").length;
+    const postflopFolds = postflop.filter((action) => action.action === "fold").length;
     const scoredActions = actions.filter(
       (action) => action.gto_probability !== null
     );
@@ -303,7 +311,10 @@ export class PlayerAnalyticsStore {
       vpip: rate(vpipHands, hands),
       pfr: rate(pfrHands, hands),
       threeBet: rate(threeBets, preflopOpenResponses.length),
-      aggressionFrequency: rate(postflopAggressive, postflop.length),
+      aggressionFrequency: rate(
+        postflopAggressive,
+        postflopAggressive + postflopCalls + postflopFolds
+      ),
       aggressionFactor:
         postflopCalls > 0 ? round(postflopAggressive / postflopCalls, 2) : null,
       wentToShowdown: rate(showdown, sawFlop),
@@ -337,14 +348,18 @@ export class PlayerAnalyticsStore {
       const aggressive = rows.filter((action) =>
         ["bet", "raise", "allin"].includes(action.action)
       ).length;
+      const calls = rows.filter((action) => action.action === "call").length;
+      const folds = rows.filter((action) => action.action === "fold").length;
       const scored = rows.filter((action) => action.gto_probability !== null);
       return {
         street,
         actions: rows.length,
-        fold: rows.filter((action) => action.action === "fold").length,
-        call: rows.filter((action) => action.action === "call").length,
+        fold: folds,
+        call: calls,
         aggressive,
-        aggressionFrequency: rows.length ? round((aggressive / rows.length) * 100) : null,
+        aggressionFrequency: aggressive + calls + folds > 0
+          ? round((aggressive / (aggressive + calls + folds)) * 100)
+          : null,
         gtoAlignment: scored.length
           ? round(scored.reduce((n, row) => n + row.gto_probability, 0) / scored.length)
           : null,

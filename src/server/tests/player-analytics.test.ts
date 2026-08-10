@@ -3,8 +3,10 @@ import { PlayerAnalyticsStore } from "../analytics/player-analytics";
 import {
   benchmarkMarker,
   benchmarkStatus,
+  combinedAnalyticsInsights,
   PLAYER_ANALYTICS_BENCHMARKS,
 } from "../../shared/playerAnalyticsBenchmarks";
+import type { PlayerAnalyticsCore, RateMetric } from "../../shared/playerAnalytics";
 
 describe("player analytics SQLite store", () => {
   it("persists human hand, action, result and GTO analysis data", () => {
@@ -63,7 +65,7 @@ describe("player analytics SQLite store", () => {
       final: true,
     });
 
-    const report = store.getReport(token, "all");
+    const report = store.getReport(token, 5000);
     assert.equal(report.core.hands, 1);
     assert.equal(report.core.vpip.value, 100);
     assert.equal(report.core.pfr.value, 100);
@@ -108,10 +110,103 @@ describe("player analytics SQLite store", () => {
       });
     });
 
-    const report = store.getReport(token, "all");
+    const report = store.getReport(token, 5000);
     assert.equal(report.core.threeBet.denominator, 2);
     assert.equal(report.core.threeBet.numerator, 1);
     assert.equal(report.core.threeBet.value, 50);
+  });
+
+  it("loads 100 hands without exceeding Durable Object binding limits", () => {
+    const store = new PlayerAnalyticsStore(":memory:");
+    const database = (store as any).db;
+    (store as any).db = {
+      exec: (sql: string) => database.exec(sql),
+      prepare: (sql: string) => {
+        const statement = database.prepare(sql);
+        const guard = (method: "run" | "get" | "all") => (...params: any[]) => {
+          assert.isAtMost(params.length, 100, "Cloudflare permits at most 100 bindings");
+          return statement[method](...params);
+        };
+        return {
+          run: guard("run"),
+          get: guard("get"),
+          all: guard("all"),
+        };
+      },
+    };
+
+    const token = "frequent-player";
+    for (let index = 0; index < 100; index += 1) {
+      const handId = `frequent-hand-${index}`;
+      store.beginHand({
+        handId,
+        roomId: "1003",
+        playerCount: 6,
+        hasBot: false,
+        players: [{ token, name: "Mainland", position: "BTN", stackBB: 100 }],
+      });
+      store.recordAction({
+        handId,
+        token,
+        street: 0,
+        position: "BTN",
+        action: "call",
+        amountBB: 2,
+        facingRaise: true,
+        raiseLevel: 1,
+      });
+      store.recordSettlement({
+        handId,
+        token,
+        profitBB: 0,
+        won: false,
+        showdown: false,
+        final: true,
+      });
+    }
+
+    const report = store.getReport(token, 100);
+    assert.equal(report.core.hands, 100);
+    assert.equal(report.core.vpip.value, 100);
+    assert.equal(report.core.threeBet.denominator, 100);
+  });
+
+  it("uses the standard AFq denominator and excludes checks", () => {
+    const store = new PlayerAnalyticsStore(":memory:");
+    const token = "afq-player";
+    const handId = "afq-hand";
+    store.beginHand({
+      handId,
+      roomId: "1004",
+      playerCount: 2,
+      hasBot: false,
+      players: [{ token, name: "AFQ", position: "BTN", stackBB: 100 }],
+    });
+    ["check", "bet", "call", "fold"].forEach((action) => {
+      store.recordAction({
+        handId,
+        token,
+        street: 1,
+        position: "BTN",
+        action,
+        facingRaise: false,
+        raiseLevel: 0,
+      });
+    });
+    store.recordSettlement({
+      handId,
+      token,
+      profitBB: 0,
+      won: false,
+      showdown: false,
+      final: true,
+    });
+
+    const report = store.getReport(token, 5000);
+    assert.equal(report.core.aggressionFrequency.numerator, 1);
+    assert.equal(report.core.aggressionFrequency.denominator, 3);
+    assert.equal(report.core.aggressionFrequency.value, 33.3);
+    assert.equal(report.streets[0].aggressionFrequency, 33.3);
   });
 });
 
@@ -131,5 +226,66 @@ describe("player analytics reference systems", () => {
     assert.equal(benchmarkStatus(24, range), "standard");
     assert.equal(benchmarkStatus(35, range), "high");
     assert.equal(benchmarkMarker(100, range), 100);
+  });
+});
+
+const metric = (value: number | null, denominator = 500): RateMetric => ({
+  value,
+  numerator: value === null ? 0 : Math.round((value / 100) * denominator),
+  denominator,
+});
+
+function analyticsCore(overrides: Partial<PlayerAnalyticsCore>): PlayerAnalyticsCore {
+  return {
+    hands: 500,
+    vpip: metric(24),
+    pfr: metric(20),
+    threeBet: metric(8, 100),
+    aggressionFrequency: metric(48, 300),
+    aggressionFactor: 3,
+    wentToShowdown: metric(29, 200),
+    wonAtShowdown: metric(51, 60),
+    gtoAlignment: metric(null, 0),
+    netBB: 0,
+    bbPer100: 0,
+    ...overrides,
+  };
+}
+
+describe("player analytics combined diagnoses", () => {
+  it("recognizes a loose-passive calling-station pattern", () => {
+    const insights = combinedAnalyticsInsights(analyticsCore({
+      vpip: metric(35),
+      pfr: metric(22),
+      wentToShowdown: metric(38, 200),
+      wonAtShowdown: metric(43, 76),
+    }), "6max");
+
+    assert.include(insights.map((insight) => insight.title), "松弱跟注站倾向");
+  });
+
+  it("recognizes a loose-aggressive high-pressure pattern", () => {
+    const insights = combinedAnalyticsInsights(analyticsCore({
+      vpip: metric(32),
+      pfr: metric(28),
+      threeBet: metric(13, 120),
+      aggressionFrequency: metric(61, 320),
+      aggressionFactor: 4.8,
+    }), "6max");
+
+    assert.include(insights.map((insight) => insight.title), "松凶高压型倾向");
+  });
+
+  it("recognizes fit-or-fold from aggression and showdown together", () => {
+    const insights = combinedAnalyticsInsights(analyticsCore({
+      vpip: metric(18),
+      pfr: metric(15),
+      aggressionFrequency: metric(35, 240),
+      aggressionFactor: 4.5,
+      wentToShowdown: metric(23, 180),
+      wonAtShowdown: metric(58, 42),
+    }), "6max");
+
+    assert.include(insights.map((insight) => insight.title), "Fit-or-Fold 倾向");
   });
 });

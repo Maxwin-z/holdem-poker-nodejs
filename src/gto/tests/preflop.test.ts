@@ -37,26 +37,26 @@ describe("preflop GTO engine", () => {
     assert.strictEqual(positionForDistance(9, 0).label, "BTN");
     assert.strictEqual(positionForDistance(9, 1).label, "SB");
     assert.strictEqual(positionForDistance(9, 2).label, "BB");
-    assert.strictEqual(positionForDistance(9, 3).label, "CO");
-    assert.strictEqual(positionForDistance(9, 4).label, "HJ");
-    assert.strictEqual(positionForDistance(9, 5).label, "LJ");
-    assert.strictEqual(positionForDistance(9, 6).label, "MP");
-    assert.strictEqual(positionForDistance(9, 7).label, "UTG+1");
-    assert.strictEqual(positionForDistance(9, 8).label, "UTG");
+    assert.strictEqual(positionForDistance(9, 3).label, "UTG");
+    assert.strictEqual(positionForDistance(9, 4).label, "UTG+1");
+    assert.strictEqual(positionForDistance(9, 5).label, "MP");
+    assert.strictEqual(positionForDistance(9, 6).label, "LJ");
+    assert.strictEqual(positionForDistance(9, 7).label, "HJ");
+    assert.strictEqual(positionForDistance(9, 8).label, "CO");
 
-    assert.strictEqual(positionForDistance(9, 8).chart, "UTG");
-    assert.strictEqual(positionForDistance(9, 7).chart, "UTG");
+    assert.strictEqual(positionForDistance(9, 8).chart, "CO");
+    assert.strictEqual(positionForDistance(9, 7).chart, "MP");
     assert.strictEqual(positionForDistance(9, 5).chart, "MP");
-    assert.strictEqual(positionForDistance(9, 4).chart, "MP");
+    assert.strictEqual(positionForDistance(9, 4).chart, "UTG");
 
     // Heads-up: button posts the small blind.
     const hu = positionForDistance(2, 0);
     assert.strictEqual(hu.chart, "SB");
     assert.strictEqual(hu.headsUpButton, true);
 
-    assert.strictEqual(positionForDistance(6, 5).label, "UTG");
-    assert.strictEqual(positionForDistance(5, 3).label, "CO");
-    assert.strictEqual(positionForDistance(5, 4).label, "UTG");
+    assert.strictEqual(positionForDistance(6, 5).label, "CO");
+    assert.strictEqual(positionForDistance(5, 3).label, "UTG");
+    assert.strictEqual(positionForDistance(5, 4).label, "CO");
     assert.strictEqual(positionsForGame(4).map((p) => p.label).join(","), "BTN,SB,BB,CO");
   });
 

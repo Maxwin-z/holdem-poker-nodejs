@@ -1,8 +1,11 @@
-import { ReloadOutlined } from "@ant-design/icons";
+import {
+  ArrowRightOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+} from "@ant-design/icons";
 import { Button, Empty, Spin, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import type {
-  AnalyticsInsight,
   AnalyticsWindow,
   PlayerAnalyticsCore,
   PlayerAnalyticsReport,
@@ -11,6 +14,7 @@ import type {
 import {
   benchmarkMarker,
   benchmarkStatus,
+  combinedAnalyticsInsights,
   PLAYER_ANALYTICS_BENCHMARKS,
 } from "../../shared/playerAnalyticsBenchmarks";
 import type {
@@ -26,7 +30,8 @@ const WINDOWS: Array<{ value: AnalyticsWindow; label: string }> = [
   { value: 50, label: "近 50 手" },
   { value: 100, label: "近 100 手" },
   { value: 500, label: "近 500 手" },
-  { value: "all", label: "全部" },
+  { value: 2000, label: "近 2,000 手" },
+  { value: 5000, label: "近 5,000 手" },
 ];
 
 const METRICS = [
@@ -59,8 +64,8 @@ const METRICS = [
     short: "Agg%",
     full: "Aggression Frequency",
     cn: "翻后主动行动频率",
-    help: "翻后下注、加注或全下占全部翻后行动的比例。",
-    benchmarkKey: null,
+    help: "翻后下注、加注或全下占下注、加注、跟注与弃牌的比例；过牌不计入标准 AFq 分母。",
+    benchmarkKey: "aggressionFrequency",
   },
   {
     key: "wentToShowdown",
@@ -116,6 +121,11 @@ const DIAGNOSIS: Record<
     low: { title: "3-Bet 偏少", detail: "可能错过价值再加注和后位反偷机会，建议按位置复盘面对开池的范围。" },
     standard: { title: "3-Bet 频率接近参考", detail: "价值牌与轻量再加注的总体占比相对稳定。" },
     high: { title: "3-Bet 偏多", detail: "检查轻量 3-Bet 是否选对位置、对手和阻断牌，避免无计划扩大底池。" },
+  },
+  aggressionFrequency: {
+    low: { title: "翻后主动频率偏低", detail: "下注和加注占比较少，检查是否错过价值下注、保护牌力和合理半诈唬。" },
+    standard: { title: "翻后主动频率接近参考", detail: "主动与被动行动比例较均衡，建议继续结合 AF 和摊牌数据判断。" },
+    high: { title: "翻后主动频率偏高", detail: "检查持续下注、多街开火和加注是否有足够价值牌与听牌支撑。" },
   },
   aggressionFactor: {
     low: { title: "翻后打法偏被动", detail: "下注和加注相对跟注较少，检查是否错过价值下注或合理施压。" },
@@ -199,34 +209,6 @@ function benchmarkStyle(
   return { code: "balanced", label: "均衡型", summary: `相对 ${profile.label} 基准整体均衡，可进一步关注位置与街道差异。` };
 }
 
-function benchmarkInsights(
-  core: PlayerAnalyticsCore,
-  mode: AnalyticsBenchmarkMode
-): AnalyticsInsight[] {
-  const profile = PLAYER_ANALYTICS_BENCHMARKS[mode];
-  if (core.hands < 40) return [{ tone: "neutral", title: "继续积累样本", detail: `当前 ${core.hands} 手；40 手后开始给出方向判断，300 手后 VPIP/PFR 更有参考价值。` }];
-  const vpip = core.vpip.value || 0;
-  const pfr = core.pfr.value || 0;
-  const gap = Math.round((vpip - pfr) * 10) / 10;
-  const gapTone = gap >= profile.vpipPfrGap.low && gap <= profile.vpipPfrGap.high ? "positive" : "warning";
-  const insights: AnalyticsInsight[] = [{
-    tone: gapTone,
-    title: "VPIP–PFR 主动性差值",
-    detail: `当前相差 ${gap} 个百分点；${profile.label} 参考为 ${profile.vpipPfrGap.low}–${profile.vpipPfrGap.high}。${gap > profile.vpipPfrGap.high ? "差值偏大通常意味着跟注或 Limp 较多。" : gap < profile.vpipPfrGap.low ? "差值很小，注意是否几乎只用加注入池。" : "入池与主动加注的关系较健康。"}`,
-  }];
-  if (core.wentToShowdown.value !== null && core.wonAtShowdown.value !== null) {
-    insights.push({
-      tone: core.wentToShowdown.value > 32 && core.wonAtShowdown.value < 49 ? "warning" : "neutral",
-      title: "摊牌组合观察",
-      detail: `WTSD ${core.wentToShowdown.value}% / W$SD ${core.wonAtShowdown.value}%。${core.wentToShowdown.value > 32 && core.wonAtShowdown.value < 49 ? "进入摊牌偏多且胜率偏低，优先复盘多街跟注。" : "需要在更大样本下结合观察，单项高低不代表绝对错误。"}`,
-    });
-  }
-  if (core.gtoAlignment.value !== null && core.gtoAlignment.denominator >= 20) {
-    insights.push({ tone: core.gtoAlignment.value >= 55 ? "positive" : "warning", title: "GTO 行动匹配度", detail: `所选行动在 GTO 混合策略中的平均频率为 ${core.gtoAlignment.value}%，基于 ${core.gtoAlignment.denominator} 次决策。` });
-  }
-  return insights;
-}
-
 async function loadReport(window: AnalyticsWindow): Promise<PlayerAnalyticsReport> {
   const response = await fetch(`/api/me/stats?window=${window}`, {
     headers: { authorization: localStorage["token"] || "" },
@@ -236,13 +218,23 @@ async function loadReport(window: AnalyticsWindow): Promise<PlayerAnalyticsRepor
   return body.data as PlayerAnalyticsReport;
 }
 
-export function PlayerAnalytics() {
-  const [window, setWindow] = useState<AnalyticsWindow>(100);
+export function PlayerAnalytics({
+  variant = "room",
+  previewReport,
+}: {
+  variant?: "room" | "lobby";
+  previewReport?: PlayerAnalyticsReport;
+} = {}) {
+  const [window, setWindow] = useState<AnalyticsWindow>(previewReport?.window || 100);
   const [benchmarkMode, setBenchmarkMode] = useState<AnalyticsBenchmarkMode>("6max");
-  const [report, setReport] = useState<PlayerAnalyticsReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [report, setReport] = useState<PlayerAnalyticsReport | null>(previewReport || null);
+  const [loading, setLoading] = useState(!previewReport);
 
   const refresh = useCallback(async () => {
+    if (previewReport) {
+      setReport(previewReport);
+      return;
+    }
     setLoading(true);
     try {
       setReport(await loadReport(window));
@@ -251,7 +243,7 @@ export function PlayerAnalytics() {
     } finally {
       setLoading(false);
     }
-  }, [window]);
+  }, [previewReport, window]);
 
   useEffect(() => {
     refresh();
@@ -259,24 +251,49 @@ export function PlayerAnalytics() {
 
   const selectedProfile = PLAYER_ANALYTICS_BENCHMARKS[benchmarkMode];
   const displayedStyle = report ? benchmarkStyle(report.core, benchmarkMode) : null;
-  const displayedInsights = report ? benchmarkInsights(report.core, benchmarkMode) : [];
+  const displayedInsights = report ? combinedAnalyticsInsights(report.core, benchmarkMode) : [];
 
   return (
-    <section className="player-analytics">
+    <section className={`player-analytics${variant === "lobby" ? " is-lobby" : ""}`}>
+      {variant === "room" && (
+        <a
+          className="player-analytics__replay-entry"
+          href="/replays"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="AI 牌局复盘（新窗口打开）"
+        >
+          <span className="player-analytics__replay-icon">
+            <RobotOutlined />
+          </span>
+          <span className="player-analytics__replay-copy">
+            <small>AI HAND REVIEW</small>
+            <strong>AI 牌局复盘</strong>
+            <span>逐手回看决策并对照 GTO 参考策略</span>
+          </span>
+          <span className="player-analytics__replay-action">
+            查看复盘
+            <ArrowRightOutlined />
+          </span>
+        </a>
+      )}
+
       <header className="player-analytics__hero">
         <div>
           <small>PLAYER INSIGHTS</small>
           <h2>我的牌局分析</h2>
           <p>从翻前范围、翻后主动性和 GTO 决策三个方向理解自己的牌风。</p>
         </div>
-        <Button
-          className="player-analytics__refresh"
-          icon={<ReloadOutlined />}
-          onClick={refresh}
-          loading={loading}
-        >
-          刷新
-        </Button>
+        {!previewReport && (
+          <Button
+            className="player-analytics__refresh"
+            icon={<ReloadOutlined />}
+            onClick={refresh}
+            loading={loading}
+          >
+            刷新
+          </Button>
+        )}
       </header>
 
       <div className="player-analytics__windows" aria-label="统计范围">
@@ -406,7 +423,7 @@ export function PlayerAnalytics() {
           <section className="player-analysis-section">
             <div className="player-analysis-section__heading">
               <div><small>BY STREET</small><h3>各街行动</h3></div>
-              <span>Agg% = 下注、加注和全下的占比</span>
+              <span>Agg% = 主动行动 ÷ 非过牌行动</span>
             </div>
             <div className="player-street-grid">
               {report.streets.map((row) => (

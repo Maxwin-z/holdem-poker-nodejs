@@ -18,7 +18,7 @@ import { logGame } from "../tests/utils";
 import { publish2all, publishLog2all, send2user } from "../api/ws";
 import { Card } from "../../ApiType";
 import { buildPreflopAdvice } from "../../gto/preflop/from-game-state";
-import { positionForDistance } from "../../gto/preflop/positions";
+import { positionLabelByActionOrder } from "../../gto/preflop/positions";
 import { buildPostflopAdvice } from "../../gto/postflop/from-game-state";
 import type { GamePlayerState } from "../../gto/preflop/from-game-state";
 import type { PreflopAdvice } from "../../gto/preflop/types";
@@ -28,6 +28,7 @@ import type {
 } from "../../gto/postflop/from-game-state";
 import type { PostflopAdvice } from "../../gto/postflop/types";
 import { calculateOvertimeCost } from "../../shared/overtime";
+import { classifyAiReplaySize } from "../../shared/aiReplay";
 import {
   DISCONNECTED_ACTION_GRACE_SECONDS,
   INITIAL_ACTION_TIME_SECONDS,
@@ -40,6 +41,16 @@ import type {
   BotStrategyRequest,
 } from "../bot/types";
 import { getPlayerAnalyticsStore } from "../analytics/player-analytics";
+import { getAiReplayStore } from "../replay/ai-replay-store";
+import type {
+  AiReplayBotStrategy,
+  AiReplayComparison,
+  AiReplayDecisionContext,
+  AiReplayParticipant,
+  AiReplayRunout,
+  ReplayStreet,
+  ReplayActionOrigin,
+} from "../../shared/aiReplay";
 
 export type RoomID = string;
 export enum GameRound {
@@ -100,6 +111,15 @@ export class Game {
   handSeq: number = 0;
   analyticsHandId: string = "";
   latestAdviceByToken: Record<Token, PreflopAdvice | PostflopAdvice> = {};
+  replayPublicId: string = "";
+  replayHumanToken: Token = "";
+  replayParticipantIds: Record<Token, string> = {};
+  replayStartingStacks: Record<Token, number> = {};
+  replayDecisionSequence: number = 0;
+  replayRunouts: AiReplayRunout[] = [];
+  replayHeroProfitChips: number = 0;
+  pendingReplayBotStrategy: Record<Token, AiReplayBotStrategy> = {};
+  pendingReplayBotAdvice: Record<Token, PreflopAdvice | PostflopAdvice> = {};
 
   runItOutBoardCardsByUser: { [token: string]: Card[] } = {};
 
@@ -127,6 +147,15 @@ export class Game {
     this.raiseCount = 0;
     this.actionHistory = [];
     this.latestAdviceByToken = {};
+    this.replayPublicId = "";
+    this.replayHumanToken = "";
+    this.replayParticipantIds = {};
+    this.replayStartingStacks = {};
+    this.replayDecisionSequence = 0;
+    this.replayRunouts = [];
+    this.replayHeroProfitChips = 0;
+    this.pendingReplayBotStrategy = {};
+    this.pendingReplayBotAdvice = {};
 
     this.multiSettleStart = false;
     this.multiSettleRound = GameRound.PreFlop;
@@ -155,6 +184,7 @@ export class Game {
     ]);
 
     this.dealCards2User();
+    this.beginAiReplay();
     this.doPreBet();
     publish2all(this.roomid);
     logGame(this);
@@ -281,6 +311,10 @@ export class Game {
     if (chips < preBets && chips < availableStack) {
       throw "chips should be large than the previous bet user";
     }
+    const replayContext = this.buildReplayDecisionContext(token);
+    const replayAdvice = user.isBot
+      ? this.pendingReplayBotAdvice[token]
+      : this.latestAdviceByToken[token];
     // raise
     if (chips > preBets) {
       // all in
@@ -331,6 +365,16 @@ export class Game {
       token,
       amount: chips,
     });
+    this.recordAiReplayDecision({
+      token,
+      action: actionType,
+      amountTo: chips,
+      delta,
+      origin: user.isBot ? "bot" : "human",
+      context: replayContext,
+      advice: replayAdvice,
+      botStrategy: this.pendingReplayBotStrategy[token],
+    });
     if (!user.isBot) {
       this.recordHumanAction(
         token,
@@ -380,12 +424,16 @@ export class Game {
     this.nextActUser(token);
     return true;
   }
-  fold(token: Token) {
+  fold(token: Token, origin?: ReplayActionOrigin) {
     const user = userMap[token];
     if (!user.isActing) {
       console.error("FOLD: not action", user.name);
       throw "not your action now";
     }
+    const replayContext = this.buildReplayDecisionContext(token);
+    const replayAdvice = user.isBot
+      ? this.pendingReplayBotAdvice[token]
+      : this.latestAdviceByToken[token];
     console.log(`USER Fold: ${user.name}`.green, prettify(user.hands));
     const pos = this.positionLabelOf(token);
     publishLog2all(this.roomid, [
@@ -394,6 +442,14 @@ export class Game {
     user.isFolded = true;
     user.actionName = "Fold";
     this.actionHistory.push({ round: this.round, type: "fold", token });
+    this.recordAiReplayDecision({
+      token,
+      action: "fold",
+      origin: origin || (user.isBot ? "bot" : "human"),
+      context: replayContext,
+      advice: replayAdvice,
+      botStrategy: this.pendingReplayBotStrategy[token],
+    });
     if (!user.isBot) {
       const facingRaise =
         this.round === GameRound.PreFlop
@@ -459,6 +515,10 @@ export class Game {
 
     // console.log(JSON.stringify(players, null, 2));
     const ps = settle(players, 1);
+    const replaySettlement: AiReplayRunout = {
+      board: this.boardCards.map((card) => ({ ...card })),
+      players: [],
+    };
 
     // just log
     ps.forEach((p) => {
@@ -499,6 +559,19 @@ export class Game {
     ps.forEach((p) => {
       const user = userMap[p.id];
       const profits = p.profits! - subTotal(user.totalBets);
+      const participantId = this.replayParticipantIds[p.id];
+      if (participantId) {
+        replaySettlement.players.push({
+          participantId,
+          profit: profits,
+          winner: Boolean(p.isWinner),
+          folded: Boolean(p.fold),
+          handType: user.handsType,
+        });
+        if (p.id === this.replayHumanToken) {
+          this.replayHeroProfitChips += profits;
+        }
+      }
       user.bets = [0, 0, 0, 0];
       user.stack += profits;
       user.profits = profits;
@@ -538,6 +611,8 @@ export class Game {
       }
     });
 
+    if (this.replayPublicId) this.replayRunouts.push(replaySettlement);
+
     publishLog2all(this.roomid, logs);
 
     // just log
@@ -573,6 +648,8 @@ export class Game {
     publishLog2all(this.roomid, [
       `<div class="log-banner log-banner--end">💰 第 ${this.handSeq} 手结束</div>`,
     ]);
+
+    this.completeAiReplay();
 
     // next game
     roomMap[this.roomid].users.forEach((t) => {
@@ -901,7 +978,7 @@ export class Game {
         break;
       }
     }
-    this.logBotDecision(
+    const decisionTrace = this.logBotDecision(
       token,
       request,
       result.source,
@@ -911,6 +988,10 @@ export class Game {
       selected,
       sample
     );
+    if (this.replayPublicId) {
+      if (result.advice) this.pendingReplayBotAdvice[token] = result.advice;
+      this.pendingReplayBotStrategy[token] = decisionTrace.strategy;
+    }
     this.executeBotChoice(token, selected);
     publish2all(this.roomid);
   }
@@ -1029,6 +1110,7 @@ export class Game {
       },
     };
     console.log("[BOT_DECISION]", JSON.stringify(trace));
+    return trace;
   }
 
   private canonicalBotChoices(
@@ -1098,7 +1180,7 @@ export class Game {
       action: currentBet > user.bets[this.round] ? "fold" : "check",
       probability: 1,
     };
-    this.logBotDecision(
+    const decisionTrace = this.logBotDecision(
       token,
       this.buildBotStrategyRequest(token),
       "safe-fallback",
@@ -1108,6 +1190,12 @@ export class Game {
       choice,
       0
     );
+    if (this.replayPublicId) {
+      this.pendingReplayBotStrategy[token] = {
+        ...decisionTrace.strategy,
+        source: "safe-fallback",
+      };
+    }
     this.executeBotChoice(token, choice);
     publish2all(this.roomid);
   }
@@ -1314,16 +1402,252 @@ export class Game {
     }
   }
 
+  private beginAiReplay() {
+    const humans = this.sortedUsers.filter((token) => !userMap[token].isBot);
+    const bots = this.sortedUsers.filter((token) => userMap[token].isBot);
+    if (humans.length !== 1 || bots.length < 1) return;
+
+    const humanToken = humans[0];
+    this.replayPublicId = uuidv4().replace(/-/g, "");
+    this.replayHumanToken = humanToken;
+    this.replayParticipantIds[humanToken] = "hero";
+    bots.forEach((token, index) => {
+      this.replayParticipantIds[token] = `bot-${index + 1}`;
+    });
+    this.sortedUsers.forEach((token) => {
+      this.replayStartingStacks[token] = userMap[token].stack;
+    });
+
+    try {
+      getAiReplayStore().beginHand({
+        publicId: this.replayPublicId,
+        ownerToken: humanToken,
+        roomId: this.roomid,
+        handSeq: this.handSeq,
+        startedAt: Date.now(),
+        smallBlind: this.smallBlind,
+        bigBlind: this.smallBlind * 2,
+        heroId: "hero",
+        participants: this.buildReplayParticipants(),
+      });
+    } catch (error) {
+      console.warn("AI replay hand start failed", error);
+      this.replayPublicId = "";
+      this.replayHumanToken = "";
+      this.replayParticipantIds = {};
+      this.replayStartingStacks = {};
+    }
+  }
+
+  private buildReplayParticipants(): AiReplayParticipant[] {
+    return this.sortedUsers
+      .filter((token) => Boolean(this.replayParticipantIds[token]))
+      .map((token) => {
+        const player = userMap[token];
+        return {
+          id: this.replayParticipantIds[token],
+          name: player.name,
+          type: player.isBot ? "bot" as const : "human" as const,
+          position: this.positionLabelOf(token),
+          cards: player.hands.map((card) => ({ ...card })),
+          startingStack: this.replayStartingStacks[token] ?? player.stack,
+          endingStack: player.stack,
+          botStyle: player.isBot ? player.botStyle : undefined,
+        };
+      });
+  }
+
+  private replayStreet(): ReplayStreet {
+    if (this.round === GameRound.Flop) return "flop";
+    if (this.round === GameRound.Turn) return "turn";
+    if (this.round === GameRound.River) return "river";
+    return "preflop";
+  }
+
+  private buildReplayDecisionContext(token: Token): AiReplayDecisionContext | undefined {
+    if (!this.replayPublicId || !this.replayParticipantIds[token]) return undefined;
+    const user = userMap[token];
+    const currentBet = this.maxPreBet();
+    const previousStreetBets = sum(user.bets.slice(0, this.round));
+    const maxTo = user.stack - previousStreetBets;
+    return {
+      board: this.boardCards.map((card) => ({ ...card })),
+      potBefore: this.sortedUsers.reduce(
+        (pot, playerToken) => pot + userMap[playerToken].totalBets,
+        0
+      ),
+      amountToCall: Math.max(
+        0,
+        Math.min(currentBet, maxTo) - user.bets[this.round]
+      ),
+      minimumRaiseTo: this.raiseBet + this.raiseBetDiff,
+      currentBet,
+      raiseCount: this.raiseCount,
+      players: this.sortedUsers
+        .filter((playerToken) => Boolean(this.replayParticipantIds[playerToken]))
+        .map((playerToken) => {
+          const player = userMap[playerToken];
+          return {
+            id: this.replayParticipantIds[playerToken],
+            name: player.name,
+            type: player.isBot ? "bot" as const : "human" as const,
+            position: this.positionLabelOf(playerToken),
+            stack: player.stack,
+            committed: player.totalBets,
+            streetBet: player.bets[this.round],
+            remaining: player.stack - player.totalBets,
+            folded: player.isFolded,
+            allIn: player.isAllIn,
+          };
+        }),
+    };
+  }
+
+  private compareReplayDecision(
+    action: string,
+    amountTo: number | undefined,
+    advice: PreflopAdvice | PostflopAdvice | undefined
+  ): AiReplayComparison {
+    if (!advice) {
+      return {
+        actionMatch: false,
+        classification: "unscored",
+        reasons: ["当前局面没有生成可用的策略建议"],
+      };
+    }
+    const normalizedAction = advice.kind === "preflop" && action === "check"
+      ? "call"
+      : action;
+    const distribution = advice.kind === "preflop" && advice.hero
+      ? advice.hero.actionDistribution
+      : advice.actionDistribution;
+    const probability = Number(
+      (distribution as unknown as Record<string, number>)[normalizedAction] || 0
+    );
+    const recommended = advice.recommended;
+    const actionMatch = normalizedAction === recommended;
+    let classification: AiReplayComparison["classification"];
+    if (actionMatch) classification = "recommended";
+    else if (probability >= 15) classification = "mixed-acceptable";
+    else if (probability > 0) classification = "low-frequency";
+    else classification = "deviation";
+
+    const aggressiveAction = ["bet", "raise", "allin"].includes(normalizedAction);
+    const preflopSize = advice.kind === "preflop"
+      ? advice.actions.find((candidate) => candidate.action === normalizedAction)
+      : undefined;
+    const recommendedSize = aggressiveAction
+      ? preflopSize?.sizeChips ?? advice.recommendedSizeChips
+      : undefined;
+    const recommendedSizeBB = aggressiveAction
+      ? preflopSize?.sizeBB ?? advice.recommendedSizeBB
+      : undefined;
+    const bigBlind = this.smallBlind * 2;
+    const sizeDifference =
+      amountTo !== undefined && recommendedSize !== undefined
+        ? amountTo - recommendedSize
+        : undefined;
+    const reasons: string[] = [];
+    if (actionMatch) reasons.push("实际行动与策略主推荐一致");
+    else if (probability >= 15) reasons.push(`该行动属于混合策略，频率 ${probability}%`);
+    else if (probability > 0) reasons.push(`该行动仅以 ${probability}% 的低频率出现`);
+    else reasons.push("该行动不在当前参考策略的行动分布中");
+    if (sizeDifference !== undefined && recommendedSize && Math.abs(sizeDifference) > 0.001) {
+      const differencePercent = Math.abs(sizeDifference / recommendedSize) * 100;
+      reasons.push(
+        `实际尺寸比建议${sizeDifference > 0 ? "大" : "小"} ${Math.abs(sizeDifference / bigBlind).toFixed(1)}bb（${differencePercent.toFixed(1)}%）`
+      );
+    }
+    const sizeDifferenceBB =
+      sizeDifference === undefined ? undefined : sizeDifference / bigBlind;
+    const sizeDifferenceRatio =
+      sizeDifference === undefined || !recommendedSize
+        ? undefined
+        : sizeDifference / recommendedSize;
+    const sizeClassification = classifyAiReplaySize(amountTo, recommendedSize);
+    return {
+      recommendedAction: recommended,
+      recommendedSizeChips: recommendedSize,
+      recommendedSizeBB,
+      actualActionProbability: probability,
+      actionMatch,
+      sizeDifferenceBB,
+      sizeDifferenceRatio,
+      sizeClassification,
+      classification,
+      reasons,
+    };
+  }
+
+  private recordAiReplayDecision(input: {
+    token: Token;
+    action: string;
+    amountTo?: number;
+    delta?: number;
+    origin: ReplayActionOrigin;
+    context?: AiReplayDecisionContext;
+    advice?: PreflopAdvice | PostflopAdvice;
+    botStrategy?: AiReplayBotStrategy;
+  }) {
+    if (!this.replayPublicId || !input.context) return;
+    const player = userMap[input.token];
+    try {
+      getAiReplayStore().recordDecision(this.replayPublicId, {
+        sequence: ++this.replayDecisionSequence,
+        street: this.replayStreet(),
+        actorId: this.replayParticipantIds[input.token],
+        actorType: player.isBot ? "bot" : "human",
+        actorName: player.name,
+        position: this.positionLabelOf(input.token),
+        actual: {
+          action: input.action,
+          amountTo: input.amountTo,
+          delta: input.delta,
+          origin: input.origin,
+        },
+        context: input.context,
+        advice: input.advice,
+        botStrategy: input.botStrategy,
+        comparison: this.compareReplayDecision(
+          input.action,
+          input.amountTo,
+          input.advice
+        ),
+        createdAt: Date.now(),
+      });
+    } catch (error) {
+      console.warn("AI replay decision failed", error);
+    } finally {
+      delete this.pendingReplayBotStrategy[input.token];
+      delete this.pendingReplayBotAdvice[input.token];
+    }
+  }
+
+  private completeAiReplay() {
+    if (!this.replayPublicId || !this.replayHumanToken) return;
+    try {
+      getAiReplayStore().completeHand({
+        publicId: this.replayPublicId,
+        ownerToken: this.replayHumanToken,
+        completedAt: Date.now(),
+        board: this.boardCards.map((card) => ({ ...card })),
+        participants: this.buildReplayParticipants(),
+        runouts: this.replayRunouts,
+        heroProfitChips: this.replayHeroProfitChips,
+      });
+    } catch (error) {
+      console.warn("AI replay completion failed", error);
+    }
+  }
+
   /** Real seat label for a player in this hand (SB/BB/CO/BTN/...). */
   private positionLabelOf(token: Token): string {
     const n = this.sortedUsers.length;
     if (n < 2) return "";
     const idx = this.sortedUsers.indexOf(token);
     if (idx < 0) return "";
-    const count = Math.min(Math.max(n, 2), 9);
-    const buttonIndex = n > 2 ? n - 1 : 0;
-    const dist = Math.min((idx - buttonIndex + n) % n, count - 1);
-    return positionForDistance(count, dist).label;
+    const actorIndex = idx >= 2 ? idx - 2 : n - 2 + idx;
+    return positionLabelByActionOrder(n, actorIndex);
   }
   handleUserDisconnected(token: Token) {
     const user = userMap[token];
@@ -1346,7 +1670,7 @@ export class Game {
   private scheduleActionTimeout(token: Token, delay: number) {
     clearTimeout(this.actingUserTimer);
     this.actingUserTimer = delayTry(() => {
-      this.fold(token); // auto fold
+      this.fold(token, "timeout"); // auto fold
       publish2all(this.roomid);
     }, delay);
   }

@@ -218,21 +218,28 @@ export default function PostflopAdviceCard({
         ))}
       </div>
 
-      {advice.adjustments && advice.adjustments.length > 0 && (
-        <div className="gto-advice-card__insight">
-          <div className="gto-advice-card__insight-group">
-            <div className="gto-advice-card__insight-title">
-              实际情况偏移建议
-            </div>
-            {advice.adjustments.map((note, i) => (
-              <small key={`adj-${i}`}>· {note}</small>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="gto-advice-card__foot">
         <small>参考范围：{advice.dataSource}</small>
+      </div>
+
+      <div
+        className="gto-advice-card__bottom-action"
+        data-testid="gto-bottom-action"
+      >
+        <small className="gto-advice-card__bottom-action-title">行动建议</small>
+        <div className="gto-advice-card__actions">
+          {lines.map((line) => (
+            <span
+              key={line.key}
+              className="gto-advice-card__action"
+              style={{ color: line.color }}
+            >
+              {line.label}
+              {line.size !== undefined ? ` ${line.size} 筹码` : ""}{" "}
+              {line.value}%
+            </span>
+          ))}
+        </div>
       </div>
 
       <GtoTips
@@ -242,6 +249,7 @@ export default function PostflopAdviceCard({
             频率最高的一项，可参考分布做混合。
           </>
         }
+        adjustments={advice.adjustments}
         limitations={advice.limitations}
       />
     </div>

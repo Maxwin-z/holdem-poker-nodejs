@@ -1,4 +1,4 @@
-export type AnalyticsWindow = 20 | 50 | 100 | 500 | "all";
+export type AnalyticsWindow = 20 | 50 | 100 | 500 | 2000 | 5000;
 
 export interface RateMetric {
   value: number | null;

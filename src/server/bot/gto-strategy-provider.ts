@@ -125,6 +125,7 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
         choices: calibrate(choices, request),
         fallbackAction: advice.hero.action,
         source: `${this.id}:preflop`,
+        advice,
         diagnostics: {
           scenario: advice.scenario,
           heroPosition: advice.heroPosition,
@@ -170,6 +171,7 @@ export class CurrentGtoStrategyProvider implements BotStrategyProvider {
       fallbackAction: advice.recommended,
       equityVsRange: advice.equityVsRange,
       source: `${this.id}:postflop`,
+      advice,
       diagnostics: {
         heroPosition: request.heroPositionLabel,
         recommended: advice.recommended,

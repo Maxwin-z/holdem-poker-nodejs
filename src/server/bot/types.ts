@@ -1,4 +1,6 @@
 import type { Card } from "../../ApiType";
+import type { PreflopAdvice } from "../../gto/preflop/types";
+import type { PostflopAdvice } from "../../gto/postflop/types";
 
 export type BotStyle = "standard" | "tight" | "loose";
 export type BotStyleSelection = BotStyle | "random";
@@ -59,6 +61,8 @@ export interface BotStrategyResult {
   source: string;
   /** Structured context used to explain and audit a sampled bot decision. */
   diagnostics?: Record<string, unknown>;
+  /** Immutable strategy snapshot used by hand replay. */
+  advice?: PreflopAdvice | PostflopAdvice;
 }
 
 export interface BotStrategyProvider {

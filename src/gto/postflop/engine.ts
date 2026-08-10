@@ -13,7 +13,7 @@
  * the equilibrium mix.
  */
 
-import { CardId, handGroupName } from "./cards";
+import { CardId, handGroupName, idToCard } from "./cards";
 import { evaluateHand, HAND_CATEGORY } from "./hand-eval";
 import { equityVsRange } from "./equity";
 import { villainContinuingRange } from "./range";
@@ -47,6 +47,20 @@ export interface PostflopDecision {
   equityRangeCombos?: number;
   /** Hand-group keys of the villain combos actually evaluated (≤ 160). */
   equityRange?: string[];
+  equityRangeDetails?: {
+    candidateComboCount: number;
+    evaluatedComboCount: number;
+    sampled: boolean;
+    combos: Array<{
+      cards: [string, string];
+      handClass: string;
+      heroEquity: number;
+      win: number;
+      tie: number;
+      lose: number;
+      samples: number;
+    }>;
+  };
 }
 
 /** Cap the continuing-range combo count for bounded server latency. */
@@ -268,6 +282,7 @@ function decidePostflopNet(
   let eqR: number | undefined;
   let eqCombos: number | undefined;
   let eqRange: string[] | undefined;
+  let eqRangeDetails: PostflopDecision["equityRangeDetails"];
 
   // Anti-punt pot-odds floor facing a bet.
   if (facingBet && finalAction !== "fold") {
@@ -275,6 +290,7 @@ function decidePostflopNet(
     eqR = r.eqR;
     eqCombos = r.combos;
     eqRange = r.range;
+    eqRangeDetails = r.details;
     const potOdds = sit.toCall / (sit.pot + sit.toCall);
     if (eqR < potOdds + 0.02) {
       return {
@@ -285,6 +301,7 @@ function decidePostflopNet(
         equityVsRange: eqR,
         equityRangeCombos: eqCombos,
         equityRange: eqRange,
+        equityRangeDetails: eqRangeDetails,
       };
     }
     if (finalAction === "raise" && eqR < 0.6) finalAction = "call";
@@ -373,6 +390,7 @@ function decidePostflopNet(
     equityVsRange: eqR,
     equityRangeCombos: eqCombos,
     equityRange: eqRange,
+    equityRangeDetails: eqRangeDetails,
   };
 }
 
@@ -388,15 +406,15 @@ function decidePostflopRanged(
 ): PostflopDecision {
   const facingBet = sit.toCall > 0;
   const aggression = facingBet;
-  const { eqR, combos, range } = equityVsContinuingRange(sit, aggression);
+  const { eqR, combos, range, details } = equityVsContinuingRange(sit, aggression);
   const pairedBoard = board.isPaired;
   const twoPairType = heroCat === HAND_CATEGORY.TWO_PAIR;
   const dominatedByBoard = dangerousFlush || (pairedBoard && twoPairType);
 
   if (facingBet) {
-    return rangedFacingBet(sit, eqR, combos, range, dominatedByBoard, heroCat);
+    return rangedFacingBet(sit, eqR, combos, range, details, dominatedByBoard, heroCat);
   }
-  return rangedFirstToAct(sit, eqR, combos, range, board, dangerousFlush, heroCat);
+  return rangedFirstToAct(sit, eqR, combos, range, details, board, dangerousFlush, heroCat);
 }
 
 function rangedFacingBet(
@@ -404,6 +422,7 @@ function rangedFacingBet(
   eqR: number,
   combos: number,
   range: string[],
+  details: NonNullable<PostflopDecision["equityRangeDetails"]>,
   dominatedByBoard: boolean,
   heroCat: number
 ): PostflopDecision {
@@ -430,6 +449,7 @@ function rangedFacingBet(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -457,6 +477,7 @@ function rangedFacingBet(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -470,6 +491,7 @@ function rangedFacingBet(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -481,6 +503,7 @@ function rangedFacingBet(
     equityVsRange: eqR,
     equityRangeCombos: combos,
     equityRange: range,
+    equityRangeDetails: details,
   };
 }
 
@@ -489,6 +512,7 @@ function rangedFirstToAct(
   eqR: number,
   combos: number,
   range: string[],
+  details: NonNullable<PostflopDecision["equityRangeDetails"]>,
   board: BoardAnalysis,
   dangerousFlush: boolean,
   heroCat: number
@@ -514,6 +538,7 @@ function rangedFirstToAct(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -533,6 +558,7 @@ function rangedFirstToAct(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -555,6 +581,7 @@ function rangedFirstToAct(
       equityVsRange: eqR,
       equityRangeCombos: combos,
       equityRange: range,
+      equityRangeDetails: details,
     };
   }
 
@@ -566,6 +593,7 @@ function rangedFirstToAct(
     equityVsRange: eqR,
     equityRangeCombos: combos,
     equityRange: range,
+    equityRangeDetails: details,
   };
 }
 
@@ -576,7 +604,12 @@ function rangedFirstToAct(
 function equityVsContinuingRange(
   sit: PostflopSituation,
   aggression: boolean
-): { eqR: number; combos: number; range: string[] } {
+): {
+  eqR: number;
+  combos: number;
+  range: string[];
+  details: NonNullable<PostflopDecision["equityRangeDetails"]>;
+} {
   const range = villainContinuingRange(sit.heroCards, sit.board, {
     aggression,
     multiway: sit.activeVillainCount > 1,
@@ -591,6 +624,24 @@ function equityVsContinuingRange(
     eqR: res.equity,
     combos: res.combos,
     range: evalRange.map(([a, b]) => handGroupName(a, b)),
+    details: {
+      candidateComboCount: range.length,
+      evaluatedComboCount: res.combos,
+      sampled: evalRange.length < range.length,
+      combos: res.details.map((detail) => ({
+        cards: detail.cards.map((id) => {
+          const card = idToCard(id);
+          const rank = card.num === 14 ? "A" : card.num === 13 ? "K" : card.num === 12 ? "Q" : card.num === 11 ? "J" : card.num === 10 ? "T" : String(card.num);
+          return `${rank}${card.suit}`;
+        }) as [string, string],
+        handClass: handGroupName(detail.cards[0], detail.cards[1]),
+        heroEquity: detail.equity,
+        win: detail.win,
+        tie: detail.tie,
+        lose: detail.lose,
+        samples: detail.samples,
+      })),
+    },
   };
 }
 

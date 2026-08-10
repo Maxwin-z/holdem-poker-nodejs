@@ -3898,6 +3898,21 @@
   line-height: 1.5;
 }
 
+.gto-advice-card__bottom-action {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.gto-advice-card__bottom-action-title {
+  color: #71877f;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 /* ============ 翻后 GTO 建议卡片 ============ */
 .postflop-advice__board {
   display: flex;

@@ -18,6 +18,10 @@ import {
 } from "../src/server/analytics/player-analytics";
 import type { AnalyticsSqliteDatabase } from "../src/server/analytics/player-analytics";
 import type { AnalyticsWindow } from "../src/shared/playerAnalytics";
+import {
+  AiReplayStore,
+  setAiReplayStore,
+} from "../src/server/replay/ai-replay-store";
 
 interface Env {
   ASSETS: Fetcher;
@@ -39,6 +43,7 @@ const API_PATHS = new Set([
   "/createroom",
   "/joinroom",
   "/api/me/stats",
+  "/api/me/ai-replays",
 ]);
 
 type DurableSqlCursor = {
@@ -130,6 +135,7 @@ function ensureUser(token: string, name: string): User {
 
 export class PokerServer {
   private readonly analytics: PlayerAnalyticsStore;
+  private readonly replays: AiReplayStore;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -139,6 +145,10 @@ export class PokerServer {
       analyticsDatabase(state.storage.sql as unknown as DurableSqlStorage)
     );
     setPlayerAnalyticsStore(this.analytics);
+    this.replays = new AiReplayStore(
+      analyticsDatabase(state.storage.sql as unknown as DurableSqlStorage)
+    );
+    setAiReplayStore(this.replays);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -159,11 +169,16 @@ export class PokerServer {
           return this.currentRoom(request);
         case "GET /api/me/stats":
           return this.playerStats(request, url);
+        case "GET /api/me/ai-replays":
+          return this.aiReplayList(request);
         case "POST /createroom":
           return this.createRoom(request);
         case "POST /joinroom":
           return this.joinRoom(request);
         default:
+          if (request.method === "GET" && url.pathname.startsWith("/api/ai-replays/")) {
+            return this.publicAiReplay(url.pathname.slice("/api/ai-replays/".length));
+          }
           return new Response("Not Found", { status: 404 });
       }
     } catch (error) {
@@ -204,12 +219,21 @@ export class PokerServer {
   private playerStats(request: Request, url: URL): Response {
     const { token } = authenticatedUser(request, this.env.JWT_SECRET);
     const requested = url.searchParams.get("window") || "100";
-    const window: AnalyticsWindow = requested === "all"
-      ? "all"
-      : ([20, 50, 100, 500].includes(Number(requested))
-        ? Number(requested) as 20 | 50 | 100 | 500
-        : 100);
+    const window = ([20, 50, 100, 500, 2000, 5000].includes(Number(requested))
+      ? Number(requested)
+      : 100) as AnalyticsWindow;
     return success(this.analytics.getReport(token, window));
+  }
+
+  private aiReplayList(request: Request): Response {
+    const { token } = authenticatedUser(request, this.env.JWT_SECRET);
+    return success(this.replays.listForToken(token));
+  }
+
+  private publicAiReplay(publicId: string): Response {
+    const replay = this.replays.getPublic(publicId);
+    if (!replay) return errorResponse("牌局复盘不存在或已过期");
+    return success(replay);
   }
 
   private async createRoom(request: Request): Promise<Response> {
@@ -270,7 +294,11 @@ export default {
     const isWebSocket =
       request.headers.get("upgrade")?.toLowerCase() === "websocket";
 
-    if (isWebSocket || API_PATHS.has(url.pathname)) {
+    if (
+      isWebSocket ||
+      API_PATHS.has(url.pathname) ||
+      url.pathname.startsWith("/api/ai-replays/")
+    ) {
       const id = env.POKER_SERVER.idFromName("global");
       return env.POKER_SERVER.get(id).fetch(request);
     }

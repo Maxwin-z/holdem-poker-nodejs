@@ -84,6 +84,28 @@ export interface PostflopHeroAdvice {
   message: string;
 }
 
+export interface ContinuingRangeCombo {
+  /** Exact suited combo, e.g. ["Ah", "Kh"]. */
+  cards: [string, string];
+  /** Canonical hand class used for grouping, e.g. AKs / AKo / QQ. */
+  handClass: string;
+  /** Hero's equity against this exact combo (0-1). */
+  heroEquity: number;
+  win: number;
+  tie: number;
+  lose: number;
+  samples: number;
+}
+
+export interface ContinuingRangeDetails {
+  /** Full candidate count before the bounded evaluation sample. */
+  candidateComboCount: number;
+  /** Concrete combos that were actually evaluated. */
+  evaluatedComboCount: number;
+  sampled: boolean;
+  combos: ContinuingRangeCombo[];
+}
+
 export interface PostflopAdvice {
   kind: "postflop";
   street: PostflopStreet;
@@ -103,6 +125,8 @@ export interface PostflopAdvice {
   equityRangeCombos?: number;
   /** Hand-group keys of the evaluated continuing range (≤ 160 combos). */
   continuingRange?: string[];
+  /** Suit-aware evaluated combos and their individual equity breakdown. */
+  continuingRangeDetails?: ContinuingRangeDetails;
   heroHandKey: string;
   actionDistribution: PostflopActionDistribution;
   recommended: PostflopAction;

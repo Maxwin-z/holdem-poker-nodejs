@@ -14,11 +14,24 @@ const POSITIONS_BY_DISTANCE: Record<number, PositionLabel[]> = {
   2: ["BTN", "BB"],
   3: ["BTN", "SB", "BB"],
   4: ["BTN", "SB", "BB", "CO"],
-  5: ["BTN", "SB", "BB", "CO", "UTG"],
-  6: ["BTN", "SB", "BB", "CO", "MP", "UTG"],
-  7: ["BTN", "SB", "BB", "CO", "HJ", "MP", "UTG"],
-  8: ["BTN", "SB", "BB", "CO", "HJ", "LJ", "MP", "UTG"],
-  9: ["BTN", "SB", "BB", "CO", "HJ", "LJ", "MP", "UTG+1", "UTG"],
+  5: ["BTN", "SB", "BB", "UTG", "CO"],
+  6: ["BTN", "SB", "BB", "UTG", "MP", "CO"],
+  7: ["BTN", "SB", "BB", "UTG", "MP", "HJ", "CO"],
+  8: ["BTN", "SB", "BB", "UTG", "MP", "LJ", "HJ", "CO"],
+  9: ["BTN", "SB", "BB", "UTG", "UTG+1", "MP", "LJ", "HJ", "CO"],
+};
+
+/** Position labels in actual preflop action order, first actor first. */
+const POSITIONS_BY_ACTION: Record<number, PositionLabel[]> = {
+  2: ["BTN", "BB"],
+  3: ["BTN", "SB", "BB"],
+  4: ["CO", "BTN", "SB", "BB"],
+  5: ["UTG", "CO", "BTN", "SB", "BB"],
+  6: ["UTG", "MP", "CO", "BTN", "SB", "BB"],
+  7: ["UTG", "MP", "HJ", "CO", "BTN", "SB", "BB"],
+  8: ["UTG", "MP", "LJ", "HJ", "CO", "BTN", "SB", "BB"],
+  9: ["UTG", "UTG+1", "MP", "LJ", "HJ", "CO", "BTN", "SB", "BB"],
+  10: ["UTG", "UTG", "UTG+1", "MP", "LJ", "HJ", "CO", "BTN", "SB", "BB"],
 };
 
 const LABEL_TO_CHART: Record<PositionLabel, ChartPosition> = {
@@ -79,11 +92,9 @@ export function positionForDistance(
 /**
  * 把牌局里的“行动顺序序号”映射成 6-max 图表位置。
  *
- * 本牌局的行牌顺序与标准 6-max 相反：翻前从 CO 开始，依次
- * CO -> MP -> UTG -> BTN -> SB -> BB（即 sortedUsers[2] 开始行动）。
- * 而 GreenCharts2024 图表按键（UTG/MP/CO/BTN/SB/BB）按标准顺序定义：
- * 第 1 个行动者是 UTG、第 2 个是 MP……因此同一个座位不能拿“距按钮
- * 距离”当图表键，要按它在行动顺序里的序号取标准位置，才能命中图表。
+ * 本牌局翻前从 sortedUsers[2]（大盲左侧第一位）开始行动，最后是
+ * BTN -> SB -> BB。展示位置和 GreenCharts2024 图表键都由这一标准
+ * 行动顺序得到，HJ/LJ 等中间位置再归一到 MP 图表。
  *
  * 对 2-10 人桌都适用（10 人桌按 9 人标签，多出的早位并到 UTG）。
  *
@@ -98,27 +109,24 @@ export function chartPositionByActionOrder(
   if (!Number.isFinite(playerCount) || n < 2 || n > 10) {
     throw new Error(`玩家数量必须是 2-10 之间的数字，收到 ${playerCount}`);
   }
-  const count = Math.min(Math.max(n, 2), 9);
-  if (n === 2) {
-    // 单挑：按钮位即小盲，图表键为 SB。
-    return actorIndex <= 0 ? "SB" : "BB";
+  // Heads-up: the button also posts the small blind and uses the SB chart.
+  if (n === 2 && actorIndex === 0) return "SB";
+  return LABEL_TO_CHART[positionLabelByActionOrder(n, actorIndex)];
+}
+
+/** Resolve the real display label for a zero-based preflop action index. */
+export function positionLabelByActionOrder(
+  playerCount: number,
+  actorIndex: number
+): PositionLabel {
+  const n = Math.floor(playerCount);
+  if (!Number.isFinite(playerCount) || n < 2 || n > 10) {
+    throw new Error(`玩家数量必须是 2-10 之间的数字，收到 ${playerCount}`);
   }
-  // 实际玩家数的距离标签（10 人桌按 9 人标签，超出部分钳到 UTG）。
-  const labels: PositionLabel[] = [];
-  for (let d = 0; d < n; d++) {
-    labels.push(positionForDistance(count, Math.min(d, count - 1)).label);
+  if (!Number.isInteger(actorIndex) || actorIndex < 0 || actorIndex >= n) {
+    throw new Error(`行动顺序序号无效：${actorIndex}（应有 0-${n - 1}）`);
   }
-  // 标准行动顺序 = 早位（距离 >= 3）按距离逆序，然后 BTN/SB/BB。
-  const sequence: ChartPosition[] = [
-    ...labels
-      .slice(3)
-      .reverse()
-      .map((label) => LABEL_TO_CHART[label]),
-    LABEL_TO_CHART[labels[0]],
-    LABEL_TO_CHART[labels[1]],
-    LABEL_TO_CHART[labels[2]],
-  ];
-  return sequence[Math.min(actorIndex, sequence.length - 1)];
+  return POSITIONS_BY_ACTION[n][actorIndex];
 }
 
 /** All positions for a game, indexed by distance from the button. */

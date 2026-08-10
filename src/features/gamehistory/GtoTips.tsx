@@ -88,18 +88,23 @@ const GLOSSARY: { term: string; desc: string }[] = [
 ];
 
 /**
- * 卡片底部的通用说明区：频率条含义 + 近似 / 简化说明。
- * 这些内容与每一手牌无关，因此始终默认折叠，用户可点击展开。
+ * 卡片底部的通用说明区：频率条含义、实际偏移、名词与近似说明。
+ * 整个区域始终默认折叠，用户可点击展开。
  */
 export default function GtoTips({
   hint,
+  adjustments,
   limitations,
 }: {
   hint?: ReactNode;
+  adjustments?: string[];
   limitations?: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const hasContent = !!hint || (limitations && limitations.length > 0);
+  const hasContent =
+    !!hint ||
+    (adjustments && adjustments.length > 0) ||
+    (limitations && limitations.length > 0);
   if (!hasContent) return null;
 
   return (
@@ -116,6 +121,18 @@ export default function GtoTips({
       {open && (
         <div className="gto-advice-card__tips-body">
           {hint && <div className="gto-advice-card__hint">{hint}</div>}
+          {adjustments && adjustments.length > 0 && (
+            <div className="gto-advice-card__insight">
+              <div className="gto-advice-card__insight-group">
+                <div className="gto-advice-card__insight-title">
+                  实际情况偏移建议
+                </div>
+                {adjustments.map((note, i) => (
+                  <small key={`adj-${i}`}>· {note}</small>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="gto-advice-card__insight">
             <div className="gto-advice-card__insight-group">
               <div className="gto-advice-card__insight-title">

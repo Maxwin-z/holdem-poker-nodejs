@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { GtoLogEntry } from "../../ApiType";
 import { getPostflopAdvice } from "../../gto/postflop/advice";
 import { getPreflopAdvice } from "../../gto/preflop/advice";
@@ -120,7 +120,10 @@ describe("GtoAdviceCard 全局折叠", () => {
     expect(screen.getByText(/牌面：/)).toBeInTheDocument();
     expect(screen.getByText(/手牌类别：/)).toBeInTheDocument();
     expect(screen.getByText(/对继续范围权益/)).toBeInTheDocument();
-    expect(screen.getByText("实际情况偏移建议")).toBeInTheDocument();
+    const bottomAction = screen.getByTestId("gto-bottom-action");
+    expect(within(bottomAction).getByText("行动建议")).toBeInTheDocument();
+    expect(within(bottomAction).getAllByText(/%/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("实际情况偏移建议")).not.toBeInTheDocument();
 
     // 通用说明（频率条解释 + 名词解释 + 近似说明）默认折叠
     expect(screen.getByText("通用说明")).toBeInTheDocument();
@@ -130,9 +133,18 @@ describe("GtoAdviceCard 全局折叠", () => {
 
     fireEvent.click(screen.getByText("通用说明"));
     expect(screen.getByText(/频率条/)).toBeInTheDocument();
+    expect(screen.getByText("实际情况偏移建议")).toBeInTheDocument();
     expect(screen.getByText("名词解释")).toBeInTheDocument();
     expect(screen.getByText("有效筹码")).toBeInTheDocument();
     expect(screen.getByText(/蒸馏神经网络近似/)).toBeInTheDocument();
+  });
+
+  it("翻前卡片底部也重复展示行动建议", () => {
+    render(<GtoAdviceCard entry={preflopEntry()} globalCollapsed={false} />);
+
+    const bottomAction = screen.getByTestId("gto-bottom-action");
+    expect(within(bottomAction).getByText("行动建议")).toBeInTheDocument();
+    expect(within(bottomAction).getByText(/加注/)).toBeInTheDocument();
   });
 
   it("继续范围明细以二维表展示，可折叠", () => {

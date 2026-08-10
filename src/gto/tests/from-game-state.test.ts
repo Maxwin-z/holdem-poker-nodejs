@@ -104,7 +104,7 @@ describe("preflop advice from game state", () => {
     assert.strictEqual(advice!.hero!.sizeBB, 10);
   });
 
-  it("6-max: 第 1 行动者（游戏 CO）按 UTG 图表处理（3bb RFI）", () => {
+  it("6-max: 第 1 行动者显示为 UTG 并按 UTG 图表处理（3bb RFI）", () => {
     const advice = buildPreflopAdvice(
       makeInput({
         seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
@@ -115,7 +115,7 @@ describe("preflop advice from game state", () => {
     );
     assert.ok(advice);
     assert.strictEqual(advice!.heroPosition, "UTG");
-    assert.strictEqual(advice!.heroPositionLabel, "CO");
+    assert.strictEqual(advice!.heroPositionLabel, "UTG");
     assert.strictEqual(advice!.scenario, "unopened");
     assert.strictEqual(advice!.hero!.action, "raise");
     assert.strictEqual(advice!.hero!.sizeBB, 3);
@@ -320,7 +320,7 @@ describe("preflop advice from game state", () => {
     );
   });
 
-  it("6-max: 游戏 UTG（第 3 行动者）开池按 CO 图表（2.5bb RFI）", () => {
+  it("6-max: 第 3 行动者显示为 CO 并按 CO 图表开池（2.5bb RFI）", () => {
     const advice = buildPreflopAdvice(
       makeInput({
         seats: ["SB", "BB", "CO", "MP", "UTG", "BTN"],
@@ -331,7 +331,7 @@ describe("preflop advice from game state", () => {
     );
     assert.ok(advice);
     assert.strictEqual(advice!.heroPosition, "CO");
-    assert.strictEqual(advice!.heroPositionLabel, "UTG");
+    assert.strictEqual(advice!.heroPositionLabel, "CO");
     assert.strictEqual(advice!.scenario, "unopened");
     assert.strictEqual(advice!.hero!.sizeBB, 2.5);
   });
