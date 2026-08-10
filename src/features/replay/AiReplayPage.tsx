@@ -5,7 +5,7 @@ import {
   TrophyOutlined,
 } from "@ant-design/icons";
 import { Button, Empty, Spin } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Card } from "../../ApiType";
 import { positionLabelByActionOrder } from "../../gto/preflop/positions";
 import type { PostflopAdvice } from "../../gto/postflop/types";
@@ -15,10 +15,13 @@ import type {
   AiReplayDecision,
   AiReplayHand,
   AiReplayListResponse,
+  AiReplayParticipant,
   AiReplaySummary,
   ReplayStreet,
 } from "../../shared/aiReplay";
 import PreflopRangeGrid from "../gamehistory/PreflopRangeGrid";
+import { buildReplaySteps } from "./replaySteps";
+import type { ReplaySeatView, ReplayStep, ReplayStepStreet } from "./replaySteps";
 import "./AiReplayPage.css";
 
 const ACTION_LABEL: Record<string, string> = {
@@ -35,6 +38,11 @@ const STREET_LABEL: Record<ReplayStreet, string> = {
   flop: "翻牌",
   turn: "转牌",
   river: "河牌",
+};
+
+const STEP_STREET_LABEL: Record<ReplayStepStreet, string> = {
+  ...STREET_LABEL,
+  result: "结果",
 };
 
 const CLASS_LABEL: Record<string, string> = {
@@ -64,6 +72,36 @@ const REPLAY_BOT_SEATS: Record<number, string[]> = {
   8: ["lower-left", "middle-left", "upper-left", "top-left", "top-right", "upper-right", "middle-right", "lower-right"],
   9: ["lower-left", "middle-left", "upper-left", "top-left", "top-center", "top-right", "upper-right", "middle-right", "lower-right"],
 };
+
+// Percent coordinates on the stage for every named seat slot. Action tags sit
+// on the segment between the seat and the table center.
+const SEAT_COORDS: Record<string, { x: number; y: number }> = {
+  "top-left": { x: 32, y: 8 },
+  "top-center": { x: 50, y: 6 },
+  "top-right": { x: 68, y: 8 },
+  "upper-left": { x: 13, y: 24 },
+  "upper-right": { x: 87, y: 24 },
+  "middle-left": { x: 12, y: 46 },
+  "middle-right": { x: 88, y: 46 },
+  "lower-left": { x: 14, y: 66 },
+  "lower-right": { x: 86, y: 66 },
+  hero: { x: 50, y: 85 },
+};
+const STAGE_CENTER = { x: 50, y: 42 };
+
+function betSpot(coord: { x: number; y: number }) {
+  return {
+    x: coord.x + (STAGE_CENTER.x - coord.x) * 0.42,
+    y: coord.y + (STAGE_CENTER.y - coord.y) * 0.5,
+  };
+}
+
+function dealerSpot(coord: { x: number; y: number }) {
+  return {
+    x: coord.x + (STAGE_CENTER.x - coord.x) * 0.22 + (coord.x <= 50 ? 6 : -6),
+    y: coord.y + (STAGE_CENTER.y - coord.y) * 0.22,
+  };
+}
 
 function actionTone(action: string): "fold" | "call" | "raise" {
   if (action === "fold") return "fold";
@@ -108,6 +146,11 @@ function strategyActionSizes(advice: ReplayAdvice): Record<string, StrategySize>
 
 function formatAmount(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatBB(chips: number, bigBlind: number) {
+  const value = chips / bigBlind;
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}BB`;
 }
 
 function strategySizeLabel(size: StrategySize) {
@@ -243,39 +286,6 @@ function CardRow({ cards, compact = false }: { cards: Card[]; compact?: boolean 
   );
 }
 
-function ReplayTableSeat({
-  participant,
-  seat,
-  bigBlind,
-}: {
-  participant: AiReplayHand["participants"][number];
-  seat: string;
-  bigBlind: number;
-}) {
-  const isBot = participant.type === "bot";
-  const endingStack = participant.endingStack ?? participant.startingStack;
-  return (
-    <article className={`replay-table-seat replay-table-seat--${seat} ${isBot ? "is-bot" : "is-hero"}`}>
-      <div className="replay-table-seat__cards">
-        <CardRow cards={participant.cards} compact />
-      </div>
-      <div className="replay-table-seat__profile">
-        <span className="replay-table-seat__avatar">
-          {isBot ? <RobotOutlined /> : participant.name.slice(0, 1)}
-        </span>
-        <span className="replay-table-seat__copy">
-          <span>
-            <strong>{participant.name}</strong>
-            <em>{isBot ? "AI" : "玩家"}</em>
-          </span>
-          <b>{(endingStack / bigBlind).toFixed(1)}bb</b>
-        </span>
-      </div>
-      <span className="replay-table-seat__position">{participant.position}</span>
-    </article>
-  );
-}
-
 function formatDate(timestamp: number) {
   return new Date(timestamp).toLocaleString("zh-CN", {
     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
@@ -404,121 +414,327 @@ function ComboExplorer({ advice }: { advice: PostflopAdvice }) {
   );
 }
 
-function BotSamplingChart({ decision }: { decision: AiReplayDecision }) {
+/* ── 牌桌回放 ─────────────────────────────────────────── */
+
+interface DisplayParticipant extends AiReplayParticipant {
+  displayPosition: string;
+}
+
+function actionTagText(action: string, amount?: number) {
+  if (action === "fold" || action === "check") return ACTION_LABEL[action];
+  const label = action === "raise" ? "加注到" : ACTION_LABEL[action] || action;
+  return amount !== undefined ? `${label} ${formatAmount(amount)}` : label;
+}
+
+function blindTagText(streetBet: number, smallBlind: number, bigBlind: number) {
+  if (streetBet === smallBlind) return `小盲 ${formatAmount(streetBet)}`;
+  if (streetBet === bigBlind) return `大盲 ${formatAmount(streetBet)}`;
+  return formatAmount(streetBet);
+}
+
+function ReplayStage({
+  replay,
+  participants,
+  coords,
+  step,
+  showBotCards,
+}: {
+  replay: AiReplayHand;
+  participants: DisplayParticipant[];
+  coords: Record<string, { x: number; y: number }>;
+  step: ReplayStep;
+  showBotCards: boolean;
+}) {
+  const isSettle = step.kind === "settle";
+  const hasLiveBets = Object.keys(step.seats).some((id) => step.seats[id].streetBet > 0);
+  const dealerParticipant = participants.find((participant) => participant.displayPosition === "BTN")
+    || participants[participants.length - 1];
+  const dealerCoord = dealerParticipant ? coords[dealerParticipant.id] : undefined;
+  const boardSlots = Array.from({ length: 5 });
+  return (
+    <div className="replay-stage" aria-label="牌桌回放">
+      <div className="replay-stage__felt" aria-hidden="true"><i /></div>
+      <div className="replay-stage__center">
+        <small>{isSettle ? "本手结束" : `${STEP_STREET_LABEL[step.street]}${step.street === "preflop" ? "" : "圈"}`}</small>
+        <span className="replay-stage__pot">
+          <small>{hasLiveBets ? "底池·含下注" : "底池"}</small>
+          <b>{isSettle ? step.wonPot ?? 0 : step.pot}</b>
+          <em>{formatBB(isSettle ? step.wonPot ?? 0 : step.pot, replay.bigBlind)}</em>
+        </span>
+        <span className="replay-stage__board">
+          {boardSlots.map((_, index) => {
+            const card = step.board[index];
+            if (!card) return <span className="replay-stage__board-slot" key={index} />;
+            const revealed = index >= step.board.length - step.newCardCount;
+            return (
+              <span className={revealed ? "replay-stage__board-new" : ""} key={index}>
+                <PlayingCard card={card} compact />
+              </span>
+            );
+          })}
+        </span>
+      </div>
+      {participants.map((participant) => {
+        const seat: ReplaySeatView = step.seats[participant.id] || {
+          id: participant.id,
+          remaining: participant.startingStack,
+          streetBet: 0,
+          folded: false,
+          allIn: false,
+        };
+        const coord = coords[participant.id];
+        if (!coord) return null;
+        const isHero = participant.type === "human";
+        const acting = step.kind === "act" && step.actorId === participant.id;
+        const revealCards = isHero || showBotCards || (isSettle && seat.showdown);
+        const spot = betSpot(coord);
+        let tag: { tone: string; text: string; bb?: string } | null = null;
+        if (isSettle) {
+          if (seat.winner && seat.profit !== undefined && seat.profit > 0) {
+            tag = { tone: "win", text: `+${formatAmount(seat.profit)}`, bb: formatBB(seat.profit, replay.bigBlind) };
+          }
+        } else if (seat.action) {
+          tag = {
+            tone: actionTone(seat.action),
+            text: actionTagText(seat.action, seat.actionAmount),
+            bb: seat.actionAmount !== undefined ? formatBB(seat.actionAmount, replay.bigBlind) : undefined,
+          };
+        } else if (seat.streetBet > 0) {
+          tag = { tone: "blind", text: blindTagText(seat.streetBet, replay.smallBlind, replay.bigBlind) };
+        }
+        return (
+          <div key={participant.id}>
+            <article
+              className={[
+                "replay-stage-seat",
+                isHero ? "is-hero" : "is-bot",
+                seat.folded ? "is-folded" : "",
+                acting ? "is-acting" : "",
+                isSettle && seat.winner ? "is-winner" : "",
+              ].join(" ")}
+              style={{ left: `${coord.x}%`, top: `${coord.y}%` }}
+            >
+              <div className="replay-stage-seat__cards">
+                {revealCards ? (
+                  <CardRow cards={participant.cards} compact />
+                ) : (
+                  <>
+                    <span className="replay-card is-compact is-back" />
+                    <span className="replay-card is-compact is-back" />
+                  </>
+                )}
+              </div>
+              <div className="replay-stage-seat__profile">
+                {seat.allIn && <span className="replay-stage-seat__allin">ALL-IN</span>}
+                <span className="replay-stage-seat__avatar">
+                  {isHero ? participant.name.slice(0, 1) : <RobotOutlined />}
+                </span>
+                <span className="replay-stage-seat__copy">
+                  <strong>{participant.name}{participant.botStyle ? ` · ${participant.botStyle}` : ""}</strong>
+                  <b>{formatAmount(seat.remaining)}<em>{formatBB(seat.remaining, replay.bigBlind)}</em></b>
+                </span>
+                <span className="replay-stage-seat__position">{participant.displayPosition}</span>
+              </div>
+            </article>
+            {tag && (
+              <span
+                className={`replay-action-tag is-${tag.tone} ${acting ? "is-live" : ""}`}
+                style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
+              >
+                {(tag.tone === "call" || tag.tone === "raise" || tag.tone === "blind") && <i className="replay-action-tag__chip" />}
+                <b>{tag.text}</b>
+                {tag.bb && <em>{tag.bb}</em>}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      {dealerCoord && (
+        <span
+          className="replay-dealer-button"
+          style={{ left: `${dealerSpot(dealerCoord).x}%`, top: `${dealerSpot(dealerCoord).y}%` }}
+        >D</span>
+      )}
+    </div>
+  );
+}
+
+/* ── 右侧联动分析面板 ─────────────────────────────────── */
+
+function PanelShell({
+  eyebrow,
+  title,
+  badge,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  badge?: { text: string; className: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <article className="replay-panel">
+      <header className="replay-panel__head">
+        <small>{eyebrow}</small>
+        <strong>{title}</strong>
+        {badge && <span className={`replay-grade ${badge.className}`}>{badge.text}</span>}
+      </header>
+      <div className="replay-panel__body">{children}</div>
+    </article>
+  );
+}
+
+function DealPanel({ replay, participants }: { replay: AiReplayHand; participants: DisplayParticipant[] }) {
+  return (
+    <PanelShell eyebrow="牌局开始" title={`发牌 · 盲注 ${replay.smallBlind} / ${replay.bigBlind}`}>
+      <div className="replay-panel__players">
+        {participants.map((participant) => (
+          <div key={participant.id}>
+            <span className={`replay-panel__player-avatar ${participant.type === "human" ? "is-hero" : ""}`}>
+              {participant.type === "human" ? participant.name.slice(0, 1) : <RobotOutlined />}
+            </span>
+            <span>{participant.name}</span>
+            <em>{participant.displayPosition}{participant.botStyle ? ` · ${participant.botStyle}` : ""}</em>
+            <b>{formatAmount(participant.startingStack)} ({formatBB(participant.startingStack, replay.bigBlind)})</b>
+          </div>
+        ))}
+      </div>
+      <p className="replay-panel__note">使用 ◀ ▶ 或键盘方向键逐步回放，此面板会跟随当前步骤更新。</p>
+    </PanelShell>
+  );
+}
+
+function StreetPanel({ replay, step }: { replay: AiReplayHand; step: ReplayStep }) {
+  const alive = Object.keys(step.seats).filter((id) => !step.seats[id].folded).length;
+  return (
+    <PanelShell
+      eyebrow={`进入${STEP_STREET_LABEL[step.street]}圈`}
+      title={step.board.map((card) => `${rank(card.num)}${suitSymbol(card.suit)}`).join(" ") || "—"}
+    >
+      <div className="replay-panel__metrics">
+        <span><small>底池</small><b>{step.pot} ({formatBB(step.pot, replay.bigBlind)})</b></span>
+        <span><small>剩余玩家</small><b>{alive} 人</b></span>
+      </div>
+    </PanelShell>
+  );
+}
+
+function BotPanel({ replay, step, participant }: {
+  replay: AiReplayHand;
+  step: ReplayStep;
+  participant?: DisplayParticipant;
+}) {
+  const decision = step.decision!;
   const choices = (decision.botStrategy?.canonicalChoices || []) as Array<{
     action?: string; probability?: number; sizeChips?: number;
   }>;
-  if (!decision.botStrategy || choices.length === 0) return null;
   const distribution = choices.reduce<Record<string, number>>((result, choice) => {
     if (choice.action) result[choice.action] = Number(choice.probability || 0) * 100;
     return result;
   }, {});
   return (
-    <details className="bot-strategy">
-      <summary><RobotOutlined /> AI 决策过程</summary>
-      <div className="bot-strategy__body">
-        <div className="bot-strategy__meta">
-          <span>策略源 <b>{decision.botStrategy.source}</b></span>
-          {decision.botStrategy.sample !== undefined && (
-            <span>随机采样 <b>{decision.botStrategy.sample.toFixed(4)}</b></span>
+    <PanelShell
+      eyebrow="AI 行动"
+      title={`${decision.actorName} · ${participant?.displayPosition || decision.position}`}
+      badge={{
+        text: actionTagText(decision.actual.action, decision.actual.amountTo),
+        className: `is-bot-action is-${actionTone(decision.actual.action)}`,
+      }}
+    >
+      {decision.botStrategy && (
+        <>
+          <div className="replay-panel__meta">
+            {participant?.botStyle && <span>风格 <b>{participant.botStyle}</b></span>}
+            <span>策略源 <b>{decision.botStrategy.source}</b></span>
+            {decision.botStrategy.sample !== undefined && (
+              <span>采样 <b>{decision.botStrategy.sample.toFixed(4)}</b></span>
+            )}
+          </div>
+          {Object.keys(distribution).length > 0 && (
+            <DistributionChart distribution={distribution} actual={decision.actual.action} />
           )}
-        </div>
-        <DistributionChart distribution={distribution} actual={decision.actual.action} />
-        <p>机器人会在校准后的混合策略中按概率采样，因此实际行动不一定等于最高频动作。</p>
-      </div>
-    </details>
+          <p className="replay-panel__note">机器人在校准后的混合策略中按概率采样，实际行动不一定等于最高频动作。</p>
+        </>
+      )}
+      {!decision.botStrategy && (
+        <p className="replay-panel__note">该 AI 行动没有记录策略抽样信息。</p>
+      )}
+    </PanelShell>
   );
 }
 
-function DecisionCard({
-  decision,
-  holeCards,
-  displayPosition,
-  bigBlind,
-  targetId,
-  active,
+function HeroPanel({
+  replay,
+  step,
+  heroDecisionTotal,
+  participant,
 }: {
-  decision: AiReplayDecision;
-  holeCards: Card[];
-  displayPosition: string;
-  bigBlind: number;
-  targetId: string;
-  active: boolean;
+  replay: AiReplayHand;
+  step: ReplayStep;
+  heroDecisionTotal: number;
+  participant?: DisplayParticipant;
 }) {
+  const decision = step.decision!;
   const advice = decision.advice;
   const preflop = advice?.kind === "preflop" ? advice : undefined;
   const postflop = advice?.kind === "postflop" ? advice : undefined;
   const distribution = advice
     ? (preflop?.hero?.actionDistribution || advice.actionDistribution) as unknown as Record<string, number>
     : {};
-  const recommendation = decision.comparison.recommendedAction;
   const sizes = advice ? strategyActionSizes(advice) : {};
-  const assessments = advice ? buildDecisionAssessments(decision, advice, sizes, bigBlind) : [];
+  const assessments = advice ? buildDecisionAssessments(decision, advice, sizes, replay.bigBlind) : [];
+  const classification = decision.comparison.classification;
+  const recommendation = decision.comparison.recommendedAction;
+  const recommendedSize = decision.comparison.recommendedSizeChips;
+  const actualMatchesRecommendation = decision.comparison.actionMatch;
   return (
-    <article
-      className={`decision-card decision-card--action-${actionTone(decision.actual.action)} ${active ? "is-quick-nav-active" : ""}`}
-      id={targetId}
-      tabIndex={-1}
+    <PanelShell
+      eyebrow={`我的决策 ${step.heroDecisionIndex}/${heroDecisionTotal}`}
+      title={`${STEP_STREET_LABEL[step.street]} · ${participant?.displayPosition || decision.position}`}
+      badge={{ text: CLASS_LABEL[classification], className: `is-${classification}` }}
     >
-      <header className="decision-card__header">
-        <span className={`decision-card__avatar ${decision.actorType === "bot" ? "is-bot" : ""}`}>
-          {decision.actorType === "bot" ? <RobotOutlined /> : decision.actorName.slice(0, 1)}
+      <div className="replay-panel__versus">
+        <div>
+          <small>我的选择</small>
+          <b>
+            {actionTagText(decision.actual.action, decision.actual.amountTo)}
+            {decision.actual.amountTo !== undefined && <em>{formatBB(decision.actual.amountTo, replay.bigBlind)}</em>}
+          </b>
+        </div>
+        <span className={actualMatchesRecommendation ? "is-good" : classification === "deviation" ? "is-bad" : "is-warn"}>
+          {actualMatchesRecommendation ? "＝" : "≠"}
         </span>
         <div>
-          <strong>{decision.actorName}</strong>
-          <small>{displayPosition} · {decision.actorType === "bot" ? "AI" : "玩家"}</small>
+          <small>GTO 主推荐</small>
+          <b>
+            {recommendation ? actionTagText(recommendation, recommendedSize) : "—"}
+            {recommendedSize !== undefined && <em>{formatBB(recommendedSize, replay.bigBlind)}</em>}
+          </b>
         </div>
-        <span className={`decision-card__actual is-${actionTone(decision.actual.action)}`}>
-          <small>实际行动</small>
-          <b>{ACTION_LABEL[decision.actual.action] || decision.actual.action}</b>
-          {decision.actual.amountTo !== undefined && <em>到 {decision.actual.amountTo}</em>}
-        </span>
-        <span className={`decision-card__grade is-${decision.comparison.classification}`}>
-          {CLASS_LABEL[decision.comparison.classification]}
-        </span>
-      </header>
-
-      <div className="decision-card__cards">
-        <span>
-          <small>{decision.actorType === "human" ? "你的手牌" : `${decision.actorName} 手牌`}</small>
-          <CardRow cards={holeCards} compact />
-        </span>
-        <span>
-          <small>当前公共牌</small>
-          {decision.context.board.length > 0 ? (
-            <CardRow cards={decision.context.board} compact />
-          ) : (
-            <em>翻前暂无公共牌</em>
-          )}
-        </span>
       </div>
-
-      <div className="decision-metrics">
-        <span><small>行动前底池</small><b>{decision.context.potBefore}</b></span>
+      {decision.actual.origin === "timeout" && (
+        <p className="replay-panel__note is-origin">⏱ 该行动由超时自动执行。</p>
+      )}
+      {decision.actual.origin === "safe-fallback" && (
+        <p className="replay-panel__note is-origin">⏱ 该行动由系统安全兜底执行。</p>
+      )}
+      {assessments.map((assessment, index) => (
+        <p className={`decision-assessment is-${assessment.tone}`} key={index}>
+          <b>{assessment.icon}</b><span>{assessment.text}</span>
+        </p>
+      ))}
+      {advice && (
+        <section className="replay-panel__section">
+          <h4>行动频率分布</h4>
+          <DistributionChart distribution={distribution} actual={decision.actual.action} sizes={sizes} />
+        </section>
+      )}
+      <div className="replay-panel__metrics">
+        <span><small>行动前底池</small><b>{decision.context.potBefore} ({formatBB(decision.context.potBefore, replay.bigBlind)})</b></span>
         <span><small>需要跟注</small><b>{decision.context.amountToCall}</b></span>
         <span><small>策略主推荐</small><b>{recommendation ? ACTION_LABEL[recommendation] || recommendation : "—"}</b></span>
         <span><small>实际动作频率</small><b>{decision.comparison.actualActionProbability ?? "—"}{decision.comparison.actualActionProbability !== undefined ? "%" : ""}</b></span>
       </div>
-
-      {advice && (
-        <div className="decision-card__analysis">
-          <section>
-            <h4>行动频率</h4>
-            <DistributionChart distribution={distribution} actual={decision.actual.action} sizes={sizes} />
-          </section>
-          <section className="decision-card__why">
-            <h4>差异分析</h4>
-            {assessments.map((assessment, index) => (
-              <p className={`decision-assessment is-${assessment.tone}`} key={index}>
-                <b>{assessment.icon}</b><span>{assessment.text}</span>
-              </p>
-            ))}
-            {postflop?.reasoning && <p className="is-reasoning">ℹ️ 策略逻辑：{postflop.reasoning}</p>}
-            {advice.notes.map((note, index) => <p className="is-note" key={`note-${index}`}>ℹ️ {note}</p>)}
-          </section>
-        </div>
-      )}
-
       {postflop && (
         <div className="equity-strip">
           <span style={{ "--equity": `${Math.round(postflop.equityVsRandom * 100)}%` } as React.CSSProperties}>
@@ -531,10 +747,16 @@ function DecisionCard({
           )}
         </div>
       )}
-
+      {(postflop?.reasoning || (advice && advice.notes.length > 0)) && (
+        <section className="replay-panel__section replay-panel__why">
+          <h4>策略解读</h4>
+          {postflop?.reasoning && <p>ℹ️ {postflop.reasoning}</p>}
+          {advice && advice.notes.map((note, index) => <p key={index}>ℹ️ {note}</p>)}
+        </section>
+      )}
       {preflop && (
         <details className="preflop-range-panel">
-          <summary>查看 {displayPosition} 策略范围表</summary>
+          <summary>查看 {participant?.displayPosition || decision.position} 策略范围表</summary>
           <PreflopRangeGrid
             grid={preflop.rangeGrid}
             heroHandKey={preflop.heroHandKey}
@@ -543,31 +765,103 @@ function DecisionCard({
         </details>
       )}
       {postflop && <ComboExplorer advice={postflop} />}
-      <BotSamplingChart decision={decision} />
-    </article>
+    </PanelShell>
   );
 }
+
+function SettlePanel({
+  replay,
+  step,
+  heroSteps,
+  steps,
+  onJump,
+}: {
+  replay: AiReplayHand;
+  step: ReplayStep;
+  heroSteps: number[];
+  steps: ReplayStep[];
+  onJump(index: number): void;
+}) {
+  const namesById = new Map(replay.participants.map((participant) => [participant.id, participant.name]));
+  const winners = replay.participants.filter((participant) => step.seats[participant.id]?.winner);
+  return (
+    <PanelShell
+      eyebrow="本手结果"
+      title={winners.length ? `${winners.map((winner) => winner.name).join("、")} 收池` : "本手结束"}
+      badge={{
+        text: `偏离度 ${replay.deviationScore === null ? "—" : Math.round(replay.deviationScore)}`,
+        className: `is-deviation-badge is-${replay.deviationLevel}`,
+      }}
+    >
+      <div className="replay-panel__lines">
+        <span><small>底池</small><b>{step.wonPot ?? 0} ({formatBB(step.wonPot ?? 0, replay.bigBlind)})</b></span>
+        <span>
+          <small>我的盈亏</small>
+          <b className={replay.heroProfitBB >= 0 ? "is-win" : "is-loss"}>
+            {replay.heroProfitChips > 0 ? "+" : ""}{formatAmount(replay.heroProfitChips)} ({replay.heroProfitBB > 0 ? "+" : ""}{replay.heroProfitBB.toFixed(1)} BB)
+          </b>
+        </span>
+        <span><small>整手评级</small><b className={`is-deviation-${replay.deviationLevel}`}>{DEVIATION_LABEL[replay.deviationLevel]}</b></span>
+      </div>
+      {replay.runouts.length > 1 && (
+        <section className="replay-panel__section">
+          <h4>多次发牌</h4>
+          {replay.runouts.map((runout, index) => (
+            <div className="replay-panel__runout" key={index}>
+              <CardRow cards={runout.board} compact />
+              <small>
+                {runout.players.filter((player) => player.winner)
+                  .map((player) => `${namesById.get(player.participantId) || "?"}${player.handType ? `（${player.handType}）` : ""}`)
+                  .join("、") || "—"}
+              </small>
+            </div>
+          ))}
+        </section>
+      )}
+      {heroSteps.length > 0 && (
+        <section className="replay-panel__section">
+          <h4>我的决策回顾 · 点击回跳</h4>
+          <div className="replay-panel__recap">
+            {heroSteps.map((stepIndex) => {
+              const heroStep = steps[stepIndex];
+              const decision = heroStep.decision!;
+              return (
+                <button key={stepIndex} onClick={() => onJump(stepIndex)}>
+                  <i className={`is-${decision.comparison.classification}`} />
+                  <small>{STEP_STREET_LABEL[heroStep.street]}</small>
+                  <span>{actionTagText(decision.actual.action, decision.actual.amountTo)}</span>
+                  <b className={`is-${decision.comparison.classification}`}>
+                    {CLASS_LABEL[decision.comparison.classification]}
+                  </b>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </PanelShell>
+  );
+}
+
+/* ── 详情页 ───────────────────────────────────────────── */
+
+const TAB_STREETS: ReplayStreet[] = ["preflop", "flop", "turn", "river"];
 
 function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void }) {
   // Participant snapshots are persisted in seat order: SB, BB, early seats..., BTN.
   // Re-derive labels so replays saved before the position-label fix also render correctly.
-  const displayParticipants = replay.participants.map((participant, seatIndex) => {
+  const displayParticipants: DisplayParticipant[] = useMemo(() => replay.participants.map((participant, seatIndex) => {
     const count = replay.participants.length;
     const actorIndex = seatIndex >= 2 ? seatIndex - 2 : count - 2 + seatIndex;
     return {
       ...participant,
-      position: positionLabelByActionOrder(count, actorIndex),
+      displayPosition: positionLabelByActionOrder(count, actorIndex),
     };
-  });
-  const cardsByParticipant = new Map(
-    displayParticipants.map((participant) => [participant.id, participant.cards])
+  }), [replay]);
+  const participantsById = useMemo(
+    () => new Map(displayParticipants.map((participant) => [participant.id, participant])),
+    [displayParticipants]
   );
-  const positionsByParticipant = new Map(
-    displayParticipants.map((participant) => [participant.id, participant.position])
-  );
-  const streets = (["preflop", "flop", "turn", "river"] as ReplayStreet[])
-    .map((street) => ({ street, decisions: replay.decisions.filter((decision) => decision.street === street) }))
-    .filter((entry) => entry.decisions.length > 0);
   const heroIndex = displayParticipants.findIndex((participant) => participant.type === "human");
   const hero = heroIndex >= 0 ? displayParticipants[heroIndex] : undefined;
   // Keep Hero pinned at the bottom while preserving the cyclic table adjacency.
@@ -581,53 +875,122 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
     : displayParticipants;
   const bots = participantsAfterHero.filter((participant) => participant.type === "bot");
   const botSeats = REPLAY_BOT_SEATS[Math.min(9, bots.length)] || REPLAY_BOT_SEATS[9];
-  const quickNavGroups = streets.map(({ street, decisions }) => ({
-    street,
-    targetId: `replay-street-${street}`,
-    decisions: decisions.map((decision) => ({
-      decision,
-      targetId: `replay-decision-${decision.id}`,
-      position: positionsByParticipant.get(decision.actorId) || decision.position,
-    })),
-  }));
-  const [activeTarget, setActiveTarget] = useState(quickNavGroups[0]?.targetId || "");
-
-  useEffect(() => {
-    const scrollRoot = document.querySelector<HTMLElement>(".replay-main");
-    const targetIds = quickNavGroups.reduce<string[]>((ids, group) => [
-      ...ids,
-      group.targetId,
-      ...group.decisions.map((item) => item.targetId),
-    ], []);
-    if (!scrollRoot || targetIds.length === 0) return;
-    setActiveTarget(targetIds[0]);
-    const updateActiveTarget = () => {
-      const focusLine = scrollRoot.getBoundingClientRect().top + 24;
-      let nextTarget = targetIds[0];
-      targetIds.forEach((targetId) => {
-        const element = document.getElementById(targetId);
-        if (element && element.getBoundingClientRect().top <= focusLine) nextTarget = targetId;
-      });
-      setActiveTarget((current) => current === nextTarget ? current : nextTarget);
-    };
-    updateActiveTarget();
-    scrollRoot.addEventListener("scroll", updateActiveTarget, { passive: true });
-    window.addEventListener("resize", updateActiveTarget);
-    return () => {
-      scrollRoot.removeEventListener("scroll", updateActiveTarget);
-      window.removeEventListener("resize", updateActiveTarget);
-    };
-    // A replay is immutable after completion; the public id is the stable dependency.
+  const coords = useMemo(() => {
+    const result: Record<string, { x: number; y: number }> = {};
+    if (hero) result[hero.id] = SEAT_COORDS.hero;
+    bots.slice(0, 9).forEach((bot, index) => {
+      result[bot.id] = SEAT_COORDS[botSeats[index]];
+    });
+    return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replay.publicId]);
 
-  const navigateToTarget = (targetId: string) => {
-    const element = document.getElementById(targetId);
-    if (!element) return;
-    setActiveTarget(targetId);
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => element.focus({ preventScroll: true }), 350);
+  const steps = useMemo(() => buildReplaySteps(replay), [replay]);
+  const heroSteps = useMemo(
+    () => steps.reduce<number[]>((result, step, index) => {
+      if (step.heroDecisionIndex !== undefined) result.push(index);
+      return result;
+    }, []),
+    [steps]
+  );
+  const [stepIndex, setStepIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [showBotCards, setShowBotCards] = useState(false);
+  const step = steps[Math.min(stepIndex, steps.length - 1)];
+
+  const go = useCallback((index: number) => {
+    setPlaying(false);
+    setStepIndex(Math.max(0, Math.min(steps.length - 1, index)));
+  }, [steps.length]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => {
+      setStepIndex((current) => {
+        if (current >= steps.length - 1) {
+          setPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 1300);
+    return () => window.clearInterval(timer);
+  }, [playing, steps.length]);
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setPlaying(false);
+        setStepIndex((current) => Math.min(steps.length - 1, current + 1));
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setPlaying(false);
+        setStepIndex((current) => Math.max(0, current - 1));
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [steps.length]);
+
+  const streetMeta = useMemo(() => TAB_STREETS.map((street) => {
+    const firstIndex = steps.findIndex((candidate) => candidate.street === street);
+    const actionCount = steps.filter((candidate) => candidate.street === street && candidate.kind === "act").length;
+    let cards: Card[] = [];
+    const finalBoard = steps[steps.length - 1].board;
+    if (street === "flop") cards = finalBoard.slice(0, 3);
+    if (street === "turn") cards = finalBoard.slice(3, 4);
+    if (street === "river") cards = finalBoard.slice(4, 5);
+    return { street, firstIndex, actionCount, cards };
+  }), [steps]);
+
+  const timelineGroups = useMemo(() => {
+    const groups: Array<{ street: ReplayStepStreet; indices: number[] }> = [];
+    steps.forEach((candidate, index) => {
+      const last = groups[groups.length - 1];
+      if (!last || last.street !== candidate.street) {
+        groups.push({ street: candidate.street, indices: [index] });
+      } else {
+        last.indices.push(index);
+      }
+    });
+    return groups;
+  }, [steps]);
+
+  const goPrevHero = () => {
+    for (let i = heroSteps.length - 1; i >= 0; i -= 1) {
+      if (heroSteps[i] < stepIndex) return go(heroSteps[i]);
+    }
+    if (heroSteps.length) go(heroSteps[heroSteps.length - 1]);
   };
+  const goNextHero = () => {
+    for (let i = 0; i < heroSteps.length; i += 1) {
+      if (heroSteps[i] > stepIndex) return go(heroSteps[i]);
+    }
+    if (heroSteps.length) go(heroSteps[0]);
+  };
+
+  const timelineDotMeta = (candidate: ReplayStep, index: number) => {
+    if (candidate.kind === "deal" || candidate.kind === "street") {
+      return { className: "replay-step-dot--street", label: `发${STEP_STREET_LABEL[candidate.street]}` };
+    }
+    if (candidate.kind === "settle") {
+      return { className: "replay-step-dot--result", label: "结算" };
+    }
+    const decision = candidate.decision!;
+    const actionText = actionTagText(decision.actual.action, decision.actual.amountTo);
+    if (candidate.heroDecisionIndex !== undefined) {
+      return {
+        className: `replay-step-dot--hero is-${decision.comparison.classification}`,
+        label: `我的决策 ${candidate.heroDecisionIndex}：${actionText}（${CLASS_LABEL[decision.comparison.classification]}）`,
+      };
+    }
+    return {
+      className: `replay-step-dot--${actionTone(decision.actual.action)}`,
+      label: `${decision.actorName} ${actionText}`,
+    };
+  };
+
   return (
     <main className="replay-detail">
       <div className="replay-detail__mobile-back">
@@ -636,7 +999,7 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
       <section className="replay-hero">
         <div className="replay-hero__title">
           <span>AI HAND REVIEW</span>
-          <h1>{hero?.position || replay.heroPosition} · {replay.botCount + 1} 人桌复盘</h1>
+          <h1>{hero?.displayPosition || replay.heroPosition} · {replay.botCount + 1} 人桌复盘</h1>
           <p>{formatDate(replay.completedAt)} · 大盲 {replay.bigBlind} · 策略 {replay.strategyVersion}</p>
         </div>
         <Button
@@ -645,112 +1008,158 @@ function ReplayDetail({ replay, onBack }: { replay: AiReplayHand; onBack(): void
           onClick={() => navigator.clipboard?.writeText(window.location.href)}
         >复制公开链接</Button>
 
-        <div className="replay-result-card">
-          <span><small>你的手牌</small><CardRow cards={replay.heroCards} /></span>
-          <span><small>公共牌</small><CardRow cards={replay.board} compact /></span>
-          <strong className={replay.heroProfitBB >= 0 ? "is-win" : "is-loss"}>
-            <TrophyOutlined />
-            {replay.heroProfitBB > 0 ? "+" : ""}{replay.heroProfitBB.toFixed(1)}bb
-          </strong>
-        </div>
-
-        <div className="replay-kpis">
-          <span><small>已评分玩家决策</small><b>{replay.scoredDecisionCount}</b></span>
+        <div className="replay-hero__strip">
+          <span><small>你的手牌</small><CardRow cards={replay.heroCards} compact /></span>
+          <span>
+            <small>公共牌</small>
+            {replay.board.length ? <CardRow cards={replay.board} compact /> : <b><em>无</em></b>}
+          </span>
+          <span>
+            <small>本手盈亏</small>
+            <b className={`replay-hero__profit ${replay.heroProfitBB >= 0 ? "is-win" : "is-loss"}`}>
+              <TrophyOutlined />
+              {replay.heroProfitBB > 0 ? "+" : ""}{replay.heroProfitBB.toFixed(1)}bb
+            </b>
+          </span>
+          <i className="replay-hero__divider" aria-hidden="true" />
+          <span><small>已评分决策</small><b>{replay.scoredDecisionCount}</b></span>
           <span><small>整手偏差度</small><b className={`is-deviation-${replay.deviationLevel}`}>{replay.deviationScore === null ? "—" : Math.round(replay.deviationScore)} <em>{DEVIATION_LABEL[replay.deviationLevel]}</em></b></span>
-          <span><small>严重偏差</small><b>{replay.severeDecisionCount} <em>{replay.maxDecisionDeviation === null ? "" : `峰值 ${Math.round(replay.maxDecisionDeviation)}`}</em></b></span>
+          <span><small>严重偏差</small><b>{replay.severeDecisionCount} {replay.maxDecisionDeviation !== null && <em>峰值 {Math.round(replay.maxDecisionDeviation)}</em>}</b></span>
           <span><small>起始筹码</small><b>{hero ? (hero.startingStack / replay.bigBlind).toFixed(0) : "—"}bb</b></span>
         </div>
       </section>
 
-      <section className="replay-table-stage" aria-label="牌桌座位与手牌">
-        <div className="replay-table-felt" aria-hidden="true"><i /></div>
-        <div className="replay-table-center">
-          <small>FINAL BOARD</small>
-          <CardRow cards={replay.board} compact />
-          <span>盲注 {replay.smallBlind} / {replay.bigBlind}</span>
-        </div>
-        {bots.slice(0, 9).map((participant, index) => (
-          <ReplayTableSeat
-            participant={participant}
-            seat={botSeats[index]}
-            bigBlind={replay.bigBlind}
-            key={participant.id}
-          />
-        ))}
-        {hero && (
-          <ReplayTableSeat participant={hero} seat="hero" bigBlind={replay.bigBlind} />
-        )}
-      </section>
-
-      <section className="replay-timeline">
-        {streets.map(({ street, decisions }) => (
-          <section
-            className={`replay-street ${activeTarget === `replay-street-${street}` ? "is-quick-nav-active" : ""}`}
-            id={`replay-street-${street}`}
-            key={street}
-            tabIndex={-1}
-          >
-            <header>
-              <span>{STREET_LABEL[street]}</span>
-              {decisions[0].context.board.length > 0 && <CardRow cards={decisions[0].context.board} compact />}
-              <i>{decisions.length} 次决策</i>
-            </header>
-            {decisions.map((decision) => (
-              <DecisionCard
-                decision={decision}
-                holeCards={cardsByParticipant.get(decision.actorId) || []}
-                displayPosition={positionsByParticipant.get(decision.actorId) || decision.position}
-                bigBlind={replay.bigBlind}
-                targetId={`replay-decision-${decision.id}`}
-                active={activeTarget === `replay-decision-${decision.id}`}
-                key={decision.id}
-              />
+      <section className="replay-workbench">
+        <div className="replay-workbench__main">
+          <nav className="replay-street-tabs" aria-label="按街道跳转">
+            {streetMeta.map((meta) => (
+              <button
+                className={[
+                  "replay-street-tab",
+                  step.street === meta.street ? "is-active" : "",
+                  meta.firstIndex < 0 ? "is-disabled" : meta.firstIndex > stepIndex && step.street !== meta.street ? "is-future" : "",
+                ].join(" ")}
+                disabled={meta.firstIndex < 0}
+                onClick={() => go(meta.firstIndex)}
+                key={meta.street}
+              >
+                <span>{STREET_LABEL[meta.street]}{meta.firstIndex >= 0 && <i>{meta.actionCount}</i>}</span>
+                <small>
+                  {meta.street === "preflop"
+                    ? `${replay.participants.length} 人开局`
+                    : meta.cards.length
+                      ? meta.cards.map((card, index) => (
+                          <em className={card.suit === "h" || card.suit === "d" ? "is-red" : ""} key={index}>
+                            {rank(card.num)}{suitSymbol(card.suit)}
+                          </em>
+                        ))
+                      : "未发生"}
+                </small>
+              </button>
             ))}
-          </section>
-        ))}
-      </section>
+            <button
+              className={`replay-street-tab replay-street-tab--result ${step.street === "result" ? "is-active" : ""}`}
+              onClick={() => go(steps.length - 1)}
+            >
+              <span>结果 <i>🏁</i></span>
+              <small>
+                {replay.heroProfitBB > 0 ? "+" : ""}{replay.heroProfitBB.toFixed(1)}bb
+              </small>
+            </button>
+          </nav>
 
-      <nav className="replay-quick-nav" aria-label="牌局快速跳转">
-        <header>
-          <span>快速定位</span>
-          <b>{replay.decisionCount}</b>
-        </header>
-        <div className="replay-quick-nav__body">
-          {quickNavGroups.map((group) => {
-            const groupTargets = [group.targetId, ...group.decisions.map((item) => item.targetId)];
-            const groupActive = groupTargets.includes(activeTarget);
-            return (
-              <section className={groupActive ? "is-active" : ""} key={group.street}>
-                <button
-                  className="replay-quick-nav__street"
-                  type="button"
-                  aria-current={activeTarget === group.targetId ? "location" : undefined}
-                  onClick={() => navigateToTarget(group.targetId)}
-                >
-                  <span>{STREET_LABEL[group.street]}</span>
-                  <small>{group.decisions.length}</small>
-                </button>
+          <ReplayStage
+            replay={replay}
+            participants={displayParticipants}
+            coords={coords}
+            step={step}
+            showBotCards={showBotCards}
+          />
+
+          <div className="replay-controls">
+            <div className="replay-controls__group">
+              <button className="replay-ctl" onClick={() => go(0)} disabled={stepIndex === 0} aria-label="回到开局">⏮</button>
+              <button className="replay-ctl" onClick={() => go(stepIndex - 1)} disabled={stepIndex === 0}>◀ 上一步</button>
+              <button className="replay-ctl replay-ctl--primary" onClick={() => go(stepIndex + 1)} disabled={stepIndex >= steps.length - 1}>下一步 ▶</button>
+              <button className="replay-ctl" onClick={() => go(steps.length - 1)} disabled={stepIndex >= steps.length - 1} aria-label="跳到结果">⏭</button>
+            </div>
+            {heroSteps.length > 0 && (
+              <div className="replay-controls__group">
+                <button className="replay-ctl" onClick={goPrevHero}>◁ 我的决策</button>
+                <button className="replay-ctl" onClick={goNextHero}>我的决策 ▷</button>
+              </div>
+            )}
+            <button
+              className="replay-ctl"
+              onClick={() => {
+                if (playing) { setPlaying(false); return; }
+                if (stepIndex >= steps.length - 1) setStepIndex(0);
+                setPlaying(true);
+              }}
+            >
+              {playing ? "⏸ 暂停" : "▶ 自动播放"}
+            </button>
+            <button
+              className={`replay-ctl ${showBotCards ? "is-on" : ""}`}
+              onClick={() => setShowBotCards((value) => !value)}
+            >
+              {showBotCards ? "隐藏 AI 手牌" : "显示 AI 手牌"}
+            </button>
+            <span className="replay-controls__step">第 <b>{stepIndex + 1}</b> / {steps.length} 步</span>
+          </div>
+
+          <div className="replay-step-timeline" aria-label="决策时间轴">
+            {timelineGroups.map((group, groupIndex) => (
+              <div
+                className={`replay-step-group ${group.indices.includes(stepIndex) ? "is-active" : ""}`}
+                key={`${group.street}-${groupIndex}`}
+              >
+                <small>{STEP_STREET_LABEL[group.street]}</small>
                 <div>
-                  {group.decisions.map(({ decision, targetId, position }) => (
-                    <button
-                      className={`replay-quick-nav__action is-${actionTone(decision.actual.action)}`}
-                      type="button"
-                      aria-current={activeTarget === targetId ? "location" : undefined}
-                      title={`${position} ${decision.actorName}：${ACTION_LABEL[decision.actual.action] || decision.actual.action}`}
-                      onClick={() => navigateToTarget(targetId)}
-                      key={targetId}
-                    >
-                      <i />
-                      <span><b>{position}</b>{decision.actorName}</span>
-                      <small>{ACTION_LABEL[decision.actual.action] || decision.actual.action}</small>
-                    </button>
-                  ))}
+                  {group.indices.map((index) => {
+                    const meta = timelineDotMeta(steps[index], index);
+                    return (
+                      <button
+                        className={`replay-step-dot ${meta.className} ${index === stepIndex ? "is-current" : ""}`}
+                        title={meta.label}
+                        aria-label={meta.label}
+                        onClick={() => go(index)}
+                        key={index}
+                      />
+                    );
+                  })}
                 </div>
-              </section>
-            );
-          })}
+              </div>
+            ))}
+          </div>
+          <div className="replay-step-legend">
+            <span><i className="is-recommended" />主推荐</span>
+            <span><i className="is-mixed-acceptable" />混合策略</span>
+            <span><i className="is-low-frequency" />低频选择</span>
+            <span><i className="is-deviation" />策略偏差</span>
+            <span className="replay-step-legend__hint">大圆点 = 我的决策，小圆点 = AI 行动</span>
+          </div>
         </div>
-      </nav>
+
+        <aside className="replay-workbench__rail">
+          {step.kind === "deal" && <DealPanel replay={replay} participants={displayParticipants} />}
+          {step.kind === "street" && <StreetPanel replay={replay} step={step} />}
+          {step.kind === "act" && step.heroDecisionIndex !== undefined && (
+            <HeroPanel
+              replay={replay}
+              step={step}
+              heroDecisionTotal={heroSteps.length}
+              participant={participantsById.get(step.decision!.actorId)}
+            />
+          )}
+          {step.kind === "act" && step.heroDecisionIndex === undefined && (
+            <BotPanel replay={replay} step={step} participant={participantsById.get(step.decision!.actorId)} />
+          )}
+          {step.kind === "settle" && (
+            <SettlePanel replay={replay} step={step} heroSteps={heroSteps} steps={steps} onJump={go} />
+          )}
+        </aside>
+      </section>
     </main>
   );
 }
@@ -821,7 +1230,7 @@ export function AiReplayPage() {
       </aside>
       <section className="replay-main">
         {detailLoading ? <div className="replay-loading"><Spin size="large" /></div> : detail ? (
-          <ReplayDetail replay={detail} onBack={() => navigate(null)} />
+          <ReplayDetail replay={detail} onBack={() => navigate(null)} key={detail.publicId} />
         ) : (
           <div className="replay-empty">
             {error ? <><strong>暂时无法打开复盘</strong><p>{error}</p></> : <><RobotOutlined /><strong>选择一手牌开始复盘</strong><p>桌面端可在左侧切换牌局，移动端会进入独立详情页。</p></>}
