@@ -257,16 +257,6 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  grid-template-rows:
-    minmax(55px, 0.75fr)
-    minmax(52px, 0.82fr)
-    minmax(84px, 1.35fr)
-    minmax(52px, 0.82fr);
-  align-items: center;
-  justify-items: center;
-  padding: 5px clamp(4px, 1vw, 14px);
   border: 1px solid rgba(222, 239, 232, 0.07);
   border-radius: 28px;
   overflow: hidden;
@@ -275,13 +265,10 @@
     rgba(3, 11, 8, 0.56);
 }
 
+/* 呢面/座位/公共牌均由 tableLayout 引擎实测计算并以内联样式绝对定位 */
 .live-table-felt {
-  grid-column: 1 / -1;
-  grid-row: 1 / -1;
-  width: min(90%, 900px);
-  height: 87%;
-  position: relative;
-  align-self: center;
+  position: absolute;
+  z-index: 1;
   display: grid;
   place-items: center;
   border: clamp(7px, 0.8vw, 11px) solid #172c25;
@@ -315,59 +302,22 @@
   white-space: nowrap;
 }
 
+/* 原子座位单元:132×108 固定碰撞盒,内容全部收在盒内,整体按引擎给的 scale 缩放 */
 .live-seat {
-  width: min(130px, 100%);
-  position: relative;
-  /* Keep children in the table's shared stack so every action label can outrank sibling cards. */
-  z-index: auto;
-  display: grid;
-  justify-items: center;
+  position: absolute;
+  z-index: 4;
   color: var(--live-text);
 }
 
-.live-seat--top-left {
-  grid-column: 2 / 4;
-  grid-row: 1;
+.live-seat.is-active {
+  z-index: 6;
 }
 
-.live-seat--top-center {
-  grid-column: 4 / 6;
-  grid-row: 1;
-}
-
-.live-seat--top-right {
-  grid-column: 6 / 8;
-  grid-row: 1;
-}
-
-.live-seat--upper-left {
-  grid-column: 1 / 3;
-  grid-row: 2;
-}
-
-.live-seat--upper-right {
-  grid-column: 7 / 9;
-  grid-row: 2;
-}
-
-.live-seat--middle-left {
-  grid-column: 1 / 3;
-  grid-row: 3;
-}
-
-.live-seat--middle-right {
-  grid-column: 7 / 9;
-  grid-row: 3;
-}
-
-.live-seat--lower-left {
-  grid-column: 1 / 3;
-  grid-row: 4;
-}
-
-.live-seat--lower-right {
-  grid-column: 7 / 9;
-  grid-row: 4;
+.live-seat__unit {
+  position: relative;
+  width: 132px;
+  height: 108px;
+  transform-origin: 0 0;
 }
 
 .live-seat.is-folded .live-seat__cards,
@@ -444,7 +394,7 @@
   }
 }
 
-.live-winner-tip,
+/* 自家(Owner)的赢家气泡保留;对手座位的赢家提示已改为座位内的 WIN 条 */
 .live-owner-winner-tip {
   min-height: 30px;
   position: absolute;
@@ -464,7 +414,6 @@
   white-space: nowrap;
 }
 
-.live-winner-tip::after,
 .live-owner-winner-tip::after {
   width: 8px;
   height: 8px;
@@ -478,7 +427,6 @@
   transform: rotate(45deg);
 }
 
-.live-winner-tip small,
 .live-owner-winner-tip small {
   color: var(--live-green);
   font-size: 8px;
@@ -486,13 +434,11 @@
   letter-spacing: 0.1em;
 }
 
-.live-winner-tip span,
 .live-owner-winner-tip span {
   font-size: 11px;
   font-weight: 750;
 }
 
-.live-winner-tip strong,
 .live-owner-winner-tip strong {
   color: var(--live-gold);
   font-size: 13px;
@@ -500,47 +446,18 @@
   font-weight: 950;
 }
 
-.live-seat--top-left .live-winner-tip,
-.live-seat--top-center .live-winner-tip,
-.live-seat--top-right .live-winner-tip {
-  top: calc(100% + 7px);
-  bottom: auto;
-}
-
-.live-seat--upper-left .live-winner-tip,
-.live-seat--middle-left .live-winner-tip,
-.live-seat--lower-left .live-winner-tip {
-  left: calc(50% + 8px);
-}
-
-.live-seat--upper-right .live-winner-tip,
-.live-seat--middle-right .live-winner-tip,
-.live-seat--lower-right .live-winner-tip {
-  left: calc(50% - 8px);
-}
-
-.live-seat--top-left .live-winner-tip::after,
-.live-seat--top-center .live-winner-tip::after,
-.live-seat--top-right .live-winner-tip::after {
-  top: -5px;
-  bottom: auto;
-  border: 0;
-  border-top: 1px solid rgba(231, 188, 99, 0.38);
-  border-left: 1px solid rgba(231, 188, 99, 0.38);
-}
-
 .live-seat__cards {
-  height: 43px;
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 50%;
   z-index: 1;
   display: flex;
-  justify-content: center;
-  margin-bottom: -6px;
+  transform: translateX(-50%);
 }
 
 .live-card-back {
-  width: 38px;
-  height: 53px;
+  width: 34px;
+  height: 48px;
   display: grid;
   place-items: center;
   border: 2px solid #bbcbc5;
@@ -554,24 +471,20 @@
     ),
     #174b3b;
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .live-seat__cards > :first-child {
-  transform: rotate(-7deg) translateX(4px);
+  transform: rotate(-7deg) translate(4px, 1px);
 }
 
 .live-seat__cards > :last-child {
-  transform: rotate(7deg) translateX(-4px);
+  transform: rotate(7deg) translate(-4px, 1px);
 }
 
-.live-seat__cards.has-visible-cards {
-  height: 47px;
-}
-
-.live-seat__cards .poker-card {
-  width: 38px;
-  height: 53px;
+.live-room-shell .live-seat__cards .poker-card {
+  width: 34px;
+  height: 48px;
   min-height: 0;
   margin: 0;
 }
@@ -585,14 +498,16 @@
 }
 
 .live-seat__profile {
-  width: 100%;
-  min-width: 0;
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  top: 28px;
+  left: 2px;
+  right: 2px;
+  z-index: 2;
+  height: 46px;
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 9px 6px 6px;
+  padding: 5px 9px 5px 5px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   background: rgba(5, 16, 13, 0.94);
@@ -600,9 +515,9 @@
 }
 
 .live-room-shell .live-seat__avatar.ant-avatar {
-  width: 35px;
-  min-width: 35px;
-  height: 35px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 2px solid rgba(255, 255, 255, 0.26);
@@ -610,7 +525,7 @@
   background: var(--live-avatar-background);
   font-size: 10px;
   font-weight: 900;
-  line-height: 31px;
+  line-height: 30px;
 }
 
 .live-room-shell .live-seat__avatar.ant-avatar.is-bot {
@@ -765,9 +680,9 @@
 }
 
 .live-seat__avatar-wrap {
-  width: 35px;
-  min-width: 35px;
-  height: 35px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
   position: relative;
   display: grid;
   place-items: center;
@@ -798,63 +713,27 @@
 }
 
 .live-seat__copy > strong {
+  overflow: hidden;
   color: #fff;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   letter-spacing: -0.015em;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.live-seat.has-large-stack .live-seat__copy > strong {
-  font-size: 9px;
-  letter-spacing: -0.045em;
-}
-
+/* 位置徽章统一贴在胶囊右上角,收在座位碰撞盒内,不再向邻座出血 */
 .live-seat__position {
   width: max-content;
   height: max-content;
   position: absolute;
-  z-index: 35;
+  z-index: 4;
+  top: 20px;
+  right: 4px;
   display: grid;
   place-items: center;
   pointer-events: none;
-}
-
-.live-seat--top-left .live-seat__position,
-.live-seat--top-center .live-seat__position,
-.live-seat--top-right .live-seat__position {
-  top: calc(100% + 3px);
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.live-seat--upper-left .live-seat__position,
-.live-seat--lower-left .live-seat__position {
-  top: 56%;
-  left: calc(100% + 5px);
-  transform: translateY(-50%);
-}
-
-.live-seat--upper-right .live-seat__position,
-.live-seat--lower-right .live-seat__position {
-  top: 56%;
-  right: calc(100% + 5px);
-  transform: translateY(-50%);
-}
-
-.live-seat--middle-left .live-seat__position,
-.live-seat--middle-right .live-seat__position {
-  top: 20%;
-  transform: translateY(-50%);
-}
-
-.live-seat--middle-left .live-seat__position {
-  left: calc(100% - 3px);
-}
-
-.live-seat--middle-right .live-seat__position {
-  right: calc(100% - 3px);
 }
 
 .live-position-badge {
@@ -941,19 +820,21 @@
 }
 
 .live-seat__meta {
-  min-height: 27px;
-  max-width: 94%;
-  position: relative;
-  z-index: 30;
+  position: absolute;
+  top: 79px;
+  left: 50%;
+  z-index: 3;
+  max-width: 128px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 0 0 8px 8px;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 0 0 9px 9px;
   overflow: hidden;
   background: rgba(4, 15, 12, 0.96);
   box-shadow: 0 5px 14px rgba(0, 0, 0, 0.26);
-  font-size: 12px;
+  transform: translateX(-50%);
+  font-size: 11px;
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -972,10 +853,41 @@
 
 .live-seat__meta b {
   color: var(--live-gold);
-  font-size: 15px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   font-weight: 900;
   letter-spacing: 0.015em;
+}
+
+/* 赢家:胶囊金色高亮 + 座位内 WIN 条(牌型 + 盈利) */
+.live-seat.is-winner .live-seat__profile {
+  border-color: rgba(231, 188, 99, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(231, 188, 99, 0.24),
+    0 0 30px rgba(231, 188, 99, 0.4);
+}
+
+.live-seat__meta.is-win {
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid rgba(231, 188, 99, 0.5);
+  background: rgba(48, 36, 17, 0.97);
+}
+
+.live-seat__meta.is-win small {
+  color: var(--live-green);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.live-seat__meta.is-win span {
+  color: #f4ead2;
+  font-size: 10px;
+}
+
+.live-seat__meta.is-win b {
+  font-size: 12px;
 }
 
 .live-seat__countdown {
@@ -1031,19 +943,18 @@
 }
 
 .live-board {
-  grid-column: 3 / 7;
-  grid-row: 3;
+  position: absolute;
   z-index: 5;
   display: grid;
   justify-items: center;
-  gap: clamp(8px, 1.2vh, 13px);
+  gap: 8px;
 }
 
 .live-pot {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 14px;
+  padding: 6px 14px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   background: rgba(5, 22, 17, 0.84);
@@ -1076,7 +987,12 @@
 .live-community-cards {
   display: flex;
   justify-content: center;
-  gap: clamp(3px, 0.55vw, 7px);
+  gap: 6px;
+}
+
+/* 竖屏模式公共牌 3 + 2 两行排布(引擎通过 data-wrap 控制) */
+.live-board[data-wrap] .live-community-cards {
+  flex-wrap: wrap;
 }
 
 .live-room-shell .live-community-cards .poker-card,
@@ -1087,7 +1003,8 @@
 }
 
 .live-room-shell .live-community-cards .poker-card {
-  width: clamp(52px, 5.6vw, 74px);
+  width: var(--board-card-w, clamp(52px, 5.6vw, 74px));
+  flex: 0 0 auto;
 }
 
 .live-room-shell .live-community-cards .poker-card__corner,
@@ -3127,163 +3044,22 @@
   }
 
   .live-table-stage {
-    /* Safari's expanded browser chrome can leave less than 400px for the table. */
-    grid-template-rows:
-      minmax(0, 0.8fr)
-      repeat(3, minmax(0, 1fr));
-    padding: 3px 2px;
     border-radius: 22px;
   }
 
   .live-table-felt {
-    width: 94%;
-    height: 88%;
     border-width: 7px;
   }
 
-  .live-seat {
-    width: min(94px, 24vw);
-  }
-
-  .live-seat--upper-left,
-  .live-seat--upper-right,
-  .live-seat--middle-left,
-  .live-seat--middle-right,
-  .live-seat--lower-left,
-  .live-seat--lower-right {
-    transform: none;
-  }
-
-  .live-seat__cards {
-    height: 37px;
-    margin-bottom: -4px;
-  }
-
-  .live-card-back {
-    width: 32px;
-    height: 45px;
-    border-radius: 5px;
-    font-size: 12px;
-  }
-
-  .live-seat__cards.has-visible-cards {
-    height: 40px;
-  }
-
-  .live-seat__cards .poker-card {
-    width: 32px;
-    height: 45px;
-  }
-
-  .live-seat__profile {
-    gap: 4px;
-    padding: 3px 5px 3px 3px;
-  }
-
-  .live-room-shell .live-seat__avatar.ant-avatar {
-    width: 27px;
-    min-width: 27px;
-    height: 27px;
-    font-size: 8px;
-    line-height: 23px;
-  }
-
-  .live-seat__avatar-wrap {
-    width: 27px;
-    min-width: 27px;
-    height: 27px;
-  }
-
-  .live-countdown-ring > span {
-    font-size: 10px;
-  }
-
-  .live-seat__name > span:first-child,
-  .live-seat__copy > strong {
-    font-size: 8.5px;
-  }
-
-  .live-seat.has-large-stack .live-seat__copy > strong {
-    font-size: 8px;
-  }
-
-  .live-seat__position {
-    width: max-content;
-    min-width: 0;
-    height: max-content;
-  }
-
-  .live-seat--middle-left .live-seat__position,
-  .live-seat--middle-right .live-seat__position {
-    top: 20%;
-  }
-
-  .live-seat--middle-left .live-seat__position {
-    left: calc(100% - 16px);
-  }
-
-  .live-seat--middle-right .live-seat__position {
-    right: calc(100% - 16px);
-  }
-
-  .live-position-badge {
-    min-width: 22px;
-    height: 19px;
-    padding: 0 3px;
-    font-size: 8px;
-  }
-
-  .live-position-badge--dealer {
-    width: 23px;
-    min-width: 23px;
-    height: 23px;
-    padding: 0;
-    font-size: 9px;
-  }
-
-  .live-position-badge--sb,
-  .live-position-badge--bb {
-    min-width: 19px;
-    height: 16px;
-    padding: 0 2px;
-    font-size: 6px;
-  }
+  /* 座位单元尺寸由引擎 scale 统一缩放,不再做逐项字号/尺寸覆盖 */
 
   .live-owner-position {
     top: -13px;
   }
 
-  .live-seat__status {
-    width: 14px;
-    font-size: 10px;
-  }
-
-  .live-seat__status img {
-    width: 16px;
-    height: 16px;
-  }
-
-  .live-seat__meta {
-    min-height: 21px;
-    max-width: 96%;
-    padding: 2px 6px;
-    font-size: 9px;
-  }
-
-  .live-seat__meta b {
-    font-size: 12px;
-  }
-
-  .live-board {
-    grid-column: 2 / 8;
-    grid-row: 3;
-    gap: 6px;
-    transform: translateY(-8px);
-  }
-
   .live-pot {
     gap: 5px;
-    padding: 6px 11px;
+    padding: 5px 11px;
   }
 
   .live-pot strong {
@@ -3292,17 +3068,6 @@
 
   .live-room-shell .poker-card {
     width: clamp(36px, 10.5vw, 44px);
-  }
-
-  .live-community-cards {
-    width: clamp(138px, calc(39vw + 6px), 162px);
-    flex-wrap: wrap;
-    gap: 3px;
-  }
-
-  .live-room-shell .live-community-cards > .poker-card {
-    width: clamp(44px, 13vw, 52px);
-    flex: 0 0 auto;
   }
 
   .live-owner-dock {
@@ -3366,19 +3131,16 @@
     letter-spacing: 0.18em;
   }
 
-  .live-winner-tip,
   .live-owner-winner-tip {
     min-height: 27px;
     gap: 4px;
     padding: 4px 7px;
   }
 
-  .live-winner-tip span,
   .live-owner-winner-tip span {
     font-size: 10px;
   }
 
-  .live-winner-tip strong,
   .live-owner-winner-tip strong {
     font-size: 12px;
   }
@@ -3536,39 +3298,6 @@
     height: calc(100dvh - 60px);
     padding-top: 6px;
     padding-bottom: 6px;
-  }
-
-  .live-table-stage {
-    grid-template-rows:
-      minmax(48px, 0.72fr)
-      minmax(46px, 0.8fr)
-      minmax(76px, 1.28fr)
-      minmax(46px, 0.8fr);
-  }
-
-  .live-seat {
-    width: min(118px, 100%);
-  }
-
-  .live-seat__cards {
-    height: 32px;
-  }
-
-  .live-card-back {
-    width: 29px;
-    height: 41px;
-  }
-
-  .live-seat__profile {
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-
-  .live-room-shell .live-seat__avatar.ant-avatar {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    line-height: 26px;
   }
 
   .live-owner-cards .poker-card {

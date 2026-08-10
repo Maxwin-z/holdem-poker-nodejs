@@ -51,6 +51,7 @@ import { BuyInSettingButton } from "./BuyInSetting";
 import { getVisibleBoardCards } from "./runItOut";
 import { BotManager } from "./BotManager";
 import { PlayerAnalytics } from "./PlayerAnalytics";
+import { useTableLayout } from "./tableLayout";
 
 const seatNames = [
   // Keep the rotated player list moving continuously around the table.
@@ -99,6 +100,7 @@ export function Room({
   );
   const roomid = useAppSelector(selectRoomID);
   const users = useAppSelector(selectUsers) || [];
+  const { ref: stageRef, layout } = useTableLayout<HTMLDivElement>();
   const room = useAppSelector(selectRoom);
   const self = useAppSelector(selectSelf);
   const game = useAppSelector(selectGame);
@@ -412,37 +414,64 @@ export function Room({
         </aside>
 
         <section className="live-table-column">
-          <div className="live-table-stage">
-            <div className="live-table-felt" aria-hidden="true">
-              <div />
-              <span className="live-table-room-code">
-                ROOM&nbsp;&nbsp;{roomid || "—"}
-              </span>
-            </div>
-
-            {users.slice(0, 9).map((id, index) => (
-              <User
-                id={`${id}`}
-                seat={seatNames[index]}
-                key={id}
-              />
-            ))}
-
-            <div className="live-board">
-              <div className="live-pot">
-                <span>总底池</span>
-                <i>●</i>
-                <strong>{(game?.pots || 0).toLocaleString("en-US")}</strong>
+          <div className="live-table-stage" ref={stageRef}>
+            {layout ? (
+              <div
+                className="live-table-felt"
+                aria-hidden="true"
+                style={{
+                  left: layout.felt.x,
+                  top: layout.felt.y,
+                  width: layout.felt.w,
+                  height: layout.felt.h,
+                }}
+              >
+                <div />
+                <span className="live-table-room-code">
+                  ROOM&nbsp;&nbsp;{roomid || "—"}
+                </span>
               </div>
-              <div className="live-community-cards">
-                {boardCards.map((card, index) => (
-                  <Poker
-                    card={card}
-                    key={`${card ? `${card.num}${card.suit}` : index}`}
+            ) : null}
+
+            {layout
+              ? users.slice(0, 9).map((id, index) => (
+                  <User
+                    id={`${id}`}
+                    seat={seatNames[index]}
+                    box={layout.seats[index]}
+                    key={id}
                   />
-                ))}
+                ))
+              : null}
+
+            {layout ? (
+              <div
+                className="live-board"
+                data-wrap={layout.board.wrap ? "true" : undefined}
+                style={
+                  {
+                    left: layout.board.x,
+                    top: layout.board.y,
+                    width: layout.board.w,
+                    "--board-card-w": `${layout.board.cardW}px`,
+                  } as React.CSSProperties
+                }
+              >
+                <div className="live-pot">
+                  <span>总底池</span>
+                  <i>●</i>
+                  <strong>{(game?.pots || 0).toLocaleString("en-US")}</strong>
+                </div>
+                <div className="live-community-cards">
+                  {boardCards.map((card, index) => (
+                    <Poker
+                      card={card}
+                      key={`${card ? `${card.num}${card.suit}` : index}`}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {selectSettleStatus ? (
               <div className="live-settle-picker">
