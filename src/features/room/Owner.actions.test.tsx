@@ -261,3 +261,17 @@ test("I toggles the waiting check-fold preaction", () => {
   fireEvent.keyDown(document, { key: "I" });
   expect(switchButton.getAttribute("aria-pressed")).toBe("true");
 });
+
+test("F also toggles the waiting check-fold preaction without folding", () => {
+  setActingState();
+  mockState.room.room.users[0].isActing = false;
+  const { getByText } = render(<Owner />);
+  const switchButton = getByText("switch");
+
+  fireEvent.keyDown(document, { key: "F" });
+  expect(switchButton.getAttribute("aria-pressed")).toBe("true");
+  expect(ws_userFold).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(document, { key: "F" });
+  expect(switchButton.getAttribute("aria-pressed")).toBe("false");
+});

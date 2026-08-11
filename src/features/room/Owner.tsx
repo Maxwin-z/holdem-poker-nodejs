@@ -301,6 +301,11 @@ export function Owner() {
           if (isActing) {
             event.preventDefault();
             handleFold();
+          } else if (isWaiting) {
+            // Waiting and acting never overlap, so F doubles as the pre-action
+            // toggle — same finger position as the fold it will end up doing.
+            event.preventDefault();
+            setAutoCheck((enabled) => !enabled);
           }
           break;
         case "r":
@@ -668,7 +673,7 @@ export function Owner() {
                 <Switch
                   checked={autoCheck}
                   onChange={(checked) => setAutoCheck(checked)}
-                  aria-keyshortcuts="I"
+                  aria-keyshortcuts="I F"
                 />
                 <span
                   role="button"
@@ -681,7 +686,7 @@ export function Owner() {
                   }}
                 >
                   <strong>自动过牌 / 弃牌</strong>
-                  <small>I · CHECK / FOLD</small>
+                  <small>I / F · CHECK / FOLD</small>
                 </span>
               </div>
             </div>
