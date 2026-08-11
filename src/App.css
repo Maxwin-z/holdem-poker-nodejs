@@ -118,41 +118,72 @@ body {
   background: white;
 }
 
+/* 牌面:左上角大数字,右下角同样大的花色。 */
 .poker-card__corner {
   position: absolute;
   z-index: 1;
-  top: 7%;
-  left: 10%;
+  top: 4%;
+  left: 9%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   font-family: Georgia, "Times New Roman", serif;
   font-style: normal;
   font-weight: 900;
   line-height: 0.84;
 }
 
+/* Georgia 的数字是旧体数字(7/9 掉到基线以下,6/8 又冒头),牌面上看着高低不齐,
+   所以点数改用有等高数字的无衬线体。 */
 .poker-card__corner strong {
-  font-size: 0.78em;
-  font-weight: 900;
-  letter-spacing: -0.08em;
+  font-family: Arial, "Helvetica Neue", Helvetica, Roboto, sans-serif;
+  font-size: 1.1em;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
-.poker-card__corner i {
-  margin-top: 0.2em;
-  font-size: 0.55em;
-  font-style: normal;
+/* 「10」是唯一的两位数:与其他点数等高、笔画同粗,只把字距收紧一点。
+   不做任何横向压扁 —— 那会让笔画变细,看着不像同一套字。 */
+.poker-card__corner strong.is-wide {
+  letter-spacing: -0.07em;
 }
 
 .poker-card__hero-suit {
   position: absolute;
-  top: 57%;
-  left: 55%;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.65em;
-  font-weight: 900;
-  line-height: 1;
-  transform: translate(-50%, -50%);
+  right: 7%;
+  bottom: 2%;
+  font-size: 1.15em;
+  line-height: 0;
+}
+
+/* 花色是 SVG,尺寸跟着所在容器的 font-size 走,和原来用字体时的调节方式一致。
+   四个花色的画布尺寸相同(32.34 × 37.74),按高度对齐即视觉统一。 */
+.suit-icon {
+  width: 0.857em;
+  height: 1em;
+  display: block;
+}
+
+/* 亮牌:整张牌可点,中间一个眼睛图标 */
+.poker-card__reveal {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  color: #0d3a2c;
+  background: rgba(255, 255, 255, 0.001);
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.poker-card__reveal:hover,
+.poker-card__reveal:focus-visible {
+  background: rgba(47, 211, 155, 0.16);
 }
 
 .roominfo {

@@ -64,6 +64,7 @@ export function User({
         !inGame ? "is-folded" : "",
         isActing ? "is-active" : "",
         isWinner ? "is-winner" : "",
+        showHands ? "is-revealed" : "",
         user.isBot ? "is-bot" : "",
         user.pendingBotRemoval ? "is-pending-removal" : "",
       ]

@@ -307,7 +307,7 @@
 
 .live-table-room-code {
   position: absolute;
-  top: 26%;
+  top: 15%;
   left: 50%;
   color: rgba(222, 239, 232, 0.16);
   font-size: clamp(9px, 0.8vw, 12px);
@@ -331,7 +331,7 @@
 .live-seat__unit {
   position: relative;
   width: 132px;
-  height: 108px;
+  height: 122px;
   transform-origin: 0 0;
 }
 
@@ -471,12 +471,12 @@
 }
 
 .live-card-back {
-  width: 34px;
-  height: 48px;
+  width: 40px;
+  height: 56px;
   display: grid;
   place-items: center;
   border: 2px solid #bbcbc5;
-  border-radius: 6px;
+  border-radius: 7px;
   color: var(--live-gold);
   background:
     repeating-linear-gradient(
@@ -486,35 +486,74 @@
     ),
     #174b3b;
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
-  font-size: 13px;
+  font-size: 15px;
+}
+
+/* 两张牌在底部小幅交叠成扇形。左边那张压在上面,它右下角的花色才不会被盖住;
+   顶部因旋转而分开,右边那张左上角的点数也露得出来。 */
+.live-seat__cards {
+  gap: 0;
 }
 
 .live-seat__cards > :first-child {
-  transform: rotate(-7deg) translate(4px, 1px);
+  z-index: 2;
+  transform: rotate(-6deg) translate(4px, 1px);
 }
 
 .live-seat__cards > :last-child {
-  transform: rotate(7deg) translate(-4px, 1px);
+  z-index: 1;
+  transform: rotate(6deg) translate(-4px, 1px);
 }
 
 .live-room-shell .live-seat__cards .poker-card {
-  width: 34px;
-  height: 48px;
+  width: 40px;
+  height: 56px;
   min-height: 0;
   margin: 0;
 }
 
 .live-seat__cards .poker-card .content {
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .live-seat__cards .poker-card button {
   display: none;
 }
 
+/* 亮牌:整手牌浮到信息胶囊之上,胶囊底色让位,花色不再被遮挡 */
+.live-seat.is-revealed .live-seat__cards {
+  z-index: 3;
+}
+
+/* 手牌已经浮在胶囊之上,底色只需退到半透明:既不再挡牌,名字也仍读得清 */
+.live-seat.is-revealed .live-seat__profile {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(4, 14, 11, 0.62);
+  box-shadow: none;
+}
+
+/* 头像顶到牌面之上,亮牌时仍能认出是谁(弃牌座位整体已置灰,不参与) */
+.live-seat.is-revealed:not(.is-folded) .live-seat__profile {
+  z-index: auto;
+}
+
+.live-seat.is-revealed:not(.is-folded) .live-seat__avatar-wrap {
+  z-index: 4;
+}
+
+.live-seat.is-revealed .live-seat__copy {
+  text-shadow: 0 1px 3px rgba(2, 10, 8, 0.9);
+}
+
+/* 赢家的金框是此刻最该保留的标记 */
+.live-seat.is-winner.is-revealed .live-seat__profile {
+  border-color: rgba(231, 188, 99, 0.95);
+  box-shadow: 0 0 26px rgba(231, 188, 99, 0.28);
+}
+
 .live-seat__profile {
   position: absolute;
-  top: 28px;
+  top: 52px;
   left: 2px;
   right: 2px;
   z-index: 2;
@@ -743,8 +782,8 @@
   width: max-content;
   height: max-content;
   position: absolute;
-  z-index: 4;
-  top: 20px;
+  z-index: 5;
+  top: 44px;
   right: 4px;
   display: grid;
   place-items: center;
@@ -836,7 +875,7 @@
 
 .live-seat__meta {
   position: absolute;
-  top: 79px;
+  top: 100px;
   left: 50%;
   z-index: 3;
   max-width: 128px;
@@ -1097,34 +1136,19 @@
   flex-wrap: wrap;
 }
 
-.live-room-shell .live-community-cards .poker-card,
-.live-room-shell .live-owner-cards .poker-card {
-  --poker-rank-size: 33cqi;
-  --poker-corner-suit-size: 22cqi;
-  --poker-hero-suit-size: 62cqi;
-}
-
 .live-room-shell .live-community-cards .poker-card {
   width: var(--board-card-w, clamp(52px, 5.6vw, 74px));
   flex: 0 0 auto;
 }
 
-.live-room-shell .live-community-cards .poker-card__corner,
-.live-room-shell .live-owner-cards .poker-card__corner {
-  top: 6%;
-  left: 8%;
-}
-
-.live-room-shell .live-community-cards .poker-card__hero-suit,
-.live-room-shell .live-owner-cards .poker-card__hero-suit {
-  top: 61%;
-  left: 56%;
-}
-
+/* 所有牌(座位手牌 / 自家手牌 / 公共牌)共用同一套牌面比例,
+   大小只由牌本身的宽度决定(cqi = 牌宽的百分比)。 */
 .live-room-shell .poker-card {
-  --poker-rank-size: 27cqi;
-  --poker-corner-suit-size: 18cqi;
-  --poker-hero-suit-size: 50cqi;
+  /* 花色字形的墨迹比字母小一圈,字号要更大才压得住 */
+  /* 「10」是两位数,这个值要保证它等高时也不出边 */
+  --poker-rank-size: 64cqi;
+  /* SVG 会铺满自己的方框(字体字形有左右留白),所以数值比用字体时小 */
+  --poker-hero-suit-size: 56cqi;
   width: clamp(44px, 4.8vw, 64px);
   height: auto;
   min-height: 0;
@@ -1170,45 +1194,37 @@
 }
 
 .live-room-shell .poker-card__corner {
-  top: 8%;
-  left: 10%;
+  top: 2%;
+  left: 8%;
 }
 
 .live-room-shell .poker-card__corner strong {
   font-size: var(--poker-rank-size);
 }
 
-.live-room-shell .poker-card__corner i {
-  margin-top: 1cqi;
-  font-size: var(--poker-corner-suit-size);
+.live-room-shell .poker-card__corner strong.is-wide {
+  font-size: var(--poker-rank-size);
 }
 
 .live-room-shell .poker-card__hero-suit {
-  top: 59%;
-  left: 56%;
+  top: auto;
+  right: 6%;
+  bottom: 4%;
+  left: auto;
   font-size: var(--poker-hero-suit-size);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.45));
+  transform: none;
 }
 
-.live-room-shell .poker-card button {
-  right: 3px;
-  bottom: 3px;
-  left: 3px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid rgba(47, 211, 155, 0.42);
-  border-radius: 5px;
-  color: #dff9ef;
-  background: rgba(8, 42, 31, 0.92);
-  box-shadow: none;
-  font-size: 9px;
+/* 亮牌:整张牌就是按钮,中间一个眼睛图标 */
+.live-room-shell .poker-card__reveal {
+  color: rgba(13, 58, 44, 0.62);
+  font-size: 34cqi;
 }
 
-.live-room-shell .poker-card button:hover,
-.live-room-shell .poker-card button:focus {
-  color: #062017;
-  border-color: var(--live-green);
-  background: var(--live-green);
+.live-room-shell .poker-card__reveal:hover,
+.live-room-shell .poker-card__reveal:focus-visible {
+  color: #0b3b2c;
+  background: rgba(47, 211, 155, 0.2);
 }
 
 .live-settle-picker {

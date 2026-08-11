@@ -41,10 +41,18 @@ describe("layoutTable", () => {
     expect(layout.seats.filter((s) => s.staggered).length).toBeGreaterThan(0);
   });
 
-  it("高度充足的宽屏保持纯椭圆(27 寸)", () => {
+  it("高度充足的宽屏保持纯椭圆并放大到上限(27 寸)", () => {
     const layout = layoutTable(1892, 680, false)!;
     expect(layout.seats.filter((s) => s.staggered)).toHaveLength(0);
-    expect(layout.scale).toBe(1);
+    expect(layout.scale).toBe(1.2);
+  });
+
+  it("公共牌始终比手牌大一档", () => {
+    for (const c of CASES) {
+      const layout = layoutTable(c.w, c.h, c.phone)!;
+      // 手牌 40px @ scale,公共牌 board.cardW
+      expect(layout.board.cardW).toBeGreaterThan(40 * layout.scale);
+    }
   });
 
   it("座位盒不越出舞台边界", () => {

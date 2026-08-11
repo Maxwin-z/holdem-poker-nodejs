@@ -113,6 +113,13 @@ function buildPreview(demoState: DemoState) {
     }),
     makeUser("jax", "Jax", 36780, {
       actionName: "等待",
+      hands: isShowdown
+        ? [
+            { num: 3, suit: "s" },
+            { num: 7, suit: "h" },
+          ]
+        : [null, null],
+      handsType: isShowdown ? "高牌 K" : "",
     }),
     makeUser("leo", "Leo", 1940, {
       position: "SB",
@@ -137,25 +144,65 @@ function buildPreview(demoState: DemoState) {
       position: "BB",
       isFoled: true,
       actionName: "已弃牌",
+      hands: isShowdown
+        ? [
+            { num: 13, suit: "c" },
+            { num: 3, suit: "h" },
+          ]
+        : [null, null],
     }),
     makeUser("kai", "Kai", 840, {
       isAllIn: true,
       actionName: "All-in",
       bet: 840,
+      hands: isShowdown
+        ? [
+            { num: 6, suit: "s" },
+            { num: 7, suit: "c" },
+          ]
+        : [null, null],
+      handsType: isShowdown ? "一对 7" : "",
     }),
     makeUser("nana", "Nana", 72210, {
       actionName: "等待",
+      hands: isShowdown
+        ? [
+            { num: 11, suit: "h" },
+            { num: 8, suit: "d" },
+          ]
+        : [null, null],
+      handsType: isShowdown ? "高牌 A" : "",
     }),
     makeUser("owen", "Owen", 50820, {
       actionName: "已跟注",
       bet: 80,
+      hands: isShowdown
+        ? [
+            { num: 9, suit: "s" },
+            { num: 6, suit: "d" },
+          ]
+        : [null, null],
+      handsType: isShowdown ? "高牌 A" : "",
     }),
     makeUser("sora", "Sora", 186400, {
       actionName: "等待",
+      hands: isShowdown
+        ? [
+            { num: 4, suit: "h" },
+            { num: 11, suit: "c" },
+          ]
+        : [null, null],
+      handsType: isShowdown ? "一对 10" : "",
     }),
     makeUser("ivy", "Ivy", 9340, {
       isFoled: true,
       actionName: "已弃牌",
+      hands: isShowdown
+        ? [
+            { num: 12, suit: "d" },
+            { num: 5, suit: "s" },
+          ]
+        : [null, null],
     }),
     makeUser("maxwin", "Maxwin", 124860, {
       isRoomOwner: true,
