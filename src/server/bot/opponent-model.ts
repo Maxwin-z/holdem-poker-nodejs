@@ -37,6 +37,23 @@ const ratio = (part: number, total: number) =>
 export class OpponentModel {
   private stats: Record<string, PlayerStats> = {};
 
+  /** Plain data for the room snapshot; read tendencies survive a restart. */
+  snapshot(): Record<string, PlayerStats> {
+    return JSON.parse(JSON.stringify(this.stats));
+  }
+
+  static fromSnapshot(data: unknown): OpponentModel {
+    const model = new OpponentModel();
+    if (data && typeof data === "object") {
+      Object.entries(data as Record<string, Partial<PlayerStats>>).forEach(
+        ([token, stats]) => {
+          model.stats[token] = { ...emptyStats(), ...stats };
+        }
+      );
+    }
+    return model;
+  }
+
   beginHand(tokens: string[]) {
     tokens.forEach((token) => {
       const stats = this.stats[token] || (this.stats[token] = emptyStats());

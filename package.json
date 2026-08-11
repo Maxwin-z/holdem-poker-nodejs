@@ -48,6 +48,7 @@
     "test:serverapi": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/serverapi.test.ts",
     "test:ws": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/websocket.test.ts",
     "test:dao": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/dao.test.ts",
+    "test:persistence": "./node_modules/mocha/bin/mocha --exit -r ts-node/register ./src/server/tests/persistence.test.ts",
     "test:room": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/room.user.test.ts",
     "test:autoplay": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay.test.ts",
     "test:autoplay-single": "./node_modules/mocha/bin/mocha -r ts-node/register ./src/server/tests/autoplay-single.ts",

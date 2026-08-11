@@ -26,6 +26,7 @@ import {
 } from "../service";
 import User, { Token } from "../service/User";
 import Room, { Game, RoomID } from "../service/Room";
+import { scheduleGameStateFlush } from "../persistence";
 import {
   ActionType,
   SimpleChipsRecord,
@@ -84,6 +85,7 @@ export function attachPokerWebSocket(
   websocket.token = token;
   userMap[token].addWebsocket(websocket);
   console.log("client connect", user);
+  scheduleGameStateFlush();
 }
 
 export function handlePokerWebSocketMessage(
@@ -107,6 +109,10 @@ export function handlePokerWebSocketMessage(
   } catch (e) {
     console.log("server catch error", e);
     sendError(websocket, `${e}`);
+  } finally {
+    // Handlers throw strings midway through mutating state, so snapshot
+    // whatever actually landed rather than only the happy path.
+    scheduleGameStateFlush();
   }
 }
 
@@ -122,6 +128,7 @@ export function detachPokerWebSocket(websocket: PokerWebSocket, token: Token) {
       publish2all(user.roomid);
     }
   }
+  scheduleGameStateFlush();
 }
 
 export default async (ctx: Context) => {

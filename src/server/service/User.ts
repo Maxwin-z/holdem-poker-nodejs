@@ -3,8 +3,12 @@ import { Card } from "../../ApiType";
 import type { BotStyle, BotStyleSelection } from "../bot/types";
 import { PokerWebSocket } from "../api/ws";
 import Room, { RoomID } from "./Room";
+import { scheduleGameStateFlush } from "../persistence";
 
 export type Token = string;
+
+/** How long a disconnected player keeps their seat. */
+const AUTO_LEAVE_DELAY_MS = 180000;
 
 class User {
   token: Token = ""; // uuid
@@ -73,14 +77,21 @@ class User {
     this.wss = this.wss.filter((_) => _ != ws);
     if (this.wss.length == 0 && !this.isOffline) {
       this.isOffline = true;
-      this.autoLeaveTimer = setTimeout(() => {
-        try {
-          userLeaveRoom(this.token);
-        } catch (e) {}
-      }, 180000); // auto leave after 3 mins
+      this.startAutoLeaveTimer();
       return true;
     }
     return false;
+  }
+  /** Also used after a restart, when every seat starts out disconnected. */
+  startAutoLeaveTimer(delay: number = AUTO_LEAVE_DELAY_MS) {
+    clearTimeout(this.autoLeaveTimer);
+    this.autoLeaveTimer = setTimeout(() => {
+      try {
+        userLeaveRoom(this.token);
+      } catch (e) {}
+      // Emptying a room can delete it; the snapshot has to follow.
+      scheduleGameStateFlush();
+    }, delay);
   }
   getWebsockets() {
     return this.wss;
