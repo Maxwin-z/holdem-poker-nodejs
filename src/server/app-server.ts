@@ -8,6 +8,11 @@ import router from "./api/index";
 import ws from "./api/ws";
 import responseMiddleware from "./middleware/response";
 import authMiddleware from "./middleware/auth";
+import { flushGameStateNow, restoreGameState } from "./persistence";
+
+// Rebuild the tables that were live when this process last stopped, before
+// any client can be told its room no longer exists.
+restoreGameState();
 
 const app = websockify(new Koa());
 const buildDirectory = path.join(__dirname, "../../../build");
@@ -36,3 +41,18 @@ app.ws.use(ws);
 const PORT = Number(process.env.PORT || 8086);
 app.listen(PORT);
 console.log(`server at: http://localhost:${PORT}`);
+
+// A clean shutdown still has up to one debounced snapshot in flight.
+["SIGINT", "SIGTERM"].forEach((signal) => {
+  process.once(signal as NodeJS.Signals, () => {
+    flushGameStateNow();
+    process.exit(0);
+  });
+});
+// Still crash on an uncaught exception — just make sure the tables are on
+// disk first, so the restart puts everyone back where they were.
+process.on("uncaughtException", (error) => {
+  console.error("uncaught exception", error);
+  flushGameStateNow();
+  process.exit(1);
+});

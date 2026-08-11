@@ -22,6 +22,11 @@ import {
   AiReplayStore,
   setAiReplayStore,
 } from "../src/server/replay/ai-replay-store";
+import {
+  GameStateStore,
+  restoreGameState,
+  setGameStateStore,
+} from "../src/server/persistence";
 
 interface Env {
   ASSETS: Fetcher;
@@ -149,6 +154,14 @@ export class PokerServer {
       analyticsDatabase(state.storage.sql as unknown as DurableSqlStorage)
     );
     setAiReplayStore(this.replays);
+    // Durable Object storage outlives both eviction and redeploys, so the
+    // rooms come back instead of every player being bounced to the lobby.
+    setGameStateStore(
+      new GameStateStore(
+        analyticsDatabase(state.storage.sql as unknown as DurableSqlStorage)
+      )
+    );
+    restoreGameState();
   }
 
   async fetch(request: Request): Promise<Response> {

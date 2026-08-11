@@ -11,6 +11,7 @@ import {
 } from "../api/ws";
 import { BOT_NAMES } from "../bot/names";
 import type { BotStyle, BotStyleSelection } from "../bot/types";
+import { scheduleGameStateFlush } from "../persistence";
 
 type UserMap = {
   [token: string]: User;
@@ -78,6 +79,7 @@ export function createRoom(
   user.isRoomOwner = true;
   user.isReady = true;
   // console.log(31, userMap);
+  scheduleGameStateFlush();
   return room;
 }
 
@@ -117,6 +119,7 @@ export function userEnterRoom(token: Token, roomid: RoomID) {
   if (room.addUser(token)) {
     user.setRoom(roomid);
   }
+  scheduleGameStateFlush();
 }
 
 export function userLeaveRoom(token: Token) {

@@ -428,6 +428,99 @@ describe("all-in runout selection edge case", () => {
       restoreTimers();
     }
   });
+
+  /**
+   * Record deferred callbacks by delay so the bot pick (650ms) and the
+   * between-runout re-deal (3000ms) can be driven without real timers.
+   */
+  function captureDelayedWork() {
+    const pending: Array<{ fn: () => void; delay: number }> = [];
+    global.setTimeout = ((fn: () => void, delay: number) => {
+      pending.push({ fn, delay });
+      return 0;
+    }) as unknown as typeof setTimeout;
+    return function run(delay: number) {
+      const due = pending.filter((item) => item.delay === delay);
+      due.forEach((item) => pending.splice(pending.indexOf(item), 1));
+      due.forEach((item) => item.fn());
+      return due.length;
+    };
+  }
+
+  it("lets the human decide by having the bot pick the maximum", () => {
+    const { game, a, b, c, restoreTimers } = createFlopAfterShortStackAllIn();
+
+    try {
+      a.isBot = true;
+      const runDelayed = captureDelayedWork();
+
+      userBet(b.token, 0);
+      userFold(c.token);
+      game.nextRound();
+
+      assert.isTrue(game.multiSettleStart);
+      runDelayed(650);
+      assert.equal(a.settleTimes, 4);
+      assert.isFalse(game.multiSettleConfirm);
+
+      game.userSetSettleTimes(b.token, 3);
+      assert.isTrue(game.multiSettleConfirm);
+      assert.equal(game.multiSettleTimes, 3);
+
+      // Run all three boards out: turn, river, settle, then re-deal twice.
+      const stacksBefore = a.stack + b.stack + c.stack;
+      const foldedStackBefore = c.stack;
+      for (let runout = 0; runout < 3; runout += 1) {
+        assert.equal(game.round, GameRound.Turn);
+        game.nextRound();
+        assert.equal(game.round, GameRound.River);
+        assert.lengthOf(game.boardCards, 5);
+        game.nextRound();
+        assert.equal(game.multiSettleIndex, runout + 1);
+
+        if (runout < 2) {
+          // Rewound to the runout street, waiting on the next board.
+          assert.isFalse(game.isSettling);
+          assert.equal(game.round, GameRound.Flop);
+          assert.lengthOf(game.boardCards, 3);
+          assert.equal(runDelayed(3000), 1);
+        } else {
+          assert.isTrue(game.isSettling);
+          assert.equal(runDelayed(3000), 0);
+        }
+      }
+
+      // Splitting the pot three ways neither mints nor burns chips, and the
+      // folded player's whole stake is paid out with nothing left to rounding.
+      assert.equal(a.stack + b.stack + c.stack, stacksBefore);
+      assert.equal(foldedStackBefore - c.stack, c.totalBets);
+    } finally {
+      restoreTimers();
+    }
+  });
+
+  it("keeps a single runout when only bots decide", () => {
+    const { game, a, b, c, restoreTimers } = createFlopAfterShortStackAllIn();
+
+    try {
+      a.isBot = true;
+      b.isBot = true;
+      const runDelayed = captureDelayedWork();
+
+      userBet(b.token, 0);
+      userFold(c.token);
+      game.nextRound();
+
+      assert.isTrue(game.multiSettleStart);
+      runDelayed(650);
+      assert.equal(a.settleTimes, 1);
+      assert.equal(b.settleTimes, 1);
+      assert.isTrue(game.multiSettleConfirm);
+      assert.equal(game.multiSettleTimes, 1);
+    } finally {
+      restoreTimers();
+    }
+  });
 });
 
 describe("settled hand run it out", () => {

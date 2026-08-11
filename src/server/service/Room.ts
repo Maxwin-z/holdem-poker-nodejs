@@ -44,6 +44,7 @@ import type {
 } from "../bot/types";
 import { getPlayerAnalyticsStore } from "../analytics/player-analytics";
 import { getAiReplayStore } from "../replay/ai-replay-store";
+import { scheduleGameStateFlush } from "../persistence";
 import type {
   AiReplayBotStrategy,
   AiReplayComparison,
@@ -65,6 +66,11 @@ export enum GameRound {
 const BOT_AUTO_REBUY_THRESHOLD_BB = 5;
 const BOT_AUTO_REBUY_TARGET_BB = 100;
 
+/** Highest run-it-out count a player may pick when all-in. */
+const MAX_SETTLE_TIMES = 4;
+/** How long players get to choose the all-in runout count. */
+const SETTLE_TIMES_DECISION_MS = 30000;
+
 function sum(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0);
 }
@@ -78,8 +84,35 @@ function delayTry(fn: FnType, delay: number): ReturnType<typeof setTimeout> {
     } catch (e) {
       console.log("delay try error", fn.toString());
     }
+    scheduleGameStateFlush();
   }, delay);
 }
+
+/**
+ * What the table is waiting on. A hand is always blocked on exactly one of
+ * these, so a single descriptor is enough to rebuild the pending timer after
+ * a restart — without it the game would freeze on whichever `setTimeout` the
+ * crash took with it.
+ */
+export type GameWaitKind =
+  | "acting"
+  | "nextRound"
+  | "settle"
+  | "nextGame"
+  | "settleTimes";
+
+export type GameWait = {
+  kind: GameWaitKind;
+  dueAt: number;
+  token?: Token;
+};
+
+/** Restored waits never fire instantly: clients need a moment to reconnect. */
+const RESUME_MIN_DELAY_MS = 1500;
+/** Extra breathing room before dealing the next hand after a restart. */
+const RESUME_NEXT_GAME_DELAY_MS = 20000;
+/** How long a resumed table waits for sockets before re-asking a question. */
+const RESUME_PROMPT_DELAY_MS = 5000;
 
 export class Game {
   roomid: RoomID = "";
@@ -125,6 +158,9 @@ export class Game {
 
   runItOutBoardCardsByUser: { [token: string]: Card[] } = {};
 
+  /** The one timer the table is currently blocked on, in persistable form. */
+  pendingWait: GameWait | null = null;
+
   constructor(
     roomid: RoomID,
     token: Token,
@@ -133,6 +169,129 @@ export class Game {
     this.roomid = roomid;
     this.bigBlindUser = token;
     this.smallBlind = smallBlind;
+  }
+
+  /**
+   * Schedules a transition and records it, so a restart can re-arm the same
+   * wait instead of leaving the hand stuck forever.
+   */
+  private waitThen(
+    kind: GameWaitKind,
+    delay: number,
+    fn: FnType,
+    token?: Token
+  ): ReturnType<typeof setTimeout> {
+    this.pendingWait = { kind, dueAt: Date.now() + delay, token };
+    return delayTry(() => {
+      if (this.pendingWait?.kind === kind && this.pendingWait.token === token) {
+        this.pendingWait = null;
+      }
+      fn();
+    }, delay);
+  }
+
+  /**
+   * Re-arms whatever the table was waiting on when the process died. Only the
+   * durable wait is rebuilt from the snapshot; bot thinking timers are simply
+   * re-derived from who is acting.
+   */
+  resumeAfterRestore() {
+    const wait =
+      this.pendingWait ||
+      // Defensive: crashed between clearing and re-arming the action timer.
+      (!this.isSettling
+        ? this.sortedUsers
+          .filter((t) => userMap[t]?.isActing)
+          .map((t): GameWait => ({ kind: "acting", dueAt: Date.now(), token: t }))[0]
+        : undefined);
+    this.pendingWait = null;
+    if (!wait) return;
+
+    const remaining = Math.max(0, wait.dueAt - Date.now());
+    const resumeDelay = Math.max(remaining, RESUME_MIN_DELAY_MS);
+
+    switch (wait.kind) {
+      case "acting": {
+        const token = wait.token || "";
+        const user = userMap[token];
+        if (!user || this.isSettling) return;
+        if (!user.isActing) {
+          // Crashed between clearing the action timer and handing the turn
+          // over: replay the same hand-off bet/fold would have made.
+          if (!this.multiSettleStart && !this.decreaseActiveUserToSettle()) {
+            this.nextActUser(token);
+          }
+          return;
+        }
+        // Downtime must not burn the player's clock: hand back a full window.
+        user.hasUsedOfflineActionGrace = false;
+        this.setActingUser(token);
+        return;
+      }
+      case "settle":
+        this.waitThen("settle", resumeDelay, () => this.settle());
+        return;
+      case "nextRound":
+        this.waitThen("nextRound", resumeDelay, () => this.nextRound());
+        return;
+      case "nextGame": {
+        // Give everyone a chance to reconnect before the next deal, otherwise
+        // the offline filter in sortUsersBySmallBlind just pauses the room.
+        const delay = Math.max(remaining, RESUME_NEXT_GAME_DELAY_MS);
+        this.nextGameTime = Date.now() + delay;
+        this.waitThen("nextGame", delay, () => this.nextGame());
+        return;
+      }
+      case "settleTimes": {
+        // Nobody holds a socket yet, so asking now would shout into the void.
+        // Wait for clients to come back, then hand out a fresh window. The
+        // descriptor goes up front so a second crash still resumes here.
+        this.pendingWait = {
+          kind: "settleTimes",
+          dueAt: Date.now() + RESUME_PROMPT_DELAY_MS + SETTLE_TIMES_DECISION_MS,
+        };
+        delayTry(() => {
+          this.promptSettleTimes(
+            this.multiSettleUsers.filter((t) => userMap[t]?.settleTimes === 0),
+            SETTLE_TIMES_DECISION_MS
+          );
+        }, RESUME_PROMPT_DELAY_MS);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Asks the still-undecided players how many times to deal the runout, and
+   * arms the fallback that picks for anyone who never answers.
+   */
+  private promptSettleTimes(settleUsers: Token[], timeout: number) {
+    // With a human in the decision, bots defer by picking the maximum:
+    // the final count is a min across everyone, so the human's pick wins.
+    // An all-bot runout has nobody to defer to, so keep it at one deal.
+    // Judged over everyone in the decision, not just whoever is left to
+    // answer, so a resumed prompt does not override a pick already made.
+    const botSettleTimes = this.multiSettleUsers.some((t) => !userMap[t]?.isBot)
+      ? MAX_SETTLE_TIMES
+      : 1;
+
+    settleUsers.forEach((t) => {
+      send2user(t, {
+        selectSettleTimes: 1,
+      });
+      if (userMap[t].isBot) {
+        delayTry(() => this.userSetSettleTimes(t, botSettleTimes), 650);
+      }
+    });
+
+    this.multiSettleTimer = this.waitThen("settleTimes", timeout, () => {
+      this.multiSettleUsers.forEach((t) => {
+        this.userSetSettleTimes(t, MAX_SETTLE_TIMES);
+        send2user(t, {
+          selectSettleTimes: 0,
+        });
+      });
+    });
   }
 
   start() {
@@ -166,6 +325,7 @@ export class Game {
     this.multiSettleIndex = 0;
     this.multiSettleUsers = [];
     clearTimeout(this.multiSettleTimer);
+    this.pendingWait = null;
     this.runItOutBoardCardsByUser = {};
 
     this.sortedUsers = this.sortUsersBySmallBlind();
@@ -480,9 +640,7 @@ export class Game {
     const tokens = this.sortedUsers.filter((t) => !userMap[t].isFolded);
     // only 1 user not fold
     if (tokens.length == 1) {
-      delayTry(() => {
-        this.settle();
-      }, 2000);
+      this.waitThen("settle", 2000, () => this.settle());
       return true;
     }
     return false;
@@ -649,9 +807,7 @@ export class Game {
       }
 
       publish2all(this.roomid);
-      delayTry(() => {
-        this.nextRound();
-      }, 3000);
+      this.waitThen("nextRound", 3000, () => this.nextRound());
       return;
     }
 
@@ -672,9 +828,7 @@ export class Game {
     const delay = 6000; // after 6s, start next game
     this.nextGameTime = Date.now() + delay;
     publish2all(this.roomid);
-    delayTry(() => {
-      this.nextGame();
-    }, delay);
+    this.waitThen("nextGame", delay, () => this.nextGame());
   }
   dealCards2User() {
     // deal cards to ready user
@@ -702,9 +856,7 @@ export class Game {
         return;
       }
     }
-    delayTry(() => {
-      this.nextRound();
-    }, 1000);
+    this.waitThen("nextRound", 1000, () => this.nextRound());
   }
   nextRound(): void {
     if (this.round === GameRound.River) {
@@ -758,23 +910,7 @@ export class Game {
           // multiple settle users
           publish2all(this.roomid);
 
-          settleUsers.forEach((t) => {
-            send2user(t, {
-              selectSettleTimes: 1,
-            });
-            if (userMap[t].isBot) {
-              delayTry(() => this.userSetSettleTimes(t, 1), 650);
-            }
-          });
-
-          this.multiSettleTimer = delayTry(() => {
-            this.multiSettleUsers.forEach((t) => {
-              this.userSetSettleTimes(t, 4);
-              send2user(t, {
-                selectSettleTimes: 0,
-              });
-            });
-          }, 30000);
+          this.promptSettleTimes(settleUsers, SETTLE_TIMES_DECISION_MS);
 
           const log =
             "玩家" +
@@ -869,9 +1005,7 @@ export class Game {
     publishLog2all(this.roomid, [log]);
 
     if (activeUsers.length <= 1) {
-      delayTry(() => {
-        this.nextRound();
-      }, 1000);
+      this.waitThen("nextRound", 1000, () => this.nextRound());
     } else {
       activeUsers.forEach((t) => (userMap[t].needAction = true));
       const token = activeUsers[0];
@@ -968,10 +1102,13 @@ export class Game {
     clearTimeout(this.botActionTimer);
     const thinkingTime = 650 + Math.floor(Math.random() * 700);
     this.botActionTimer = delayTry(() => {
-      this.performBotAction(token).catch((error) => {
-        console.warn("bot action failed", error);
-        this.performSafeBotFallback(token, "strategy-error");
-      });
+      this.performBotAction(token)
+        .catch((error) => {
+          console.warn("bot action failed", error);
+          this.performSafeBotFallback(token, "strategy-error");
+        })
+        // The bot resolves after delayTry's own flush, so snapshot again.
+        .then(() => scheduleGameStateFlush());
     }, thinkingTime);
   }
 
@@ -1630,10 +1767,15 @@ export class Game {
   }
   private scheduleActionTimeout(token: Token, delay: number) {
     clearTimeout(this.actingUserTimer);
-    this.actingUserTimer = delayTry(() => {
-      this.fold(token, "timeout"); // auto fold
-      publish2all(this.roomid);
-    }, delay);
+    this.actingUserTimer = this.waitThen(
+      "acting",
+      delay,
+      () => {
+        this.fold(token, "timeout"); // auto fold
+        publish2all(this.roomid);
+      },
+      token
+    );
   }
   userSetSettleTimes(token: Token, times: number) {
     if (
@@ -1642,7 +1784,7 @@ export class Game {
       userMap[token].settleTimes > 0 ||
       !Number.isInteger(times) ||
       times < 1 ||
-      times > 4
+      times > MAX_SETTLE_TIMES
     ) {
       return;
     }
