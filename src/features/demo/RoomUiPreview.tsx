@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import {
   Card,
+  GameLogEntry,
   SimpleChipsRecord,
   SimpleGame,
   SimpleRoom,
@@ -8,6 +9,9 @@ import {
   SimpleUser,
 } from "../../ApiType";
 import { useAppDispatch } from "../../app/hooks";
+import { getPostflopAdvice } from "../../gto/postflop/advice";
+import { cardToId } from "../../gto/postflop/cards";
+import { getPreflopAdvice } from "../../gto/preflop/advice";
 import { Room } from "../room/Room";
 import {
   setGame,
@@ -24,14 +28,82 @@ const boardCards: Card[] = [
   { num: 13, suit: "s" },
 ];
 
-const previewLogs = [
-  "=== 新的一手 #128 ===",
-  "Momo 在按钮位下注 80",
-  "Flop 14s 10h 7d",
-  "<strong>Leo</strong>: 这手有点意思",
-  "Owen 跟注 80",
-  "Turn 2c",
-  "<strong>Maxwin</strong>: 河牌见",
+const previewCard = (num: number, suit: string) => cardToId({ num, suit });
+
+// GTO 建议是结构化条目（不是日志字符串），预览页也要带上，
+// 否则改版后的折叠条 / 展开卡没法在浏览器里核对。
+const preflopAdvice: GameLogEntry = {
+  type: "gto",
+  text: "GTO 翻前建议",
+  data: getPreflopAdvice({
+    playerCount: 6,
+    heroPosition: "BTN",
+    effectiveStackBB: 100,
+    scenario: "unopened",
+    heroHand: "AdAc",
+  }),
+  actingId: "momo",
+  handSeq: 127,
+};
+
+const postflopAdvice: GameLogEntry = {
+  type: "gto",
+  text: "GTO 转牌建议",
+  data: getPostflopAdvice({
+    street: "turn",
+    heroCards: [previewCard(14, "d"), previewCard(14, "c")],
+    board: [
+      previewCard(14, "s"),
+      previewCard(10, "h"),
+      previewCard(7, "d"),
+      previewCard(2, "c"),
+    ],
+    pot: 1240,
+    currentBet: 0,
+    heroBet: 0,
+    toCall: 0,
+    heroRemaining: 8700,
+    bigBlind: 40,
+    effectiveStackBB: 87,
+    activeVillainCount: 1,
+    heroInPosition: true,
+    isPreflopAggressor: true,
+    preflopHasRaise: true,
+    threeBetPot: false,
+    streetBetCount: 0,
+    facedRaiseThisStreet: false,
+  }),
+  actingId: "momo",
+  handSeq: 127,
+};
+
+// 与服务端 publishLog2all 的输出格式保持一致，预览页才能真实反映排版。
+const previewLogs: GameLogEntry[] = [
+  '<div class="log-banner log-banner--start">🂠 第 126 手开始</div>',
+  '<strong class="log-player">Ivy</strong><span class="log-pos">SB</span> <span class="log-act log-act--fold">弃牌</span>',
+  '<strong class="log-player">Sora</strong><span class="log-pos">BTN</span> <span class="log-act log-act--raise">加注到</span> 120',
+  '<strong class="log-player">Sora</strong> <span class="log-profit log-profit--win">+640</span>',
+  '<strong class="log-player">Ivy</strong> <span class="log-profit log-profit--lose">-640</span>',
+  '<div class="log-banner log-banner--end">💰 第 126 手结束</div>',
+  '<div class="log-banner log-banner--start">🂠 第 127 手开始</div>',
+  '<strong class="log-player">Momo</strong><span class="log-pos">BTN</span> <span class="log-act log-act--raise">加注到</span> 240',
+  preflopAdvice,
+  '<strong class="log-player">Jax</strong><span class="log-pos">CO</span> <span class="log-act log-act--fold">弃牌</span>',
+  '<strong class="log-player">Leo</strong><span class="log-pos">BB</span> <span class="log-act log-act--call">跟注</span> 240',
+  "<strong>Leo</strong>: \n      这手有点意思",
+  '<span class="log-round-title">翻牌</span> 14s10h7d',
+  '<strong class="log-player">Leo</strong><span class="log-pos">BB</span> <span class="log-act log-act--check">过牌</span>',
+  '<strong class="log-player">Momo</strong><span class="log-pos">BTN</span> <span class="log-act log-act--bet">下注</span> 320',
+  '<strong class="log-player">Leo</strong><span class="log-pos">BB</span> <span class="log-act log-act--call">跟注</span> 320',
+  '<span class="log-round-title">转牌</span> 2c',
+  '<strong class="log-player">Leo</strong><span class="log-pos">BB</span> <span class="log-act log-act--check">过牌</span>',
+  postflopAdvice,
+  '<strong class="log-player">Momo</strong><span class="log-pos">BTN</span> <span class="log-act log-act--bet">下注</span> 680',
+  '<strong class="log-player">Leo</strong><span class="log-pos">BB</span> <span class="log-act log-act--allin">全下</span> 2140',
+  '<span class="log-round-title">河牌</span> 13s',
+  '<strong class="log-player">Momo</strong> 【14d14c】14s14d14c10h7d 三条 A <span class="log-profit log-profit--win">+1280</span>',
+  '<strong class="log-player">Leo</strong> 【13h12h】13s13h12h10h7d 一对 K <span class="log-profit log-profit--lose">-1280</span>',
+  "<strong>Maxwin</strong>: \n      nice&nbsp;hand",
 ];
 
 const previewChipsRecords: SimpleChipsRecord[] = [

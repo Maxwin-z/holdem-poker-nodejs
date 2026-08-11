@@ -78,6 +78,8 @@ function PreflopGtoAdviceCard({
     : ["BB", ...rfiTabs];
   const [tab, setTab] = useState<ChartPosition>(spotTab);
   const [gridMode, setGridMode] = useState<"action" | "strength">("strength");
+  // 范围表很高（13×13 + 位置页签），默认收起，卡片先给结论。
+  const [rangeOpen, setRangeOpen] = useState(false);
   const dist = advice.actionDistribution;
   const hero = advice.hero;
   const recMeta = ACTION_META[advice.recommended];
@@ -109,9 +111,19 @@ function PreflopGtoAdviceCard({
         role="button"
       >
         <span className="gto-advice-card__badge">GTO</span>
-        <span className="gto-advice-card__summary">Preflop(翻前)</span>
+        {/* 折叠条空间很窄，用短街道名，把宽度让给结论。 */}
+        <span className="gto-advice-card__summary">翻前</span>
+        <span
+          className="gto-advice-card__summary-rec"
+          style={{ color: stale ? undefined : recMeta.color }}
+        >
+          {recMeta.label}
+          {advice.recommendedSizeBB != null
+            ? ` ${advice.recommendedSizeBB}bb`
+            : ""}
+        </span>
         <span className="gto-advice-card__toggle">
-          {stale ? "已过行动阶段 ▸" : "▸"}
+          {stale ? "已过 ▸" : "▸"}
         </span>
       </div>
     );
@@ -174,47 +186,62 @@ function PreflopGtoAdviceCard({
         ))}
       </div>
       <div className="gto-advice-card__range">
-        <div className="gto-advice-card__mode">
-          <button
-            type="button"
-            className={gridMode === "action" ? "is-active" : ""}
-            onClick={() => setGridMode("action")}
-          >
-            动作
-          </button>
-          <button
-            type="button"
-            className={gridMode === "strength" ? "is-active" : ""}
-            onClick={() => setGridMode("strength")}
-          >
-            牌力
-          </button>
-        </div>
-        <div className="gto-advice-card__tabs">
-          {tabs.map((pos) => (
-            <button
-              type="button"
-              key={pos}
-              className={`gto-advice-card__tab ${
-                tab === pos ? "is-active" : ""
-              } ${heroChart === pos ? "is-current" : ""}`}
-              onClick={() => setTab(pos)}
-            >
-              {pos}
-            </button>
-          ))}
-        </div>
-        <div className="gto-advice-card__grid-title">
-          {tab === heroChart
-            ? `${advice.heroPositionLabel}（你的位置） · ${advice.scenario}`
-            : `${tab} · 开池加注（RFI）`}
-        </div>
-        {activeGrid && (
-          <PreflopRangeGrid
-            grid={activeGrid}
-            heroHandKey={advice.heroHandKey}
-            mode={gridMode}
-          />
+        <button
+          type="button"
+          className="gto-advice-card__range-toggle"
+          aria-expanded={rangeOpen}
+          onClick={() => setRangeOpen((open) => !open)}
+        >
+          <span>手牌范围表</span>
+          <span className="gto-advice-card__tips-arrow">
+            {rangeOpen ? "▾" : "▸"}
+          </span>
+        </button>
+        {rangeOpen && (
+          <>
+            <div className="gto-advice-card__mode">
+              <button
+                type="button"
+                className={gridMode === "action" ? "is-active" : ""}
+                onClick={() => setGridMode("action")}
+              >
+                动作
+              </button>
+              <button
+                type="button"
+                className={gridMode === "strength" ? "is-active" : ""}
+                onClick={() => setGridMode("strength")}
+              >
+                牌力
+              </button>
+            </div>
+            <div className="gto-advice-card__tabs">
+              {tabs.map((pos) => (
+                <button
+                  type="button"
+                  key={pos}
+                  className={`gto-advice-card__tab ${
+                    tab === pos ? "is-active" : ""
+                  } ${heroChart === pos ? "is-current" : ""}`}
+                  onClick={() => setTab(pos)}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+            <div className="gto-advice-card__grid-title">
+              {tab === heroChart
+                ? `${advice.heroPositionLabel}（你的位置） · ${advice.scenario}`
+                : `${tab} · 开池加注（RFI）`}
+            </div>
+            {activeGrid && (
+              <PreflopRangeGrid
+                grid={activeGrid}
+                heroHandKey={advice.heroHandKey}
+                mode={gridMode}
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -222,19 +249,24 @@ function PreflopGtoAdviceCard({
         <small>参考范围：{advice.dataSource}</small>
       </div>
 
-      <div
-        className="gto-advice-card__bottom-action"
-        data-testid="gto-bottom-action"
-      >
-        <small className="gto-advice-card__bottom-action-title">行动建议</small>
-        <span
-          className="gto-advice-card__action"
-          style={{ color: recMeta.color }}
+      {/* 卡片被范围表撑长后，底部再交代一次结论；短卡片不重复。 */}
+      {rangeOpen ? (
+        <div
+          className="gto-advice-card__bottom-action"
+          data-testid="gto-bottom-action"
         >
-          {recMeta.label}
-          {sizeText}
-        </span>
-      </div>
+          <small className="gto-advice-card__bottom-action-title">
+            行动建议
+          </small>
+          <span
+            className="gto-advice-card__action"
+            style={{ color: recMeta.color }}
+          >
+            {recMeta.label}
+            {sizeText}
+          </span>
+        </div>
+      ) : null}
 
       <GtoTips
         hint={

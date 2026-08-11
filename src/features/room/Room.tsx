@@ -1,6 +1,7 @@
 import { Button, message, Popconfirm, Tooltip } from "antd";
 import {
   Card as PokerCard,
+  GameLogEntry,
   SimpleChipsRecord,
 } from "../../ApiType";
 import {
@@ -67,7 +68,7 @@ const seatNames = [
 ];
 
 type RoomPreviewDetails = {
-  logs?: string[];
+  logs?: GameLogEntry[];
   chipsRecords?: SimpleChipsRecord[];
 };
 

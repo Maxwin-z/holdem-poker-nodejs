@@ -25,6 +25,12 @@ const STREET_LABEL: Record<string, string> = {
   river: "River(河牌)",
 };
 
+const STREET_SHORT: Record<string, string> = {
+  flop: "翻牌",
+  turn: "转牌",
+  river: "河牌",
+};
+
 function cardColor(suit: string): string {
   return suit === "h" || suit === "d" ? "#d85b5d" : "#dfe8e4";
 }
@@ -39,7 +45,8 @@ export default function PostflopAdviceCard({
   globalCollapsed?: boolean;
 }) {
   const [expanded, setExpanded] = useState(!stale && !globalCollapsed);
-  const [rangeOpen, setRangeOpen] = useState(true);
+  // 继续范围明细是整张卡最高的一块，默认收起，先把结论亮出来。
+  const [rangeOpen, setRangeOpen] = useState(false);
   useEffect(() => {
     if (stale) setExpanded(false);
   }, [stale]);
@@ -63,14 +70,18 @@ export default function PostflopAdviceCard({
       value: dist[key],
     }))
     .sort((a, b) => b.value - a.value);
-  const lines = rows.map((row) => ({
-    ...row,
-    size:
-      (row.key === "bet" || row.key === "raise" || row.key === "allin") &&
-      advice.recommendedSizeChips != null
-        ? advice.recommendedSizeChips
-        : undefined,
-  }));
+  // 结论只写一行：动作 + 筹码尺度。各动作占比交给下面的频率条，
+  // 不再用文字把同样的百分比重复一遍。
+  const recSize =
+    (advice.recommended === "bet" ||
+      advice.recommended === "raise" ||
+      advice.recommended === "allin") &&
+    advice.recommendedSizeChips != null
+      ? advice.recommendedSizeChips
+      : undefined;
+  const recText = `${recMeta.label}${
+    recSize !== undefined ? ` ${recSize} 筹码` : ""
+  }`;
 
   if (!expanded) {
     return (
@@ -80,11 +91,21 @@ export default function PostflopAdviceCard({
         role="button"
       >
         <span className="gto-advice-card__badge">GTO</span>
+        {/* 折叠条空间很窄，用短街道名，把宽度让给结论。 */}
         <span className="gto-advice-card__summary">
-          {STREET_LABEL[advice.street]}
+          {STREET_SHORT[advice.street]}
+        </span>
+        <span
+          className="gto-advice-card__summary-rec"
+          style={{ color: stale ? undefined : recMeta.color }}
+        >
+          {recMeta.label}
+          {advice.recommendedSizeChips != null
+            ? ` ${advice.recommendedSizeChips}`
+            : ""}
         </span>
         <span className="gto-advice-card__toggle">
-          {stale ? "已过行动阶段 ▸" : "▸"}
+          {stale ? "已过 ▸" : "▸"}
         </span>
       </div>
     );
@@ -128,16 +149,12 @@ export default function PostflopAdviceCard({
 
       <div className="gto-advice-card__main">
         <div className="gto-advice-card__actions">
-          {lines.map((line) => (
-            <span
-              key={line.key}
-              className="gto-advice-card__action"
-              style={{ color: line.color }}
-            >
-              {line.label}
-              {line.size !== undefined ? ` ${line.size} 筹码` : ""} {line.value}%
-            </span>
-          ))}
+          <span
+            className="gto-advice-card__action"
+            style={{ color: recMeta.color }}
+          >
+            {recText}
+          </span>
         </div>
         {hero && (
           <span className="gto-advice-card__hero">
@@ -224,25 +241,23 @@ export default function PostflopAdviceCard({
         <small>参考范围：{advice.dataSource}</small>
       </div>
 
-      <div
-        className="gto-advice-card__bottom-action"
-        data-testid="gto-bottom-action"
-      >
-        <small className="gto-advice-card__bottom-action-title">行动建议</small>
-        <div className="gto-advice-card__actions">
-          {lines.map((line) => (
-            <span
-              key={line.key}
-              className="gto-advice-card__action"
-              style={{ color: line.color }}
-            >
-              {line.label}
-              {line.size !== undefined ? ` ${line.size} 筹码` : ""}{" "}
-              {line.value}%
-            </span>
-          ))}
+      {/* 卡片被范围表撑长后，底部再交代一次结论；短卡片不重复。 */}
+      {rangeOpen ? (
+        <div
+          className="gto-advice-card__bottom-action"
+          data-testid="gto-bottom-action"
+        >
+          <small className="gto-advice-card__bottom-action-title">
+            行动建议
+          </small>
+          <span
+            className="gto-advice-card__action"
+            style={{ color: recMeta.color }}
+          >
+            {recText}
+          </span>
         </div>
-      </div>
+      ) : null}
 
       <GtoTips
         hint={
