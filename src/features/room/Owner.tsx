@@ -66,17 +66,38 @@ export function Owner() {
   const canRaise = game?.raiseUser != self?.id;
   const shouldAllIn = stack + bet <= preBet;
   const onlyRaiseAllIn = stack + bet <= raiseBet + raiseBetDiff;
-  const minRaise = Math.min(stack, Math.max(bb, raiseBet + raiseBetDiff - bet));
-  const maxRaise = stack;
-  const has1_4 = stack >= pots / 4 && pots / 4 >= minRaise;
-  const has1_3 = stack >= pots / 3 && pots / 3 >= minRaise;
-  const has1_2 = stack >= pots / 2 && pots / 2 >= minRaise;
-  const has2_3 = stack >= (pots * 2) / 3 && (pots * 2) / 3 >= minRaise;
-  const has3_4 = stack >= (pots * 3) / 4 && (pots * 3) / 4 >= minRaise;
-  const has1_1 = stack >= pots && pots >= minRaise;
-  const useBB = stack > 4 * bb && pots < 4 * bb;
-
   const chips2call = Math.min(stack, preBet - bet);
+
+  // 加注统一用「加注到」(本轮下注总额) 计量，与牌谱日志的「加注到 N」、
+  // GTO 建议的 raise-to 尺寸、以及 ws_userBet 的协议参数是同一个单位。
+  const maxRaiseTo = stack + bet;
+  const minRaiseTo = Math.min(
+    maxRaiseTo,
+    Math.max(bb + bet, raiseBet + raiseBetDiff)
+  );
+  // pots 已含本轮所有下注，跟注之后的底池才是池比例加注的基数。
+  const potRaiseTo = (fraction: number) =>
+    bet + chips2call + Math.ceil(fraction * (pots + chips2call));
+  const useBB = maxRaiseTo > 4 * bb && pots < 4 * bb;
+  const raisePresets = (
+    useBB
+      ? [
+          { label: "2BB", raiseTo: bb * 2 },
+          { label: "2.5BB", raiseTo: Math.floor(bb * 2.5) },
+          { label: "3BB", raiseTo: bb * 3 },
+          { label: "4BB", raiseTo: bb * 4 },
+        ]
+      : [
+          { label: "¼ 池", raiseTo: potRaiseTo(1 / 4) },
+          { label: "⅓ 池", raiseTo: potRaiseTo(1 / 3) },
+          { label: "½ 池", raiseTo: potRaiseTo(1 / 2) },
+          { label: "⅔ 池", raiseTo: potRaiseTo(2 / 3) },
+          { label: "¾ 池", raiseTo: potRaiseTo(3 / 4) },
+          { label: "底池", raiseTo: potRaiseTo(1) },
+        ]
+  ).filter(
+    (preset) => preset.raiseTo >= minRaiseTo && preset.raiseTo <= maxRaiseTo
+  );
   const inGame = self?.isInCurrentGame && self?.isReady && !self?.isFoled;
   const showSelfHands = Boolean(
     self?.isReady || (self?.isInCurrentGame && !isSettling)
@@ -102,12 +123,12 @@ export function Owner() {
   const [showAllInConfirm, setShowAllInConfirm] = useState(false);
   const [showFoldConfirm, setShowFoldConfirm] = useState(false);
 
-  const raise = Number(raiseInput);
+  const raiseTo = Number(raiseInput);
   const hasValidRaise =
     raiseInput !== "" &&
-    Number.isFinite(raise) &&
-    Number.isInteger(raise) &&
-    raise >= minRaise;
+    Number.isFinite(raiseTo) &&
+    Number.isInteger(raiseTo) &&
+    raiseTo >= minRaiseTo;
 
   const setRaiseAmount = (amount: number) => {
     setRaiseInput(String(amount));
@@ -121,7 +142,7 @@ export function Owner() {
     if (!isActing || !canRaise) return;
 
     if (onlyRaiseAllIn) {
-      ws_userBet(stack + bet);
+      ws_userBet(maxRaiseTo);
       return;
     }
 
@@ -130,12 +151,12 @@ export function Owner() {
       return;
     }
 
-    if (raise > stack) {
+    if (raiseTo > maxRaiseTo) {
       setShowAllInConfirm(true);
       return;
     }
 
-    ws_userBet(raise + bet);
+    ws_userBet(raiseTo);
   };
 
   const handleFold = () => {
@@ -228,8 +249,8 @@ export function Owner() {
     ? "查看原牌堆剩余公共牌；筹码足够时向其他本手玩家各支付 1BB"
     : "操作区会在需要行动时自动更新";
   const sliderValue = Math.min(
-    maxRaise,
-    Math.max(minRaise, hasValidRaise ? raise : minRaise)
+    maxRaiseTo,
+    Math.max(minRaiseTo, hasValidRaise ? raiseTo : minRaiseTo)
   );
 
   useEffect(() => {
@@ -447,13 +468,13 @@ export function Owner() {
                 <div className="live-raise-slider-row">
                   <input
                     type="range"
-                    min={minRaise}
-                    max={maxRaise}
+                    min={minRaiseTo}
+                    max={maxRaiseTo}
                     value={sliderValue}
                     onChange={(event) =>
                       setRaiseAmount(Number(event.target.value))
                     }
-                    aria-label="加注筹码"
+                    aria-label="加注到筹码"
                   />
                   <label>
                     <span>¥</span>
@@ -474,105 +495,34 @@ export function Owner() {
                           handleRaise();
                         }
                       }}
-                      aria-label="加注金额"
+                      aria-label="加注到金额"
                     />
                   </label>
                 </div>
 
+                {/* 输入的是本轮下注总额，这里补回「这一手要再掏多少筹码」。 */}
+                <div className="live-raise-hint">
+                  <span>最小加注到 {formatChips(minRaiseTo)}</span>
+                  <span>
+                    {hasValidRaise
+                      ? raiseTo >= maxRaiseTo
+                        ? `需再投入 ${formatChips(stack)}（All-in）`
+                        : `需再投入 ${formatChips(raiseTo - bet)}`
+                      : "输入或拖动选择加注到的总额"}
+                  </span>
+                </div>
+
                 <div className="live-raise-presets">
-                  {useBB ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setRaiseAmount(bb * 2)}
-                      >
-                        <span>2BB</span>
-                        <b>{formatChips(bb * 2)}</b>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRaiseAmount(Math.floor(bb * 2.5))}
-                      >
-                        <span>2.5BB</span>
-                        <b>{formatChips(Math.floor(bb * 2.5))}</b>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRaiseAmount(bb * 3)}
-                      >
-                        <span>3BB</span>
-                        <b>{formatChips(bb * 3)}</b>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRaiseAmount(bb * 4)}
-                      >
-                        <span>4BB</span>
-                        <b>{formatChips(bb * 4)}</b>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {has1_4 ? (
-                        <button
-                          type="button"
-                          onClick={() => setRaiseAmount(Math.ceil(pots / 4))}
-                        >
-                          <span>¼ 池</span>
-                          <b>{formatChips(Math.ceil(pots / 4))}</b>
-                        </button>
-                      ) : null}
-                      {has1_3 ? (
-                        <button
-                          type="button"
-                          onClick={() => setRaiseAmount(Math.ceil(pots / 3))}
-                        >
-                          <span>⅓ 池</span>
-                          <b>{formatChips(Math.ceil(pots / 3))}</b>
-                        </button>
-                      ) : null}
-                      {has1_2 ? (
-                        <button
-                          type="button"
-                          onClick={() => setRaiseAmount(Math.ceil(pots / 2))}
-                        >
-                          <span>½ 池</span>
-                          <b>{formatChips(Math.ceil(pots / 2))}</b>
-                        </button>
-                      ) : null}
-                      {has2_3 ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRaiseAmount(Math.ceil((pots * 2) / 3))
-                          }
-                        >
-                          <span>⅔ 池</span>
-                          <b>{formatChips(Math.ceil((pots * 2) / 3))}</b>
-                        </button>
-                      ) : null}
-                      {has3_4 ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRaiseAmount(Math.ceil((pots * 3) / 4))
-                          }
-                        >
-                          <span>¾ 池</span>
-                          <b>{formatChips(Math.ceil((pots * 3) / 4))}</b>
-                        </button>
-                      ) : null}
-                      {has1_1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setRaiseAmount(Math.ceil(pots))}
-                        >
-                          <span>底池</span>
-                          <b>{formatChips(Math.ceil(pots))}</b>
-                        </button>
-                      ) : null}
-                    </>
-                  )}
+                  {raisePresets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setRaiseAmount(preset.raiseTo)}
+                    >
+                      <span>{preset.label}</span>
+                      <b>{formatChips(preset.raiseTo)}</b>
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : null}
@@ -625,9 +575,9 @@ export function Owner() {
                     type="button"
                     className="is-raise"
                     aria-keyshortcuts="R"
-                    onClick={() => ws_userBet(minRaise + bet)}
+                    onClick={() => ws_userBet(maxRaiseTo)}
                   >
-                    <strong>All-in {formatChips(minRaise)}</strong>
+                    <strong>All-in {formatChips(stack)}</strong>
                     <span>R · ALL IN</span>
                   </button>
                 ) : (
@@ -638,7 +588,9 @@ export function Owner() {
                     disabled={!hasValidRaise}
                     onClick={handleRaise}
                   >
-                    <strong>加注 {formatChips(raise)}</strong>
+                    <strong>
+                      {hasValidRaise ? `加注到 ${formatChips(raiseTo)}` : "加注"}
+                    </strong>
                     <span>R · RAISE</span>
                   </button>
                 )
@@ -755,7 +707,8 @@ export function Owner() {
             <small>ALL-IN</small>
             <strong id="live-all-in-confirm-title">输入金额超过当前 Stack</strong>
             <p>
-              当前最多可投入 {formatChips(stack)} 筹码，是否改为 All-in？
+              当前最多可加注到 {formatChips(maxRaiseTo)}（再投入{" "}
+              {formatChips(stack)} 筹码），是否改为 All-in？
             </p>
             <div>
               <button
@@ -773,7 +726,7 @@ export function Owner() {
                 className="is-primary"
                 onClick={() => {
                   setShowAllInConfirm(false);
-                  ws_userBet(stack + bet);
+                  ws_userBet(maxRaiseTo);
                 }}
               >
                 确认 All-in

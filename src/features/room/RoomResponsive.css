@@ -1554,7 +1554,8 @@
 }
 
 .live-action-panel {
-  --live-action-panel-height: 204px;
+  /* 大屏才显示加注提示行，面板高度要容得下它 */
+  --live-action-panel-height: 227px;
   width: min(100%, 760px);
   height: var(--live-action-panel-height);
   min-width: 0;
@@ -1694,6 +1695,23 @@
 .live-raise-slider-row label input::-webkit-outer-spin-button {
   margin: 0;
   appearance: none;
+}
+
+.live-raise-hint {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: -4px;
+  color: var(--live-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-raise-hint span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .live-raise-presets {
@@ -3621,6 +3639,11 @@
     margin-bottom: 8px;
   }
 
+  /* 操作区在手机上是固定高度的，提示行会把按钮顶出面板，直接省掉。 */
+  .live-raise-hint {
+    display: none;
+  }
+
   .live-raise-slider-row {
     grid-template-columns: minmax(0, 1fr) 104px;
     gap: 10px;
@@ -3772,6 +3795,11 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 8px;
+  }
+
+  /* 两列布局里滑杆与快捷尺度并排，提示行会挤成第三格，矮屏直接省掉。 */
+  .live-raise-hint {
+    display: none;
   }
 
   .live-raise-presets button {

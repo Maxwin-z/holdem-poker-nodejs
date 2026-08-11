@@ -70,10 +70,18 @@ function setActingState({
   stack = 100,
   bet = 10,
   preBet = 20,
+  pots = 80,
+  bb = 10,
+  raiseBet = 20,
+  raiseBetDiff = 10,
 }: {
   stack?: number;
   bet?: number;
   preBet?: number;
+  pots?: number;
+  bb?: number;
+  raiseBet?: number;
+  raiseBetDiff?: number;
 } = {}) {
   mockState = {
     room: {
@@ -106,13 +114,13 @@ function setActingState({
       },
       game: {
         boardCards: [],
-        pots: 80,
+        pots,
         preBet,
-        bb: 10,
+        bb,
         isSettling: false,
         raiseUser: "other",
-        raiseBet: 20,
-        raiseBetDiff: 10,
+        raiseBet,
+        raiseBetDiff,
         userCount: 2,
       },
       self: {
@@ -140,31 +148,75 @@ afterEach(() => {
 
 test("chip input starts empty and accepts a number without restoring zero", () => {
   const { getByLabelText } = render(<Owner />);
-  const input = getByLabelText("加注金额") as HTMLInputElement;
+  const input = getByLabelText("加注到金额") as HTMLInputElement;
 
   expect(input.value).toBe("");
   fireEvent.change(input, { target: { value: "12" } });
   expect(input.value).toBe("12");
 });
 
-test("Enter submits a valid amount from the chip input", () => {
+test("Enter submits the raise-to total straight from the chip input", () => {
   const { getByLabelText } = render(<Owner />);
-  const input = getByLabelText("加注金额") as HTMLInputElement;
+  const input = getByLabelText("加注到金额") as HTMLInputElement;
 
-  fireEvent.change(input, { target: { value: "30" } });
+  // 输入的就是本轮下注总额，不再叠加自己已下的 10。
+  fireEvent.change(input, { target: { value: "40" } });
   fireEvent.keyDown(input, { key: "Enter" });
 
   expect(ws_userBet).toHaveBeenCalledTimes(1);
   expect(ws_userBet).toHaveBeenCalledWith(40);
 });
 
+test("a raise-to below the minimum is rejected", () => {
+  const { getByLabelText, getByText } = render(<Owner />);
+
+  // raiseBet 20 + raiseBetDiff 10 => 最小加注到 30。
+  fireEvent.change(getByLabelText("加注到金额"), { target: { value: "29" } });
+  expect(
+    (getByText("加注").closest("button") as HTMLButtonElement).disabled
+  ).toBe(true);
+
+  fireEvent.change(getByLabelText("加注到金额"), { target: { value: "30" } });
+  fireEvent.click(getByText("加注到 30"));
+  expect(ws_userBet).toHaveBeenCalledWith(30);
+});
+
+test("pot presets size the raise off the pot after calling", () => {
+  const { getByText } = render(<Owner />);
+
+  // 底池 80（含对手下注）、跟注 10 => 跟注后底池 90，半池加注到 10+10+45。
+  fireEvent.click(getByText("½ 池"));
+  expect(getByText("加注到 65")).toBeTruthy();
+
+  fireEvent.click(getByText("底池"));
+  expect(getByText("加注到 110")).toBeTruthy();
+});
+
+test("BB presets open to the labelled size from a posted blind", () => {
+  setActingState({
+    stack: 200,
+    bet: 5,
+    preBet: 10,
+    pots: 15,
+    raiseBet: 10,
+    raiseBetDiff: 10,
+  });
+  const { getByText } = render(<Owner />);
+
+  // SB 已投 5，3BB 开局是「加注到 30」而不是再掏 30。
+  fireEvent.click(getByText("3BB"));
+  fireEvent.click(getByText("加注到 30"));
+
+  expect(ws_userBet).toHaveBeenCalledWith(30);
+});
+
 test("an amount over stack asks before converting the action to all-in", () => {
   const { getByLabelText, getByText } = render(<Owner />);
 
-  fireEvent.change(getByLabelText("加注金额"), {
+  fireEvent.change(getByLabelText("加注到金额"), {
     target: { value: "150" },
   });
-  fireEvent.click(getByText("加注 150"));
+  fireEvent.click(getByText("加注到 150"));
 
   expect(getByText("输入金额超过当前 Stack")).toBeTruthy();
   expect(ws_userBet).not.toHaveBeenCalled();
@@ -190,7 +242,7 @@ test("fold asks for confirmation when check is available", () => {
 
 test("a digit outside editable controls focuses and seeds the chip input", () => {
   const { getByLabelText } = render(<Owner />);
-  const input = getByLabelText("加注金额") as HTMLInputElement;
+  const input = getByLabelText("加注到金额") as HTMLInputElement;
 
   fireEvent.keyDown(document, { key: "4" });
 
@@ -207,10 +259,10 @@ test("chat typing is isolated while R submits a valid focused chip input", () =>
   fireEvent.keyDown(chat, { key: "F" });
   fireEvent.keyDown(chat, { key: "7" });
   expect(ws_userFold).not.toHaveBeenCalled();
-  expect((getByLabelText("加注金额") as HTMLInputElement).value).toBe("");
+  expect((getByLabelText("加注到金额") as HTMLInputElement).value).toBe("");
 
-  const input = getByLabelText("加注金额") as HTMLInputElement;
-  fireEvent.change(input, { target: { value: "30" } });
+  const input = getByLabelText("加注到金额") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "40" } });
   input.focus();
   fireEvent.keyDown(input, { key: "R" });
 
