@@ -86,17 +86,19 @@ describe("GtoAdviceCard 全局折叠", () => {
     localStorage.clear();
   });
 
-  it("默认折叠时只显示 GTO + 行动轮次，不显示建议", () => {
+  it("默认折叠条显示 GTO + 短街道名 + 结论", () => {
     render(<GtoAdviceCard entry={postflopEntry()} globalCollapsed />);
     expect(screen.getByText("GTO")).toBeInTheDocument();
-    expect(screen.getByText("Flop(翻牌)")).toBeInTheDocument();
+    expect(screen.getByText("翻牌")).toBeInTheDocument();
     expect(screen.queryByText("Flop(翻牌) 建议")).not.toBeInTheDocument();
     expect(screen.queryByText(/建议/)).not.toBeInTheDocument();
   });
 
-  it("翻前折叠条显示“Preflop(翻前)”", () => {
+  it("翻前折叠条用短街道名“翻前”，并直接给出建议动作", () => {
     render(<GtoAdviceCard entry={preflopEntry()} globalCollapsed />);
-    expect(screen.getByText("Preflop(翻前)")).toBeInTheDocument();
+    expect(screen.getByText("翻前")).toBeInTheDocument();
+    // 折叠态就能看到结论，不用展开
+    expect(screen.getByText(/加注/)).toBeInTheDocument();
   });
 
   it("展开态边框颜色与推荐行动字体颜色一致", () => {
@@ -120,9 +122,8 @@ describe("GtoAdviceCard 全局折叠", () => {
     expect(screen.getByText(/牌面：/)).toBeInTheDocument();
     expect(screen.getByText(/手牌类别：/)).toBeInTheDocument();
     expect(screen.getByText(/对继续范围权益/)).toBeInTheDocument();
-    const bottomAction = screen.getByTestId("gto-bottom-action");
-    expect(within(bottomAction).getByText("行动建议")).toBeInTheDocument();
-    expect(within(bottomAction).getAllByText(/%/).length).toBeGreaterThan(0);
+    // 卡片短的时候不重复结论，底部行动建议只在范围表展开后出现
+    expect(screen.queryByTestId("gto-bottom-action")).not.toBeInTheDocument();
     expect(screen.queryByText("实际情况偏移建议")).not.toBeInTheDocument();
 
     // 通用说明（频率条解释 + 名词解释 + 近似说明）默认折叠
@@ -139,28 +140,35 @@ describe("GtoAdviceCard 全局折叠", () => {
     expect(screen.getByText(/蒸馏神经网络近似/)).toBeInTheDocument();
   });
 
-  it("翻前卡片底部也重复展示行动建议", () => {
+  it("翻前范围表默认折叠，展开后底部才重复行动建议", () => {
     render(<GtoAdviceCard entry={preflopEntry()} globalCollapsed={false} />);
 
+    // 默认只给结论，13×13 范围表收起
+    expect(screen.queryByTestId("gto-bottom-action")).not.toBeInTheDocument();
+    expect(screen.queryByText("牌力")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("手牌范围表"));
+    expect(screen.getByText("牌力")).toBeInTheDocument();
     const bottomAction = screen.getByTestId("gto-bottom-action");
     expect(within(bottomAction).getByText("行动建议")).toBeInTheDocument();
     expect(within(bottomAction).getByText(/加注/)).toBeInTheDocument();
   });
 
-  it("继续范围明细以二维表展示，可折叠", () => {
+  it("继续范围明细以二维表展示，默认折叠可展开", () => {
     const entry = postflopEntry();
     render(<GtoAdviceCard entry={entry} globalCollapsed={false} />);
 
-    // 继续范围明细默认展开（类似翻前牌力表），展示表格与图例
+    // 入口一直在，但表格默认收起，避免一张卡吃掉整个面板
     expect(screen.getByText(/继续范围明细/)).toBeInTheDocument();
+    expect(screen.queryByText("不在范围")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/继续范围明细/));
     expect(
       screen.getByText("继续范围（颜色越深组合越多）")
     ).toBeInTheDocument();
     expect(screen.getByText("不在范围")).toBeInTheDocument();
-
-    // 折叠后表格隐藏
-    fireEvent.click(screen.getByText(/继续范围明细/));
-    expect(screen.queryByText("不在范围")).not.toBeInTheDocument();
+    // 卡片被撑长后，底部重复一次结论
+    expect(screen.getByTestId("gto-bottom-action")).toBeInTheDocument();
   });
 
   it("眼睛图标控制全局展开/折叠并持久化到 localStorage", () => {
@@ -172,7 +180,7 @@ describe("GtoAdviceCard 全局折叠", () => {
     render(<GameHistory />);
 
     // 默认折叠
-    expect(screen.getByText("Flop(翻牌)")).toBeInTheDocument();
+    expect(screen.getByText("翻牌")).toBeInTheDocument();
     expect(screen.queryByText("Flop(翻牌) 建议")).not.toBeInTheDocument();
 
     // 点击眼睛展开，写入本地

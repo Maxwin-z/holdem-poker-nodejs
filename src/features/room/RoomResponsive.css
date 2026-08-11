@@ -2527,9 +2527,12 @@
   padding: 14px;
 }
 
+/* flex 而不是 grid：抽屉里标题行会被隐藏，固定的行轨道会把
+   日志区从 1fr 挤成 auto。 */
 .live-chat-panel {
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .live-chips-panel {
@@ -2540,13 +2543,31 @@
 }
 
 .live-detail-panel__heading {
+  flex: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
 }
 
-.live-detail-panel__heading > div {
+/* 抽屉的标签页已经写了面板名（"聊天与牌局"/"积分信息"），面板内部
+   再写一遍就是移动端上白占一行。隐藏标题块，右侧的计数/开关留下。 */
+.live-room-drawer .live-detail-panel__heading > div:first-child {
+  display: none;
+}
+
+.live-room-drawer .live-detail-panel__heading {
+  justify-content: flex-end;
+}
+
+/* 聊天面板的标题行只剩标题（眼睛和计数在下面的工具条里），整行都不用留。 */
+.live-room-drawer .live-chat-panel > .live-detail-panel__heading {
+  display: none;
+}
+
+/* 只作用于标题块本身：右侧的操作区是另一个 div，被这条规则改成
+   grid 会把眼睛和计数竖着摞起来。 */
+.live-detail-panel__heading > div:first-child {
   min-width: 0;
   display: grid;
 }
@@ -2563,7 +2584,8 @@
   font-size: 15px;
 }
 
-.live-detail-panel__heading > span {
+.live-detail-panel__heading > span,
+.live-detail-panel__heading-actions > span {
   min-width: 34px;
   height: 24px;
   display: grid;
@@ -2578,6 +2600,7 @@
 }
 
 .live-detail-panel__heading-actions {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2608,60 +2631,365 @@
   border-color: rgba(47, 211, 155, 0.45);
 }
 
-.live-chat-log {
-  min-height: 0;
+/* ============ 牌局 feed：手牌 → 街道 → 行动 ============ */
+.live-feed__toolbar {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 7px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.live-feed__filters {
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+}
+
+.live-feed__filters button {
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--live-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.live-feed__filters button:hover {
+  color: var(--live-text);
+}
+
+.live-feed__filters button.is-active {
+  color: #062017;
+  border-color: var(--live-green);
+  background: var(--live-green);
+}
+
+.live-chat-log {
+  flex: 1;
+  min-height: 0;
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-color: rgba(47, 211, 155, 0.26) transparent;
   scrollbar-width: thin;
+  font-size: 11.5px;
 }
 
-.live-chat-log__item {
-  align-self: flex-start;
-  max-width: 92%;
-  padding: 8px 10px;
-  border: 1px solid rgba(221, 238, 231, 0.09);
-  border-radius: 5px 12px 12px 12px;
-  color: #b6c8c1;
-  background: rgba(255, 255, 255, 0.035);
+/* —— 手牌分组 —— */
+.live-feed__hand-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--live-line);
+  border-radius: 7px;
+  background: #10241d;
+  color: var(--live-muted);
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.live-feed__hand:first-child .live-feed__hand-head {
+  margin-top: 0;
+}
+
+.live-feed__hand-head:hover {
+  border-color: var(--live-line-strong);
+  background: #143028;
+}
+
+.live-feed__hand-caret {
+  flex: none;
+  color: #6c857c;
+  font-size: 9px;
+}
+
+.live-feed__hand-no {
+  color: #c8d8d2;
   font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.live-feed__hand-state,
+.live-feed__hand-chat {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.live-feed__hand-sum {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--live-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-feed__hand-sum b {
+  margin-left: 5px;
+  font-weight: 700;
+}
+
+.live-feed__hand-sum b.is-win {
+  color: #3ddc84;
+}
+
+.live-feed__hand-sum b.is-lose {
+  color: #ff7b80;
+}
+
+.live-feed__hand-head.is-live {
+  border-color: rgba(47, 211, 155, 0.42);
+  background: #12291f;
+}
+
+.live-feed__hand-head.is-live .live-feed__hand-no {
+  color: var(--live-green);
+}
+
+.live-feed__hand-head.is-live .live-feed__hand-state {
+  color: var(--live-green);
+  background: rgba(47, 211, 155, 0.14);
+}
+
+.live-feed__hand-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--live-green);
+  box-shadow: 0 0 8px var(--live-green);
+  animation: live-feed-blip 1.6s ease-in-out infinite;
+}
+
+@keyframes live-feed-blip {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* —— 街道小标题 —— */
+.live-feed__street {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 0 3px;
+  padding: 0 2px;
+}
+
+.live-feed__street-label {
+  flex: none;
+  color: var(--live-gold);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.live-feed__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--live-line);
+}
+
+.live-feed__cards {
+  display: flex;
+  flex: none;
+  gap: 3px;
+}
+
+.live-feed__card {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #dfe8e4;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.live-feed__card.is-red {
+  color: #e2686a;
+}
+
+/* —— 行动行：名字 · 位置 · 动作 …… 金额 —— */
+.live-feed__act {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  line-height: 1.45;
+}
+
+.live-feed__act:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.live-feed__who {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--live-text);
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.live-feed__pos {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #9fb3ac;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.live-feed__verb {
+  flex: none;
+  font-weight: 700;
+}
+
+.live-feed__verb.is-fold {
+  color: #ff7b80;
+}
+
+.live-feed__verb.is-call {
+  color: #5b9dff;
+}
+
+.live-feed__verb.is-bet,
+.live-feed__verb.is-raise {
+  color: #3ddc84;
+}
+
+.live-feed__verb.is-allin {
+  color: #c084fc;
+}
+
+.live-feed__verb.is-check {
+  color: #8fa39b;
+}
+
+.live-feed__amt {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  color: #cfdcd7;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— 摊牌块 —— */
+.live-feed__showdown {
+  margin: 8px 0 2px;
+  padding: 7px 8px;
+  border: 1px solid rgba(231, 188, 99, 0.2);
+  border-radius: 8px;
+  background: rgba(231, 188, 99, 0.05);
+}
+
+.live-feed__showdown-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+  color: var(--live-gold);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.live-feed__showdown-title i {
+  flex: 1;
+  height: 1px;
+  background: rgba(231, 188, 99, 0.22);
+}
+
+.live-feed__showdown-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px;
+}
+
+.live-feed__hand-type {
+  flex: none;
+  color: var(--live-muted);
+  font-size: 10px;
+}
+
+.live-feed__profit {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-feed__profit.is-win {
+  color: #3ddc84;
+}
+
+.live-feed__profit.is-lose {
+  color: #ff7b80;
+}
+
+/* —— 聊天：整个 feed 里唯一保留气泡的东西 —— */
+.live-feed__chat {
+  max-width: 92%;
+  margin: 7px 0 7px 2px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--live-green);
+  border-radius: 3px 10px 10px 3px;
+  background: rgba(47, 211, 155, 0.085);
+  overflow-wrap: anywhere;
+}
+
+.live-feed__chat-who {
+  display: block;
+  margin-bottom: 1px;
+  color: var(--live-green);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.live-feed__chat-text {
+  color: #e2ede9;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* —— 兜底：没能解析的系统提示 —— */
+.live-feed__note {
+  padding: 4px 6px;
+  color: #a9bcb5;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.live-chat-log__item.is-message {
-  border-color: rgba(47, 211, 155, 0.17);
-  color: #e0ebe7;
-  background: rgba(47, 211, 155, 0.075);
-}
-
-.live-chat-log__item.is-message strong {
-  color: var(--live-green);
-}
-
-.live-chat-log__item.is-system > strong {
+.live-feed__note strong {
   color: var(--live-gold);
-  letter-spacing: 0.035em;
-}
-
-/* System feed lines are flat (no bubble) and alternate a subtle
-   background per hand, so hand boundaries read without heavy boxes. */
-.live-chat-log__item.is-system {
-  border-color: transparent;
-  background: transparent;
-  padding: 5px 10px;
-  border-radius: 8px;
-}
-
-.live-chat-log__item.is-system:not(.is-hand-alt) {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.live-chat-log__item.is-system.is-hand-alt {
-  background: rgba(255, 255, 255, 0.055);
 }
 
 .live-chat-composer {
@@ -2733,11 +3061,17 @@
   cursor: not-allowed;
 }
 
+/* 提示只在输入框获得焦点时出现，平时不占视觉权重。 */
 .live-chat-composer__hint {
   align-self: flex-end;
   padding-right: 4px;
   color: #698078;
   font-size: 8px;
+  visibility: hidden;
+}
+
+.live-chat-composer:focus-within .live-chat-composer__hint {
+  visibility: visible;
 }
 
 .live-chip-summary {
@@ -3982,15 +4316,32 @@
   cursor: pointer;
 }
 
+/* 面板只有 ~250px 宽：街道名先让位，结论最后才允许被裁。 */
 .gto-advice-card--collapsed .gto-advice-card__summary {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  color: var(--live-text);
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--live-muted);
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 折叠态直接给结论，不用展开才知道建议什么。 */
+.gto-advice-card__summary-rec {
+  flex: 1 0 auto;
+  min-width: 0;
+  color: var(--live-text);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gto-advice-card--collapsed .gto-advice-card__toggle {
+  flex: none;
 }
 
 .gto-advice-card__toggle {
