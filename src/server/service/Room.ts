@@ -65,6 +65,9 @@ export enum GameRound {
 const BOT_AUTO_REBUY_THRESHOLD_BB = 5;
 const BOT_AUTO_REBUY_TARGET_BB = 100;
 
+/** Highest run-it-out count a player may pick when all-in. */
+const MAX_SETTLE_TIMES = 4;
+
 function sum(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0);
 }
@@ -758,18 +761,25 @@ export class Game {
           // multiple settle users
           publish2all(this.roomid);
 
+          // With a human in the decision, bots defer by picking the maximum:
+          // the final count is a min across everyone, so the human's pick wins.
+          // An all-bot runout has nobody to defer to, so keep it at one deal.
+          const botSettleTimes = settleUsers.some((t) => !userMap[t].isBot)
+            ? MAX_SETTLE_TIMES
+            : 1;
+
           settleUsers.forEach((t) => {
             send2user(t, {
               selectSettleTimes: 1,
             });
             if (userMap[t].isBot) {
-              delayTry(() => this.userSetSettleTimes(t, 1), 650);
+              delayTry(() => this.userSetSettleTimes(t, botSettleTimes), 650);
             }
           });
 
           this.multiSettleTimer = delayTry(() => {
             this.multiSettleUsers.forEach((t) => {
-              this.userSetSettleTimes(t, 4);
+              this.userSetSettleTimes(t, MAX_SETTLE_TIMES);
               send2user(t, {
                 selectSettleTimes: 0,
               });
@@ -1642,7 +1652,7 @@ export class Game {
       userMap[token].settleTimes > 0 ||
       !Number.isInteger(times) ||
       times < 1 ||
-      times > 4
+      times > MAX_SETTLE_TIMES
     ) {
       return;
     }
