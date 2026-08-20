@@ -417,6 +417,143 @@ describe("postflop advice", () => {
   });
 });
 
+describe("postflop trust labels", () => {
+  // `trust` must name the mechanism that PICKED the action, so an advice
+  // card never presents a hand-written rule as a distilled-model output.
+
+  it("labels heads-up first-to-act spots as rule, not model", () => {
+    // Not facing a bet => leadBetProbability decides alone; the net's
+    // bet/check head is measurably inverted here (see lead.ts).
+    const advice = getPostflopAdvice(sit({ activeVillainCount: 1 }));
+    assert.strictEqual(advice.trust, "rule");
+  });
+
+  it("labels a heads-up net decision facing a bet as model", () => {
+    const advice = getPostflopAdvice(
+      sit({
+        street: "river",
+        heroCards: [c(9, "h"), c(9, "s")],
+        board: [c(9, "d"), c(9, "c"), c(2, "c"), c(5, "h"), c(3, "d")],
+        pot: 400,
+        currentBet: 120,
+        heroBet: 0,
+        toCall: 120,
+        heroRemaining: 900,
+        streetBetCount: 1,
+      })
+    );
+    assert.strictEqual(advice.trust, "model");
+  });
+
+  it("labels the multiway path as heuristic", () => {
+    const advice = getPostflopAdvice(sit({ activeVillainCount: 2 }));
+    assert.strictEqual(advice.trust, "heuristic");
+  });
+
+  it("labels an anti-punt override as heuristic, not model", () => {
+    // QT on a double-paired 8877 turn: 2% equity against the continuing
+    // range, so the pot-odds floor vetoes the net's own choice. The floor is
+    // a range-equity calculation, so the label must follow it.
+    const advice = getPostflopAdvice(
+      sit({
+        street: "turn",
+        heroCards: [c(10, "d"), c(12, "c")],
+        board: [c(8, "h"), c(7, "s"), c(8, "s"), c(7, "c")],
+        pot: 100,
+        currentBet: 60,
+        heroBet: 0,
+        toCall: 60,
+        heroRemaining: 900,
+        activeVillainCount: 1,
+        isPreflopAggressor: false,
+        streetBetCount: 1,
+      })
+    );
+    assert.strictEqual(advice.recommended, "fold");
+    assert.ok(
+      /anti-punt/.test(advice.reasoning || ""),
+      `expected the anti-punt floor to fire, got: ${advice.reasoning}`
+    );
+    assert.strictEqual(advice.trust, "heuristic");
+  });
+
+  it("never claims a neural net produced a rule-labelled recommendation", () => {
+    // The limitations block is rendered on the same card as the badge, so
+    // it must not say "蒸馏神经网络" while the badge says 简化规则.
+    const lead = getPostflopAdvice(sit({ activeVillainCount: 1 }));
+    assert.strictEqual(lead.trust, "rule");
+    assert.ok(
+      !lead.limitations.some((l) => l.includes("神经网络")),
+      `rule-labelled advice must not cite the net: ${JSON.stringify(lead.limitations)}`
+    );
+    assert.ok(lead.limitations.some((l) => l.includes("规则策略")));
+
+    const net = getPostflopAdvice(
+      sit({
+        street: "river",
+        heroCards: [c(9, "h"), c(9, "s")],
+        board: [c(9, "d"), c(9, "c"), c(2, "c"), c(5, "h"), c(3, "d")],
+        pot: 400,
+        currentBet: 120,
+        heroBet: 0,
+        toCall: 120,
+        heroRemaining: 900,
+        streetBetCount: 1,
+      })
+    );
+    assert.strictEqual(net.trust, "model");
+    assert.ok(net.limitations.some((l) => l.includes("神经网络")));
+  });
+
+  it("keeps the model label when the net folds on its own", () => {
+    // Same shape, but here the net itself wants to fold — no guard fires, so
+    // the label must NOT be downgraded.
+    const advice = getPostflopAdvice(
+      sit({
+        heroCards: [c(7, "h"), c(2, "d")],
+        board: [c(14, "s"), c(13, "d"), c(12, "h")],
+        pot: 100,
+        currentBet: 80,
+        heroBet: 0,
+        toCall: 80,
+        heroRemaining: 420,
+        activeVillainCount: 1,
+        isPreflopAggressor: false,
+        streetBetCount: 1,
+      })
+    );
+    assert.strictEqual(advice.recommended, "fold");
+    assert.strictEqual(advice.trust, "model");
+  });
+});
+
+describe("postflop raise sizing", () => {
+  it("sizes net-driven raises from the model's size head", () => {
+    const advice = getPostflopAdvice(
+      sit({
+        street: "river",
+        heroCards: [c(9, "h"), c(9, "s")],
+        board: [c(9, "d"), c(9, "c"), c(2, "c"), c(5, "h"), c(3, "d")],
+        pot: 400,
+        currentBet: 120,
+        heroBet: 0,
+        toCall: 120,
+        heroRemaining: 900,
+        streetBetCount: 1,
+      })
+    );
+    assert.strictEqual(advice.recommended, "raise");
+    // currentBet + fraction * pot, where fraction is one of the model's
+    // pot-fraction buckets — never the old flat 2.5x-the-bet formula.
+    const buckets = [0.4, 0.66, 0.85, 1.25, 2.0];
+    const size = advice.recommendedSizeChips!;
+    assert.ok(
+      buckets.some((f) => Math.abs(size - (120 + f * 400)) <= 2),
+      `raise size ${size} should match a model size bucket off 120 + f*400`
+    );
+  });
+});
+
 describe("postflop advice from game state", () => {
   function makeState(over: {
     seats: string[];

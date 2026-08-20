@@ -13,6 +13,7 @@ import {
   isDangerousFlushBoard,
 } from "./engine";
 import { analyzeBoard, BOARD_TEXTURE_CN } from "./board";
+import type { AdviceTrust } from "../trust";
 import type {
   PostflopAction,
   PostflopActionDistribution,
@@ -79,14 +80,28 @@ function buildHeroMessage(
   }
 }
 
+/**
+ * The approximation notes must agree with the trust badge on the same card:
+ * a heads-up spot decided by the lead policy is NOT "a distilled network",
+ * so the limitation line follows `trust`, not just the opponent count.
+ */
 function buildLimitations(
-  input: PostflopSituation
+  input: PostflopSituation,
+  trust: AdviceTrust
 ): string[] {
   const lim: string[] = [];
-  if (input.activeVillainCount === 1) {
-    lim.push("单挑策略为蒸馏神经网络近似（约 84% 求解器一致性），非精确 Nash");
-  } else {
+  if (input.activeVillainCount !== 1) {
     lim.push("多人底池采用范围启发式近似，非精确多人均衡");
+  } else if (trust === "model") {
+    lim.push("单挑策略为蒸馏神经网络近似（约 84% 求解器一致性），非精确 Nash");
+  } else if (trust === "rule") {
+    lim.push(
+      "本手由规则策略给出：网络在“首先行动下注/过牌”这类局面下注频率与牌力反相关，故不采用"
+    );
+  } else {
+    lim.push(
+      "本手由范围-权益启发式接管（底池赔率底线或合理性闸门改写了网络建议），非精确均衡"
+    );
   }
   if (input.villainRange && input.villainRange.length > 0) {
     lim.push(
@@ -102,7 +117,11 @@ function buildLimitations(
       `当前有效筹码 ${round1(input.effectiveStackBB)}bb 偏离基准，尺寸/全下规则为近似`
     );
   }
-  lim.push("下注/加注尺寸为纹理+街道+牌力的启发式，非求解器精确尺寸");
+  lim.push(
+    trust === "model"
+      ? "加注尺寸来自模型尺寸头（5 档底池比例，92.4% 验证准确率），非求解器精确尺寸"
+      : "下注/加注尺寸为纹理+街道+牌力的启发式，非求解器精确尺寸"
+  );
   return lim;
 }
 
@@ -172,6 +191,7 @@ export function getPostflopAdvice(
   }
 
   const decision = decidePostflop(input);
+  const trust: AdviceTrust = decision.trust || "heuristic";
   const facingBet = input.toCall > 0;
   const m = decision.mixedStrategy;
   const betProb = m.bets.reduce((s, b) => s + b.probability, 0);
@@ -273,10 +293,10 @@ export function getPostflopAdvice(
     recommendedSizeBB: sizeBB,
     hero,
     notes,
-    limitations: buildLimitations(input),
+    limitations: buildLimitations(input, trust),
     adjustments: buildAdjustments(input),
     reasoning: decision.reasoning,
     dataSource: DATA_SOURCE,
-    trust: decision.trust || "heuristic",
+    trust,
   };
 }

@@ -3,7 +3,10 @@ import type { GtoLogEntry } from "../../ApiType";
 import { getPostflopAdvice } from "../../gto/postflop/advice";
 import { getPreflopAdvice } from "../../gto/preflop/advice";
 import { cardToId } from "../../gto/postflop/cards";
-import type { PostflopSituation } from "../../gto/postflop/types";
+import type {
+  PostflopAdvice,
+  PostflopSituation,
+} from "../../gto/postflop/types";
 import GtoAdviceCard from "./GtoAdviceCard";
 import GameHistory from "./GameHistory";
 
@@ -116,6 +119,9 @@ describe("GtoAdviceCard 全局折叠", () => {
 
   it("展开态显示每手相关信息，通用说明默认折叠可展开", () => {
     const entry = postflopEntry();
+    // 近似说明的措辞跟着 trust 走（网络 / 规则 / 启发式各不相同），
+    // 这里取建议自己给出的那一条，避免把文案写死在断言里。
+    const limitation = (entry.data as PostflopAdvice).limitations[0];
     render(<GtoAdviceCard entry={entry} globalCollapsed={false} />);
 
     // 每手相关的信息直接可见
@@ -130,14 +136,16 @@ describe("GtoAdviceCard 全局折叠", () => {
     expect(screen.getByText("通用说明")).toBeInTheDocument();
     expect(screen.queryByText(/频率条/)).not.toBeInTheDocument();
     expect(screen.queryByText("名词解释")).not.toBeInTheDocument();
-    expect(screen.queryByText(/蒸馏神经网络近似/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(limitation, { exact: false })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("通用说明"));
     expect(screen.getByText(/频率条/)).toBeInTheDocument();
     expect(screen.getByText("实际情况偏移建议")).toBeInTheDocument();
     expect(screen.getByText("名词解释")).toBeInTheDocument();
     expect(screen.getByText("有效筹码")).toBeInTheDocument();
-    expect(screen.getByText(/蒸馏神经网络近似/)).toBeInTheDocument();
+    expect(screen.getByText(limitation, { exact: false })).toBeInTheDocument();
   });
 
   it("翻前范围表默认折叠，展开后底部才重复行动建议", () => {
