@@ -1461,6 +1461,10 @@ export class Game {
         hand: advice.heroHandKey,
         position: advice.heroPositionLabel,
         recommended: advice.recommended,
+        // Which mechanism actually picked the action (model / rule /
+        // heuristic / chart). Without it, offline analysis cannot tell a
+        // distilled-net decision from a rule-based one.
+        trust: advice.trust,
         sizeBB: advice.recommendedSizeBB,
         sizeChips: advice.recommendedSizeChips,
         distribution: advice.actionDistribution,

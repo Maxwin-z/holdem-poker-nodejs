@@ -6,6 +6,20 @@
  * decision is rare in its training data (~6%) and it extrapolates badly, so
  * when not facing a bet we use this sound policy instead: who took the
  * initiative + position + made-hand strength + equity + texture + street.
+ *
+ * Measured on 3000 sampled heads-up first-to-act spots with a realistic
+ * preflop hole-card range, the net's bet frequency is INVERTED against hand
+ * strength and blind to initiative:
+ *
+ *   equity 0-30%   -> net bets 71.3%   (this policy: 14.7%)
+ *   equity 45-60%  -> net bets 40.0%   (this policy: 27.1%)
+ *   two pair       -> net bets 44.2%   (this policy: 63.7%)
+ *   preflop aggressor 48.2% vs non-aggressor 47.7% -> no signal at all
+ *
+ * Facing a bet the same net is monotone and sane (0-30% equity folds 99.9%,
+ * 75%+ equity raises 69.5%), which is why only this branch is rule-based.
+ * Fixing it properly means retraining upstream (ml/train.py + PokerBench),
+ * not reweighting here.
  */
 
 import { HAND_CATEGORY } from "./hand-eval";

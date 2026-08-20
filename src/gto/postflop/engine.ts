@@ -8,6 +8,12 @@
  * villain continuing range. Every decision passes through the soundness gate
  * and is legalized (sizing capped to the hero's remaining stack).
  *
+ * The `trust` on the returned decision names the mechanism that actually
+ * PICKED the action, not the path it travelled: "model" only when the net's
+ * own output survives to the recommendation, "rule" / "heuristic" when the
+ * lead policy, a guard, or the soundness gate overrode it. Advice cards
+ * surface this to learners, so it must not overstate the net's involvement.
+ *
  * Unlike the reference bot (which samples one action), this engine returns a
  * deterministic recommendation: the action with the highest probability in
  * the equilibrium mix.
@@ -19,7 +25,7 @@ import { equityVsRange } from "./equity";
 import { villainContinuingRange } from "./range";
 import { leadBetProbability } from "./lead";
 import { evaluateSoundness } from "./soundness";
-import { predictPostflop } from "./policy";
+import { predictBetSize, predictPostflop } from "./policy";
 import { deterministicEquity, Spot } from "./features";
 import { analyzeBoard, BoardAnalysis } from "./board";
 import {
@@ -169,7 +175,9 @@ export function decidePostflop(sit: PostflopSituation): PostflopDecision {
     );
     if (netDecision) {
       decision = netDecision;
-      trust = "model";
+      // decidePostflopNet labels each of its exits; "model" only when the
+      // net's own argmax survived every guard.
+      trust = netDecision.trust || "model";
     } else {
       decision = decidePostflopRanged(sit, board, heroCat, dangerousFlush);
     }
@@ -186,10 +194,14 @@ export function decidePostflop(sit: PostflopSituation): PostflopDecision {
       reasoning: `${decision.reasoning} [free check]`,
       mixedStrategy: { fold: 0, check: 1, call: 0, bets: [] },
     };
+    trust = "rule";
   }
 
   // Soundness gate: veto punts on every path.
+  const beforeGate = decision.action;
   decision = applySoundnessGate(decision, sit, equityVsRandom);
+  // The gate decides from range equity, so it owns the label when it fires.
+  if (decision.action !== beforeGate) trust = "heuristic";
 
   // Legalize sizing: never bet/raise more than hero can put in.
   decision = legalizeDecision(decision, sit);
@@ -279,24 +291,23 @@ function decidePostflopNet(
     bb,
     heroCat
   );
-  const raiseSize = Math.max(
-    roundToStake(sit.currentBet * 2.5, bb),
-    sit.currentBet + betSize
-  );
 
   // Flush-board guard: never bet/raise a hand that can't beat a flush.
+  let flushGuarded = false;
   if (
     (finalAction === "bet" || finalAction === "raise") &&
     dangerousFlush &&
     heroCat < HAND_CATEGORY.FLUSH
   ) {
     finalAction = facingBet ? "call" : "check";
+    flushGuarded = true;
   }
 
   let eqR: number | undefined;
   let eqCombos: number | undefined;
   let eqRange: string[] | undefined;
   let eqRangeDetails: PostflopDecision["equityRangeDetails"];
+  let raiseDowngraded = false;
 
   // Anti-punt pot-odds floor facing a bet.
   if (facingBet && finalAction !== "fold") {
@@ -311,6 +322,8 @@ function decidePostflopNet(
         action: "fold",
         confidence: 1 - eqR,
         reasoning: `fold ${sit.toCall} (${pct(eqR)} vs range < ${pct(potOdds)} pot odds) [anti-punt]`,
+        // The floor is a range-equity calculation, not the net's call.
+        trust: "heuristic",
         mixedStrategy: { fold: 1, check: 0, call: 0, bets: [] },
         equityVsRange: eqR,
         equityRangeCombos: eqCombos,
@@ -318,7 +331,10 @@ function decidePostflopNet(
         equityRangeDetails: eqRangeDetails,
       };
     }
-    if (finalAction === "raise" && eqR < 0.6) finalAction = "call";
+    if (finalAction === "raise" && eqR < 0.6) {
+      finalAction = "call";
+      raiseDowngraded = true;
+    }
   }
 
   // Lead / c-bet policy when first to act.
@@ -344,6 +360,9 @@ function decidePostflopNet(
       amount: pBet >= 0.5 ? betSize : undefined,
       confidence: pBet >= 0.5 ? pBet : 1 - pBet,
       reasoning,
+      // Bet-or-check is decided entirely by leadBetProbability here; the net
+      // never sees this exit, so it must not be labelled as a model output.
+      trust: "rule",
       mixedStrategy: {
         fold: 0,
         check: round1(1 - pBet),
@@ -352,6 +371,14 @@ function decidePostflopNet(
       },
     };
   }
+
+  // Raise sizing comes from the model's own size head. SIZE_BUCKET_FRACS are
+  // pot fractions in the same convention encodeSpot() uses for
+  // offeredSizeFrac (chips-to-call / pot, where pot already includes the
+  // outstanding bet), so the predicted fraction is what hero puts in ON TOP
+  // of the current bet. legalizeDecision() applies the min-raise floor,
+  // rounding, and the all-in cap afterwards.
+  const raiseSize = modelRaiseSize(spot, sit, bb, betSize);
 
   const betProb = probs.bet + probs.raise;
   const downgraded =
@@ -395,17 +422,52 @@ function decidePostflopNet(
     confidence = mixedStrategy[finalAction] || 0;
   }
 
+  // The net's argmax only survives when no guard rewrote it.
+  const trust: AdviceTrust = flushGuarded
+    ? "rule"
+    : raiseDowngraded
+    ? "heuristic"
+    : "model";
+
   return {
     action: finalAction,
     amount: finalAction === "raise" ? raiseSize : undefined,
     confidence,
     reasoning,
+    trust,
     mixedStrategy,
     equityVsRange: eqR,
     equityRangeCombos: eqCombos,
     equityRange: eqRange,
     equityRangeDetails: eqRangeDetails,
   };
+}
+
+/**
+ * "Raise to" total from the distilled size head (0.9240 val accuracy),
+ * falling back to the texture-based sizing if the forward pass fails.
+ */
+function modelRaiseSize(
+  spot: Spot,
+  sit: PostflopSituation,
+  bb: number,
+  fallbackBetSize: number
+): number {
+  const textureSize = Math.max(
+    roundToStake(sit.currentBet * 2.5, bb),
+    sit.currentBet + fallbackBetSize
+  );
+  try {
+    const { fraction } = predictBetSize(spot);
+    if (!Number.isFinite(fraction) || fraction <= 0) return textureSize;
+    return roundToStake(
+      sit.currentBet + fraction * Math.max(1, sit.pot),
+      bb
+    );
+  } catch (e) {
+    console.warn("[GTO] postflop size head failed, using texture sizing", e);
+    return textureSize;
+  }
 }
 
 // ============================================================
